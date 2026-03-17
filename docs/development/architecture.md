@@ -27,9 +27,14 @@
 │  │  • get_schema           │    │  │                             │  │   │
 │  │  • get_table_info       │    │  │  工具：（与 stdio 相同）    │  │   │
 │  │  • clear_cache          │    │  │  • execute_query            │  │   │
-│  │                         │    │  │  • get_schema               │  │   │
-│  │  适用：Claude Desktop,  │    │  │  • get_table_info           │  │   │
-│  │        Cursor 等        │    │  │  • clear_cache              │  │   │
+│  │  • get_enum_values      │    │  │  • get_schema               │  │   │
+│  │  • get_sample_data      │    │  │  • get_table_info           │  │   │
+│  │  • connect_database     │    │  │  • clear_cache              │  │   │
+│  │  • disconnect_database  │    │  │  • get_enum_values          │  │   │
+│  │  • get_connection_status│    │  │  • get_sample_data          │  │   │
+│  │                         │    │  │  • connect_database         │  │   │
+│  │  适用：Claude Desktop,  │    │  │  • disconnect_database      │  │   │
+│  │        Cursor 等        │    │  │  • get_connection_status    │  │   │
 │  └─────────────┬───────────┘    │  │                             │  │   │
 │                │                │  │  适用：Dify、远程访问       │  │   │
 │                │                │  └──────────────┬──────────────┘  │   │
@@ -69,14 +74,14 @@
 
 | 启动模式 | 协议 | 传输方式 | 工具/端点 | 适用场景 |
 |---------|------|---------|----------|---------|
-| stdio | MCP | stdio | 4 个工具 | Claude Desktop、Cursor |
-| http | MCP | SSE | 4 个工具 | Dify（传统方式） |
-| http | MCP | Streamable HTTP | 4 个工具 | Dify（推荐） |
+| stdio | MCP | stdio | 9 个工具 | Claude Desktop、Cursor |
+| http | MCP | SSE | 9 个工具 | Dify（传统方式） |
+| http | MCP | Streamable HTTP | 9 个工具 | Dify（推荐） |
 | http | REST | HTTP | 10+ 端点 | Coze、n8n、自定义集成 |
 
 ### MCP 协议工具
 
-无论使用哪种传输方式（stdio/SSE/Streamable HTTP），MCP 协议都提供相同的 4 个工具：
+无论使用哪种传输方式（stdio/SSE/Streamable HTTP），MCP 协议都提供相同的 9 个工具：
 
 | 工具 | 描述 |
 |------|------|
@@ -84,6 +89,11 @@
 | `get_schema` | 获取数据库结构信息 |
 | `get_table_info` | 获取指定表的详细信息 |
 | `clear_cache` | 清除 Schema 缓存 |
+| `get_enum_values` | 获取指定列的所有唯一值 |
+| `get_sample_data` | 获取表的示例数据（已脱敏） |
+| `connect_database` | 动态连接数据库（支持全部 17 种类型） |
+| `disconnect_database` | 断开当前数据库连接 |
+| `get_connection_status` | 获取当前数据库连接状态 |
 
 ### REST API 端点
 

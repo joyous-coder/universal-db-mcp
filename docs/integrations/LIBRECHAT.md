@@ -52,6 +52,11 @@ Show me the schema of the users table
 | `get_schema` | Get database schema |
 | `get_table_info` | Get table details |
 | `clear_cache` | Clear schema cache |
+| `get_enum_values` | Get all unique values for a specified column |
+| `get_sample_data` | Get sample data from a table (with automatic data masking) |
+| `connect_database` | Dynamically connect to a database (supports all 17 types) |
+| `disconnect_database` | Disconnect from the current database |
+| `get_connection_status` | Get current database connection status |
 
 ## Resources
 

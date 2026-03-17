@@ -223,6 +223,9 @@ The following tools are available after connecting via MCP protocol:
 | `clear_cache` | Clear schema cache |
 | `get_enum_values` | Get all unique values for a column (for enum-type columns like status, type) |
 | `get_sample_data` | Get sample data from a table (with automatic data masking for privacy) |
+| `connect_database` | Dynamically connect to a database (supports all 17 database types, auto-disconnects existing connection) |
+| `disconnect_database` | Disconnect from the current database |
+| `get_connection_status` | Get current database connection status (type, host, permissions, cache info) |
 
 ### REST API Endpoints
 

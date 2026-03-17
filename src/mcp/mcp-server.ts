@@ -14,6 +14,7 @@ import {
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { DbAdapter, DbConfig } from '../types/adapter.js';
 import { DatabaseService, SchemaCacheConfig } from '../core/database-service.js';
+import { createAdapter, normalizeDbType } from '../utils/adapter-factory.js';
 
 /**
  * 数据库 MCP 服务器类
@@ -21,12 +22,12 @@ import { DatabaseService, SchemaCacheConfig } from '../core/database-service.js'
 export class DatabaseMCPServer {
   private server: Server;
   private adapter: DbAdapter | null = null;
-  private config: DbConfig;
+  private config: DbConfig | null;
   private databaseService: DatabaseService | null = null;
   private cacheConfig: Partial<SchemaCacheConfig>;
 
-  constructor(config: DbConfig, cacheConfig?: Partial<SchemaCacheConfig>) {
-    this.config = config;
+  constructor(config?: DbConfig, cacheConfig?: Partial<SchemaCacheConfig>) {
+    this.config = config || null;
     this.cacheConfig = cacheConfig || {};
     this.server = new Server(
       {
@@ -160,6 +161,55 @@ export class DatabaseMCPServer {
               required: ['tableName'],
             },
           },
+          {
+            name: 'connect_database',
+            description: '连接到数据库。支持动态指定数据库类型和连接参数，无需重启服务。如果当前已有连接，会自动断开旧连接再建立新连接。支持的数据库类型：mysql, postgres, redis, oracle, dm, sqlserver, mongodb, sqlite, kingbase, gaussdb, oceanbase, tidb, clickhouse, polardb, vastbase, highgo, goldendb。',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                type: {
+                  type: 'string',
+                  description: '数据库类型',
+                  enum: [
+                    'mysql', 'postgres', 'redis', 'oracle', 'dm', 'sqlserver',
+                    'mongodb', 'sqlite', 'kingbase', 'gaussdb', 'oceanbase',
+                    'tidb', 'clickhouse', 'polardb', 'vastbase', 'highgo', 'goldendb',
+                  ],
+                },
+                host: { type: 'string', description: '数据库主机地址' },
+                port: { type: 'number', description: '数据库端口' },
+                user: { type: 'string', description: '用户名' },
+                password: { type: 'string', description: '密码' },
+                database: { type: 'string', description: '数据库名称' },
+                filePath: { type: 'string', description: 'SQLite 数据库文件路径' },
+                allowWrite: { type: 'boolean', description: '是否允许写操作（默认 false）' },
+                permissionMode: {
+                  type: 'string',
+                  description: '权限模式: safe(只读) | readwrite(读写不删) | full(完全控制)',
+                  enum: ['safe', 'readwrite', 'full'],
+                },
+                authSource: { type: 'string', description: 'MongoDB 认证数据库（默认 admin）' },
+                oracleClientPath: { type: 'string', description: 'Oracle Instant Client 路径' },
+              },
+              required: ['type'],
+            },
+          },
+          {
+            name: 'disconnect_database',
+            description: '断开当前数据库连接。断开后需要重新调用 connect_database 才能执行查询。',
+            inputSchema: {
+              type: 'object',
+              properties: {},
+            },
+          },
+          {
+            name: 'get_connection_status',
+            description: '获取当前数据库连接状态。返回是否已连接、数据库类型、地址、数据库名、权限模式等信息。',
+            inputSchema: {
+              type: 'object',
+              properties: {},
+            },
+          },
         ],
       };
     });
@@ -169,9 +219,164 @@ export class DatabaseMCPServer {
       const { name, arguments: args } = request.params;
 
       try {
-        // 确保数据库服务已初始化
+        // 连接管理类 tool 不需要检查数据库连接
+        switch (name) {
+          case 'connect_database': {
+            const {
+              type, host, port, user, password, database,
+              filePath, allowWrite, permissionMode, authSource, oracleClientPath,
+            } = args as Record<string, any>;
+
+            // 构建新配置
+            const newConfig: DbConfig = {
+              type: normalizeDbType(type),
+              host,
+              port,
+              user,
+              password,
+              database,
+              filePath,
+              allowWrite: allowWrite || false,
+              permissionMode: permissionMode || 'safe',
+            };
+
+            // MongoDB 特殊配置
+            if (newConfig.type === 'mongodb' && authSource) {
+              (newConfig as any).authSource = authSource;
+            }
+
+            // Oracle 特殊配置
+            if (newConfig.type === 'oracle' && oracleClientPath) {
+              newConfig.oracleClientPath = oracleClientPath;
+            }
+
+            // 断开旧连接
+            if (this.adapter) {
+              console.error('🔄 断开旧数据库连接...');
+              if (this.databaseService) {
+                this.databaseService.clearSchemaCache();
+              }
+              await this.adapter.disconnect();
+              this.adapter = null;
+              this.databaseService = null;
+            }
+
+            // 建立新连接
+            console.error(`🔌 正在连接 ${newConfig.type} 数据库...`);
+            const newAdapter = createAdapter(newConfig);
+            await newAdapter.connect();
+
+            this.adapter = newAdapter;
+            this.config = newConfig;
+            this.databaseService = new DatabaseService(newAdapter, newConfig, this.cacheConfig);
+
+            const connInfo = newConfig.type === 'sqlite'
+              ? `SQLite: ${newConfig.filePath}`
+              : `${newConfig.type}: ${newConfig.host}:${newConfig.port}/${newConfig.database || '(default)'}`;
+
+            console.error(`✅ 数据库连接成功: ${connInfo}`);
+
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify({
+                  success: true,
+                  message: `已成功连接到 ${connInfo}`,
+                  connection: {
+                    type: newConfig.type,
+                    host: newConfig.host,
+                    port: newConfig.port,
+                    database: newConfig.database,
+                    permissionMode: newConfig.permissionMode || 'safe',
+                  },
+                }, null, 2),
+              }],
+            };
+          }
+
+          case 'disconnect_database': {
+            if (!this.adapter) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: JSON.stringify({ success: true, message: '当前没有活跃的数据库连接' }, null, 2),
+                }],
+              };
+            }
+
+            if (this.databaseService) {
+              this.databaseService.clearSchemaCache();
+            }
+            await this.adapter.disconnect();
+
+            const oldType = this.config?.type;
+            this.adapter = null;
+            this.config = null;
+            this.databaseService = null;
+
+            console.error('👋 数据库连接已断开');
+
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify({
+                  success: true,
+                  message: `已断开 ${oldType || ''} 数据库连接`,
+                }, null, 2),
+              }],
+            };
+          }
+
+          case 'get_connection_status': {
+            if (!this.adapter || !this.config) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: JSON.stringify({
+                    connected: false,
+                    message: '当前未连接任何数据库。请使用 connect_database 工具连接。',
+                  }, null, 2),
+                }],
+              };
+            }
+
+            const status: Record<string, any> = {
+              connected: true,
+              type: this.config.type,
+              permissionMode: this.config.permissionMode || 'safe',
+            };
+
+            if (this.config.type === 'sqlite') {
+              status.filePath = this.config.filePath;
+            } else {
+              status.host = this.config.host;
+              status.port = this.config.port;
+              status.database = this.config.database;
+            }
+
+            if (this.databaseService) {
+              const cacheStats = this.databaseService.getCacheStats();
+              status.schemaCache = {
+                cached: cacheStats.isCached,
+                hitRate: this.databaseService.getCacheHitRate() + '%',
+              };
+            }
+
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(status, null, 2),
+              }],
+            };
+          }
+
+          default:
+            break;
+        }
+
+        // 以下 tool 需要数据库已连接
         if (!this.databaseService) {
-          throw new Error('数据库未连接。请检查配置并重启服务。');
+          throw new Error('数据库未连接。请先使用 connect_database 工具连接数据库。');
         }
 
         switch (name) {
@@ -332,7 +537,9 @@ export class DatabaseMCPServer {
    */
   setAdapter(adapter: DbAdapter): void {
     this.adapter = adapter;
-    this.databaseService = new DatabaseService(adapter, this.config, this.cacheConfig);
+    if (this.config) {
+      this.databaseService = new DatabaseService(adapter, this.config, this.cacheConfig);
+    }
   }
 
   /**
@@ -356,7 +563,7 @@ export class DatabaseMCPServer {
     console.error('✅ 数据库连接成功');
 
     // 显示安全模式状态
-    if (this.config.allowWrite) {
+    if (this.config?.allowWrite) {
       console.error('⚠️  警告: 写入模式已启用，请谨慎操作！');
     } else {
       console.error('🛡️  安全模式: 只读模式（推荐）');
@@ -377,13 +584,18 @@ export class DatabaseMCPServer {
    * 启动服务器（使用 stdio 传输，用于 Claude Desktop）
    */
   async start(): Promise<void> {
-    await this.connectDatabase();
+    // 如果有初始配置和适配器，先连接；否则等待 AI 调用 connect_database
+    if (this.adapter) {
+      await this.connectDatabase();
+    } else {
+      console.error('📡 MCP 服务器以无连接模式启动，等待通过 connect_database 工具连接数据库...');
+    }
 
     // 启动 MCP 服务器（stdio 模式）
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
 
-    console.error('🚀 MCP 服务器已启动，等待 Claude Desktop 连接...');
+    console.error('🚀 MCP 服务器已启动，等待客户端连接...');
   }
 
   /**

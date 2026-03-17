@@ -20,7 +20,7 @@ export async function startMcpServer(): Promise<void> {
     .name('universal-db-mcp')
     .description('MCP 数据库万能连接器 - 让 Claude Desktop 直接连接你的数据库')
     .version('1.0.0')
-    .requiredOption('--type <type>', '数据库类型 (mysql|postgres|redis|oracle|dm|sqlserver|mssql|mongodb|sqlite|kingbase|gaussdb|opengauss|oceanbase|tidb|clickhouse|polardb|vastbase|highgo|goldendb)')
+    .option('--type <type>', '数据库类型 (mysql|postgres|redis|oracle|dm|sqlserver|mssql|mongodb|sqlite|kingbase|gaussdb|opengauss|oceanbase|tidb|clickhouse|polardb|vastbase|highgo|goldendb)。不指定则以无连接模式启动，可在对话中通过 connect_database 动态连接。')
     .option('--host <host>', '数据库主机地址')
     .option('--port <port>', '数据库端口', parseInt)
     .option('--user <user>', '用户名')
@@ -34,97 +34,112 @@ export async function startMcpServer(): Promise<void> {
     .option('--permissions <list>', '自定义权限列表，逗号分隔: read,insert,update,delete,ddl')
     .action(async (options) => {
       try {
-        // Normalize database type
-        const dbType = normalizeDbType(options.type);
+        // 提取 graceful shutdown 逻辑为复用函数
+        function setupGracefulShutdown(server: DatabaseMCPServer): void {
+          let shuttingDown = false;
 
-        // Parse permissions from command line
-        const parsedPermissions = options.permissions
-          ? options.permissions.split(',').map((p: string) => p.trim()) as PermissionType[]
-          : undefined;
+          async function gracefulShutdown(reason: string): Promise<void> {
+            if (shuttingDown) return;
+            shuttingDown = true;
 
-        // Build configuration
-        const config: DbConfig = {
-          type: dbType as any,
-          host: options.host,
-          port: options.port,
-          user: options.user,
-          password: options.password,
-          database: options.database,
-          filePath: options.file,
-          allowWrite: options.dangerAllowWrite,
-          permissionMode: options.dangerAllowWrite ? 'full' : options.permissionMode as PermissionMode,
-          permissions: parsedPermissions,
-        };
+            console.error(`\n⏹️  正在关闭服务器 (${reason})...`);
 
-        // Add MongoDB-specific config
-        if (dbType === 'mongodb' && options.authSource) {
-          (config as any).authSource = options.authSource;
-        }
-
-        // Add Oracle-specific config
-        if (dbType === 'oracle' && options.oracleClientPath) {
-          config.oracleClientPath = options.oracleClientPath;
-        }
-
-        // Resolve and display permissions
-        const permissions = resolvePermissions(config);
-        const isSafeMode = permissions.length === 1 && permissions[0] === 'read';
-
-        console.error('🔧 配置信息:');
-        console.error(`   数据库类型: ${config.type}`);
-        if (config.type === 'sqlite') {
-          console.error(`   数据库文件: ${config.filePath}`);
-        } else {
-          console.error(`   主机地址: ${config.host}:${config.port}`);
-          console.error(`   数据库名: ${config.database || '(默认)'}`);
-        }
-        console.error(`   权限模式: ${isSafeMode ? '✅ 只读模式' : '⚠️  ' + formatPermissions(permissions)}`);
-        console.error('');
-
-        // Create server
-        const server = new DatabaseMCPServer(config);
-
-        // Create adapter using factory
-        const adapter = createAdapter(config);
-
-        // Set adapter and start server
-        server.setAdapter(adapter);
-        await server.start();
-
-        // 统一的 graceful shutdown（防重入 + 超时保护）
-        let shuttingDown = false;
-
-        async function gracefulShutdown(reason: string): Promise<void> {
-          if (shuttingDown) return;
-          shuttingDown = true;
-
-          console.error(`\n⏹️  正在关闭服务器 (${reason})...`);
-
-          try {
-            await Promise.race([
-              server.stop(),
-              new Promise<void>((resolve) => setTimeout(() => {
-                console.error('⚠️  关闭超时，强制退出');
-                resolve();
-              }, 5000)),
-            ]);
-          } catch (err) {
-            console.error('关闭过程中出错:', err instanceof Error ? err.message : String(err));
-          } finally {
-            process.exit(0);
+            try {
+              await Promise.race([
+                server.stop(),
+                new Promise<void>((resolve) => setTimeout(() => {
+                  console.error('⚠️  关闭超时，强制退出');
+                  resolve();
+                }, 5000)),
+              ]);
+            } catch (err) {
+              console.error('关闭过程中出错:', err instanceof Error ? err.message : String(err));
+            } finally {
+              process.exit(0);
+            }
           }
+
+          // 信号处理
+          process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+          process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
+          // stdin 关闭处理（核心修复）
+          // 当 MCP 客户端（如 Codex CLI）关闭 stdin 管道时触发
+          process.stdin.resume();
+          process.stdin.on('end', () => gracefulShutdown('stdin-end'));
+          process.stdin.on('close', () => gracefulShutdown('stdin-close'));
         }
 
-        // 信号处理
-        process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-        process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+        if (options.type) {
+          // === 有初始配置：和原来完全一样的逻辑 ===
+          // Normalize database type
+          const dbType = normalizeDbType(options.type);
 
-        // stdin 关闭处理（核心修复）
-        // 当 MCP 客户端（如 Codex CLI）关闭 stdin 管道时触发
-        process.stdin.resume();
-        process.stdin.on('end', () => gracefulShutdown('stdin-end'));
-        process.stdin.on('close', () => gracefulShutdown('stdin-close'));
+          // Parse permissions from command line
+          const parsedPermissions = options.permissions
+            ? options.permissions.split(',').map((p: string) => p.trim()) as PermissionType[]
+            : undefined;
 
+          // Build configuration
+          const config: DbConfig = {
+            type: dbType as any,
+            host: options.host,
+            port: options.port,
+            user: options.user,
+            password: options.password,
+            database: options.database,
+            filePath: options.file,
+            allowWrite: options.dangerAllowWrite,
+            permissionMode: options.dangerAllowWrite ? 'full' : options.permissionMode as PermissionMode,
+            permissions: parsedPermissions,
+          };
+
+          // Add MongoDB-specific config
+          if (dbType === 'mongodb' && options.authSource) {
+            (config as any).authSource = options.authSource;
+          }
+
+          // Add Oracle-specific config
+          if (dbType === 'oracle' && options.oracleClientPath) {
+            config.oracleClientPath = options.oracleClientPath;
+          }
+
+          // Resolve and display permissions
+          const permissions = resolvePermissions(config);
+          const isSafeMode = permissions.length === 1 && permissions[0] === 'read';
+
+          console.error('🔧 配置信息:');
+          console.error(`   数据库类型: ${config.type}`);
+          if (config.type === 'sqlite') {
+            console.error(`   数据库文件: ${config.filePath}`);
+          } else {
+            console.error(`   主机地址: ${config.host}:${config.port}`);
+            console.error(`   数据库名: ${config.database || '(默认)'}`);
+          }
+          console.error(`   权限模式: ${isSafeMode ? '✅ 只读模式' : '⚠️  ' + formatPermissions(permissions)}`);
+          console.error('');
+
+          // Create server
+          const server = new DatabaseMCPServer(config);
+
+          // Create adapter using factory
+          const adapter = createAdapter(config);
+
+          // Set adapter and start server
+          server.setAdapter(adapter);
+          await server.start();
+
+          setupGracefulShutdown(server);
+        } else {
+          // === 无初始配置：无连接模式启动 ===
+          console.error('📡 无连接模式：未指定数据库类型，等待通过 connect_database 工具动态连接...');
+          console.error('');
+
+          const server = new DatabaseMCPServer();
+          await server.start();
+
+          setupGracefulShutdown(server);
+        }
       } catch (error) {
         console.error('❌ 启动失败:', error instanceof Error ? error.message : String(error));
         process.exit(1);

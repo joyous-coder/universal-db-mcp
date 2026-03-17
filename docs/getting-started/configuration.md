@@ -8,7 +8,7 @@
 universal-db-mcp [选项]
 
 选项：
-  --type <db>              数据库类型（必需）
+  --type <db>              数据库类型（可选，不指定则以无连接模式启动，可在对话中通过 connect_database 动态连接）
   --host <host>            数据库主机地址（默认: localhost）
   --port <port>            数据库端口
   --user <user>            用户名

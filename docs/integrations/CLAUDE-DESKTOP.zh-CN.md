@@ -506,6 +506,11 @@ WHERE created_at >= DATE_FORMAT(NOW(), '%Y-%m-01')
 | `get_schema` | 获取完整的数据库结构信息 |
 | `get_table_info` | 获取指定表的详细信息 |
 | `clear_cache` | 清除 Schema 缓存 |
+| `get_enum_values` | 获取指定列的所有唯一值 |
+| `get_sample_data` | 获取表的示例数据（自动脱敏） |
+| `connect_database` | 动态连接数据库（支持全部 17 种类型） |
+| `disconnect_database` | 断开当前数据库连接 |
+| `get_connection_status` | 获取当前数据库连接状态 |
 
 ## 故障排除
 

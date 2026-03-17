@@ -357,6 +357,11 @@ JetBrains IDE 使用基于 JSON 的配置来管理 MCP 服务器，可通过 IDE
 | `get_schema` | 获取数据库结构信息（表、列、类型） |
 | `get_table_info` | 获取特定表的详细信息 |
 | `clear_cache` | 清除 Schema 缓存 |
+| `get_enum_values` | 获取指定列的所有唯一值 |
+| `get_sample_data` | 获取表的示例数据（自动脱敏） |
+| `connect_database` | 动态连接数据库（支持全部 17 种类型） |
+| `disconnect_database` | 断开当前数据库连接 |
+| `get_connection_status` | 获取当前数据库连接状态 |
 
 ## 使用示例
 

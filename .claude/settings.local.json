@@ -44,7 +44,27 @@
       "Bash(MODE=mcp node:*)",
       "Bash(npx .:*)",
       "Bash(npx tsc:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(npx --no-install tsc --noEmit)",
+      "Bash(npx --no-install tsc)",
+      "Bash(node -e \":*)",
+      "Bash(node --input-type=module -e \":*)",
+      "Bash(npx --no-install vitest run tests/unit)",
+      "Bash(while read:*)",
+      "Bash(do grep:*)",
+      "Bash(sort -t'|' -k3 -u)",
+      "Bash(do sed:*)",
+      "Bash(for f:*)",
+      "Bash(do)",
+      "Bash(if grep:*)",
+      "Bash(! grep:*)",
+      "Bash(then)",
+      "Bash(perl -i -pe 's/\\(^\\\\| `clear_cache` \\\\|.*\\\\|\\)\\\\s*$/\\\\1\\\\n| `get_enum_values` | 获取指定列的所有唯一值 |\\\\n| `get_sample_data` | 获取表的示例数据（自动脱敏） |\\\\n| `connect_database` | 动态连接数据库（支持全部 17 种类型） |\\\\n| `disconnect_database` | 断开当前数据库连接 |\\\\n| `get_connection_status` | 获取当前数据库连接状态 |/' \"$f\")",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(echo \"MISSING: $f\")",
+      "Bash(cd:*)"
     ]
   }
 }

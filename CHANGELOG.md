@@ -2,6 +2,68 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [2.14.0] - 2026
+
+### 新增
+- **MCP stdio 模式动态数据库连接** - 支持在对话中动态连接/切换数据库，无需写死配置
+  - **新增 3 个 MCP Tool**：
+    - `connect_database`：动态连接数据库，支持全部 17 种数据库类型，已有连接时自动断开旧连接
+    - `disconnect_database`：断开当前数据库连接
+    - `get_connection_status`：查看当前连接状态（类型、地址、权限模式、缓存状态）
+  - **`--type` 参数改为可选**：不指定则以无连接模式启动，等待 AI 通过 `connect_database` 动态连接
+  - **零配置启动**：`claude_desktop_config.json` 中只需 `"args": ["universal-db-mcp"]`，对话中告诉 AI 数据库信息即可
+  - **向后兼容**：传了 `--type` 参数的用户行为完全不变
+  - **影响范围**：仅 MCP stdio 模式，HTTP/SSE/Streamable HTTP 模式不受影响
+  - **改动文件**：`src/mcp/mcp-server.ts`、`src/mcp/mcp-index.ts`
+
+#### 用户使用指南
+
+**方式 A：零配置启动（新增能力）**
+
+在 `claude_desktop_config.json` 中无需指定数据库参数：
+
+```json
+{
+  "mcpServers": {
+    "universal-db": {
+      "command": "npx",
+      "args": ["universal-db-mcp"]
+    }
+  }
+}
+```
+
+然后在对话中直接告诉 AI 数据库信息：
+- "帮我连接 192.168.1.100 的 MySQL，用户名 root，密码 123456，数据库 order_db"
+- "切换到 10.0.0.5 的 PostgreSQL，端口 5432，数据库 analytics"
+- "断开当前数据库连接"
+- "当前连的是哪个库？"
+
+AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_status` 工具。
+
+**方式 B：带默认连接启动（向后兼容，行为不变）**
+
+```json
+{
+  "mcpServers": {
+    "universal-db": {
+      "command": "npx",
+      "args": [
+        "universal-db-mcp",
+        "--type", "mysql",
+        "--host", "localhost",
+        "--port", "3306",
+        "--user", "root",
+        "--password", "your_password",
+        "--database", "your_database"
+      ]
+    }
+  }
+}
+```
+
+启动时自动连接指定数据库，对话中仍可通过 `connect_database` 切换到其他数据库。
+
 ## [2.13.0] - 2026
 
 ### 修复

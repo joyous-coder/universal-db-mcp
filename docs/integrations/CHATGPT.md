@@ -110,6 +110,11 @@ Once connected, the following tools become available in ChatGPT:
 | `get_schema` | Get database schema information |
 | `get_table_info` | Get detailed information about a specific table |
 | `clear_cache` | Clear the schema cache |
+| `get_enum_values` | Get all unique values for a specified column |
+| `get_sample_data` | Get sample data from a table (with automatic data masking) |
+| `connect_database` | Dynamically connect to a database (supports all 17 types) |
+| `disconnect_database` | Disconnect from the current database |
+| `get_connection_status` | Get current database connection status |
 
 ## Header Reference
 

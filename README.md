@@ -207,9 +207,12 @@ See [Dify Integration Guide](./docs/integrations/DIFY.md) for detailed setup ins
 │  │  • clear_cache          │    │  │  • execute_query            │  │   │
 │  │  • get_enum_values      │    │  │  • get_schema               │  │   │
 │  │  • get_sample_data      │    │  │  • get_table_info           │  │   │
-│  │                         │    │  │  • clear_cache              │  │   │
-│  │  For: Claude Desktop,   │    │  │  • get_enum_values          │  │   │
-│  │       Cursor, etc.      │    │  │  • get_sample_data          │  │   │
+│  │  • connect_database     │    │  │  • clear_cache              │  │   │
+│  │  • disconnect_database  │    │  │  • get_enum_values          │  │   │
+│  │  • get_connection_status│    │  │  • get_sample_data          │  │   │
+│  │                         │    │  │  • connect_database         │  │   │
+│  │  For: Claude Desktop,   │    │  │  • disconnect_database      │  │   │
+│  │       Cursor, etc.      │    │  │  • get_connection_status    │  │   │
 │  └─────────────┬───────────┘    │  │                             │  │   │
 │                │                │  │  For: Dify, Remote Access   │  │   │
 │                │                │  └──────────────┬──────────────┘  │   │

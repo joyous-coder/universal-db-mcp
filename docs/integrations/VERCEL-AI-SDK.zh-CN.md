@@ -62,6 +62,11 @@ console.log(result.text);
 | `get_schema` | 获取数据库结构 |
 | `get_table_info` | 获取表详情 |
 | `clear_cache` | 清除 Schema 缓存 |
+| `get_enum_values` | 获取指定列的所有唯一值 |
+| `get_sample_data` | 获取表的示例数据（自动脱敏） |
+| `connect_database` | 动态连接数据库（支持全部 17 种类型） |
+| `disconnect_database` | 断开当前数据库连接 |
+| `get_connection_status` | 获取当前数据库连接状态 |
 
 ## 资源
 

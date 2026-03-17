@@ -206,9 +206,12 @@ POST http://localhost:3000/mcp
 │  │  • clear_cache          │    │  │  • execute_query            │  │   │
 │  │  • get_enum_values      │    │  │  • get_schema               │  │   │
 │  │  • get_sample_data      │    │  │  • get_table_info           │  │   │
-│  │                         │    │  │  • clear_cache              │  │   │
-│  │  适用：Claude Desktop,  │    │  │  • get_enum_values          │  │   │
-│  │        Cursor 等        │    │  │  • get_sample_data          │  │   │
+│  │  • connect_database     │    │  │  • clear_cache              │  │   │
+│  │  • disconnect_database  │    │  │  • get_enum_values          │  │   │
+│  │  • get_connection_status│    │  │  • get_sample_data          │  │   │
+│  │                         │    │  │  • connect_database         │  │   │
+│  │  适用：Claude Desktop,  │    │  │  • disconnect_database      │  │   │
+│  │        Cursor 等        │    │  │  • get_connection_status    │  │   │
 │  └─────────────┬───────────┘    │  │                             │  │   │
 │                │                │  │  适用：Dify、远程访问       │  │   │
 │                │                │  └──────────────┬──────────────┘  │   │
