@@ -151,7 +151,7 @@ export class OracleAdapter implements DbAdapter {
       return await this.withRetry(() => this.withConnection(async (connection) => {
         let cleanQuery = query.trim();
         if (cleanQuery.endsWith(';')) cleanQuery = cleanQuery.slice(0, -1).trim();
-        const result = await connection.execute(cleanQuery, params || [], { autoCommit: false, outFormat: oracledb.OUT_FORMAT_OBJECT });
+        const result = await connection.execute(cleanQuery, params || [], { autoCommit: true, outFormat: oracledb.OUT_FORMAT_OBJECT });
         const executionTime = Date.now() - startTime;
         if (result.rows && result.rows.length > 0) {
           const rows = result.rows.map((row: any) => { const r: Record<string, unknown> = {}; for (const [k, v] of Object.entries(row)) { r[k.toLowerCase()] = v; } return r; });
