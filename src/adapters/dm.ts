@@ -45,6 +45,7 @@ async function loadDMDB() {
 
 export class DMAdapter implements DbAdapter {
   private connection: any = null;
+  private pool: any = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private connectionConfig: any = null;
   private config: {
@@ -74,7 +75,14 @@ export class DMAdapter implements DbAdapter {
     try {
       if (this.connection) { try { await this.connection.close(); } catch {} this.connection = null; }
       const DM = await loadDMDB();
-      this.connection = await DM.getConnection(this.connectionConfig);
+      // 从连接池重新获取连接
+      if (this.pool) {
+        this.connection = await this.pool.getConnection();
+      } else {
+        const pool = await DM.createPool(this.connectionConfig);
+        this.pool = pool;
+        this.connection = await pool.getConnection();
+      }
       console.error('达梦数据库重连成功');
     } catch (error) {
       console.error('达梦数据库重连失败:', error instanceof Error ? error.message : String(error));
@@ -105,26 +113,27 @@ export class DMAdapter implements DbAdapter {
 
   /**
    * 连接到达梦数据库
+   *
+   * 注意：dmdb 驱动的 getConnection() 方法不支持 connectString 参数，
+   * 只能通过 createPool + pool.getConnection() 的方式连接。
+   * 同时需要通过 URL 参数 loginEncrypt=false 禁用消息加密，
+   * 避免 Node.js 22 的 OpenSSL 3.0 与达梦加密算法不兼容的问题。
    */
   async connect(): Promise<void> {
     try {
       const DM = await loadDMDB();
 
       // 达梦数据库连接配置
-      const connectionConfig = {
-        host: this.config.host,
-        port: this.config.port || 5236, // 达梦默认端口
-        user: this.config.user,
-        password: this.config.password,
-        database: this.config.database,
-        // 禁用消息加密以避免 OpenSSL 3.0 兼容性问题
-        // 如果需要加密连接，请确保达梦数据库服务器配置了兼容的加密算法
-        cipherPath: '',
-        loginEncrypt: false,
-      };
+      // 使用 connectString 格式，通过 URL 参数 loginEncrypt=false 禁用消息加密
+      // 避免 Node.js 22 的 OpenSSL 3.0 与达梦加密算法不兼容的问题
+      const port = this.config.port || 5236; // 达梦默认端口
+      const connectString = `dm://${this.config.user}:${this.config.password}@${this.config.host}:${port}?loginEncrypt=false`;
 
-      this.connection = await DM.getConnection(connectionConfig);
-      this.connectionConfig = connectionConfig;
+      // createPool 支持 connectString，getConnection 不支持
+      // 所以先用 createPool 创建连接池，再从池中获取连接
+      this.pool = await DM.createPool({ connectString });
+      this.connection = await this.pool.getConnection();
+      this.connectionConfig = { connectString };
 
       // 测试连接
       await this.connection.execute('SELECT 1 FROM DUAL', []);
@@ -156,6 +165,14 @@ export class DMAdapter implements DbAdapter {
       }
       this.connection = null;
     }
+    if (this.pool) {
+      try {
+        await this.pool.close();
+      } catch (error) {
+        // 忽略关闭连接池时的错误
+      }
+      this.pool = null;
+    }
   }
 
   /**
@@ -176,8 +193,11 @@ export class DMAdapter implements DbAdapter {
       }
 
       // 执行查询
+      // 对于写操作（INSERT/UPDATE/DELETE），设置 autoCommit: true 确保操作立即提交
+      // 对于读操作（SELECT），autoCommit 无影响
+      const isWrite = this.isWriteOperation(cleanQuery);
       const result: any = await this.withRetry(() => this.connection.execute(cleanQuery, params || [], {
-        autoCommit: false,
+        autoCommit: isWrite,
       }));
 
       const executionTime = Date.now() - startTime;
