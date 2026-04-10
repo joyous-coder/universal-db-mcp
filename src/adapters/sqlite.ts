@@ -54,7 +54,11 @@ export class SQLiteAdapter implements DbAdapter {
    */
   async disconnect(): Promise<void> {
     if (this.db) {
-      this.db.close();
+      try {
+        this.db.close();
+      } catch {
+        // 忽略关闭连接时的错误（数据库文件可能已被删除）
+      }
       this.db = null;
     }
   }
