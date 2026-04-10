@@ -87,7 +87,11 @@ export class MongoDBAdapter implements DbAdapter {
    */
   async disconnect(): Promise<void> {
     if (this.client) {
-      await this.client.close();
+      try {
+        await this.client.close();
+      } catch {
+        // 忽略关闭连接时的错误（连接可能已断开）
+      }
       this.client = null;
       this.db = null;
     }
