@@ -354,7 +354,7 @@ curl -X POST http://localhost:3000/api/connect \
 ### For Claude Desktop (MCP Mode)
 No changes needed! Continue using as before:
 ```bash
-npm install -g universal-db-mcp
+npm install -g @joyous-coder/universal-db-mcp
 # Configure in Claude Desktop config file
 ```
 
@@ -362,7 +362,7 @@ npm install -g universal-db-mcp
 
 1. **Install**:
    ```bash
-   npm install -g universal-db-mcp
+   npm install -g @joyous-coder/universal-db-mcp
    ```
 
 2. **Configure** (create `.env`):

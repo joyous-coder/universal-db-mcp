@@ -25,7 +25,7 @@
 ### 安装
 
 ```bash
-npm install -g universal-db-mcp
+npm install -g @joyous-coder/universal-db-mcp
 ```
 
 ### 基础配置

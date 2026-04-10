@@ -24,7 +24,7 @@
 
 ```bash
 # 全局安装
-npm install -g universal-db-mcp
+npm install -g @joyous-coder/universal-db-mcp
 
 # 或本地安装
 npm install universal-db-mcp
@@ -52,7 +52,7 @@ LOG_LEVEL=info
 npm run start:http
 
 # 如果本地安装
-npx universal-db-mcp
+npx @joyous-coder/universal-db-mcp
 ```
 
 #### 4. 验证

@@ -15,7 +15,7 @@ universal-db-mcp 现已支持 Microsoft SQL Server（2012+）和 Azure SQL Datab
 ### 方法 1: 全局安装（推荐）
 
 ```bash
-npm install -g universal-db-mcp
+npm install -g @joyous-coder/universal-db-mcp
 ```
 
 SQL Server 驱动 `mssql` 会自动安装。

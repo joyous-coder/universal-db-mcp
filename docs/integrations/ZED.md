@@ -531,7 +531,7 @@ The AI will examine your schema and generate appropriate code.
 2. Verify the command path is correct (use `which npx` to find the full path)
 3. Test the MCP server manually in terminal:
    ```bash
-   npx universal-db-mcp --type mysql --host localhost --port 3306 --user root --password your_password --database your_database
+   npx @joyous-coder/universal-db-mcp --type mysql --host localhost --port 3306 --user root --password your_password --database your_database
    ```
 4. Ensure all required arguments are provided
 

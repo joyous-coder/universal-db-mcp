@@ -577,7 +577,7 @@ AI 将检查您的结构并生成适当的代码。
 2. 验证命令路径是否正确（使用 `which npx` 查找完整路径）
 3. 在终端中手动测试 MCP 服务器：
    ```bash
-   npx universal-db-mcp --type mysql --host localhost --port 3306 --user root --password your_password --database your_database
+   npx @joyous-coder/universal-db-mcp --type mysql --host localhost --port 3306 --user root --password your_password --database your_database
    ```
 4. 确保提供了所有必需的参数
 

@@ -328,7 +328,7 @@ SESSION_CLEANUP_INTERVAL=300000
 Cherry Studio 也支持 MCP 协议，配置命令示例：
 
 ```bash
-npx universal-db-mcp@latest --type mysql --host localhost --port 3306 --user root --password your_password --database your_database
+npx @joyous-coder/universal-db-mcp@latest --type mysql --host localhost --port 3306 --user root --password your_password --database your_database
 ```
 
 ## 配置优先级

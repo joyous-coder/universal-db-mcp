@@ -31,7 +31,7 @@ Dify 是一个 LLM 应用开发平台。通过集成 Universal Database MCP Serv
 export MODE=http
 export HTTP_PORT=3000
 export API_KEYS=your-secret-key  # 可选：启用 API Key 认证
-npx universal-db-mcp
+npx @joyous-coder/universal-db-mcp
 
 # 或使用 Docker
 docker run -d \

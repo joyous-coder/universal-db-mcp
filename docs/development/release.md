@@ -54,7 +54,7 @@ npm publish
 npm view universal-db-mcp
 
 # 测试安装
-npx universal-db-mcp@latest --help
+npx @joyous-coder/universal-db-mcp@latest --help
 ```
 
 ## 🎉 发布成功后
@@ -63,10 +63,10 @@ npx universal-db-mcp@latest --help
 
 ```bash
 # 全局安装
-npm install -g universal-db-mcp
+npm install -g @joyous-coder/universal-db-mcp
 
 # 或直接使用 npx
-npx universal-db-mcp --type mysql --host localhost --port 3306 ...
+npx @joyous-coder/universal-db-mcp --type mysql --host localhost --port 3306 ...
 ```
 
 ## 📦 包信息

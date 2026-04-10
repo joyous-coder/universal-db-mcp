@@ -61,7 +61,7 @@ HTTP API 模式的详细部署文档请参考：
 
 ```bash
 # 安装
-npm install -g universal-db-mcp
+npm install -g @joyous-coder/universal-db-mcp
 
 # 启动 MCP 模式
 universal-db-mcp --type mysql --host localhost --port 3306 --user root --password xxx --database mydb

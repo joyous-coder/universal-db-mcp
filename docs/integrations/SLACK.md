@@ -24,7 +24,7 @@ export MODE=http
 export HTTP_PORT=3000
 export API_KEYS=slack-bot-secret-key
 export CORS_ORIGINS=*
-npx universal-db-mcp
+npx @joyous-coder/universal-db-mcp
 
 # Or using Docker
 docker run -d \

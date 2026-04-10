@@ -1,6 +1,6 @@
 {
-  "name": "universal-db-mcp",
-  "version": "2.14.0",
+  "name": "@joyous-coder/universal-db-mcp",
+  "version": "2.14.1-fork.1",
   "description": "MCP 数据库万能连接器 - 让 Claude Desktop 直接连接你的数据库",
   "main": "dist/index.js",
   "bin": {
@@ -61,7 +61,7 @@
     "数据库",
     "AI"
   ],
-  "author": "Anarkh-Lee",
+  "author": "joyous-coder",
   "license": "MIT",
   "files": [
     "dist/**/*.js",
@@ -115,10 +115,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Anarkh-Lee/universal-db-mcp.git"
+    "url": "https://github.com/joyous-coder/universal-db-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/Anarkh-Lee/universal-db-mcp/issues"
+    "url": "https://github.com/joyous-coder/universal-db-mcp/issues"
   },
-  "homepage": "https://github.com/Anarkh-Lee/universal-db-mcp#readme"
+  "homepage": "https://github.com/joyous-coder/universal-db-mcp#readme"
 }

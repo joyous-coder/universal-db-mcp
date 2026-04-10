@@ -26,7 +26,7 @@
 
 ```
 #添加mcp
-claude mcp add universal-db-mcp -- npx universal-db-mcp --type xxx --host xxx.xxx.xxx.xxx --port xxx --user xxx --password xxx --database xxx
+claude mcp add universal-db-mcp -- npx @joyous-coder/universal-db-mcp --type xxx --host xxx.xxx.xxx.xxx --port xxx --user xxx --password xxx --database xxx
 ```
 
 下面还有一些命令可能会用到

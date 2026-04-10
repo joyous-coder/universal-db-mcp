@@ -31,7 +31,7 @@ Deploy Universal Database MCP Server in HTTP mode:
 export MODE=http
 export HTTP_PORT=3000
 export API_KEYS=your-secret-key  # Optional: Enable API key authentication
-npx universal-db-mcp
+npx @joyous-coder/universal-db-mcp
 
 # Or using Docker
 docker run -d \
