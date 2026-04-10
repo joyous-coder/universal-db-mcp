@@ -97,7 +97,11 @@ export class MySQLAdapter implements DbAdapter {
    */
   async disconnect(): Promise<void> {
     if (this.pool) {
-      await this.pool.end();
+      try {
+        await this.pool.end();
+      } catch {
+        // 忽略关闭连接池时的错误（连接可能已断开）
+      }
       this.pool = null;
     }
   }
