@@ -571,9 +571,9 @@ Generate a Spring Data JPA repository for the products table with custom query m
 4. On Windows, you may need to restart after installing Node.js
 5. Alternatively, install globally and use direct command:
    ```bash
-   npm install -g universal-db-mcp
+   npm install -g @joyous-coder/universal-db-mcp
    ```
-   Then use `universal-db-mcp` instead of `npx universal-db-mcp` in the configuration
+   Then use `universal-db-mcp` instead of `npx @joyous-coder/universal-db-mcp` in the configuration
 
 ### Issue: Slow Response
 

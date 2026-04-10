@@ -620,7 +620,7 @@ You can also use environment variables in your configuration:
 If you've installed universal-db-mcp globally, you can use it directly:
 
 ```bash
-npm install -g universal-db-mcp
+npm install -g @joyous-coder/universal-db-mcp
 ```
 
 ```json

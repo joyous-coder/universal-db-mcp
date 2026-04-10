@@ -13,7 +13,7 @@
 ### 方式一：NPM 全局安装（推荐）
 
 ```bash
-npm install -g universal-db-mcp
+npm install -g @joyous-coder/universal-db-mcp
 ```
 
 安装完成后，可以直接使用命令：
@@ -25,7 +25,7 @@ universal-db-mcp --help
 ### 方式二：npx 直接运行（无需安装）
 
 ```bash
-npx universal-db-mcp --help
+npx @joyous-coder/universal-db-mcp --help
 ```
 
 这种方式会自动下载最新版本并运行，适合临时使用或测试。
@@ -84,7 +84,7 @@ Oracle 驱动 `oracledb` 需要 Oracle Instant Client。请参考 [Oracle 官方
 npm update -g universal-db-mcp
 
 # 或重新安装最新版
-npm install -g universal-db-mcp@latest
+npm install -g @joyous-coder/universal-db-mcp@latest
 ```
 
 ## 卸载

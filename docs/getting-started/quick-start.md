@@ -16,7 +16,7 @@ Universal DB MCP 支持两种运行模式：
 ### 1. 安装
 
 ```bash
-npm install -g universal-db-mcp
+npm install -g @joyous-coder/universal-db-mcp
 ```
 
 ### 2. 配置 Claude Desktop

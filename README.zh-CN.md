@@ -75,7 +75,7 @@ AI: 让我帮你查询一下...
 ### 安装
 
 ```bash
-npm install -g universal-db-mcp
+npm install -g @joyous-coder/universal-db-mcp
 ```
 
 ### MCP 模式（Claude Desktop）
@@ -119,7 +119,7 @@ export HTTP_PORT=3000
 export API_KEYS=your-secret-key
 
 # 启动服务
-npx universal-db-mcp
+npx @joyous-coder/universal-db-mcp
 ```
 
 ```bash
@@ -272,16 +272,16 @@ POST http://localhost:3000/mcp
 
 ```bash
 # 只读模式（默认）
-npx universal-db-mcp --type mysql ...
+npx @joyous-coder/universal-db-mcp --type mysql ...
 
 # 读写但不能删除
-npx universal-db-mcp --type mysql --permission-mode readwrite ...
+npx @joyous-coder/universal-db-mcp --type mysql --permission-mode readwrite ...
 
 # 自定义：只允许读和插入
-npx universal-db-mcp --type mysql --permissions read,insert ...
+npx @joyous-coder/universal-db-mcp --type mysql --permissions read,insert ...
 
 # 完全控制（等价于原来的 --danger-allow-write）
-npx universal-db-mcp --type mysql --permission-mode full ...
+npx @joyous-coder/universal-db-mcp --type mysql --permission-mode full ...
 ```
 
 **不同传输方式的权限配置：**

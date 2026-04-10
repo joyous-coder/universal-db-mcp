@@ -185,7 +185,7 @@ npm view universal-db-mcp version
 npm view universal-db-mcp
 
 # 安装测试
-npm install -g universal-db-mcp@latest
+npm install -g @joyous-coder/universal-db-mcp@latest
 universal-db-mcp --version
 ```
 

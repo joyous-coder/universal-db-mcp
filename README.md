@@ -76,7 +76,7 @@ AI: Let me query that for you...
 ### Installation
 
 ```bash
-npm install -g universal-db-mcp
+npm install -g @joyous-coder/universal-db-mcp
 ```
 
 ### MCP Mode (Claude Desktop)
@@ -120,7 +120,7 @@ export HTTP_PORT=3000
 export API_KEYS=your-secret-key
 
 # Start the server
-npx universal-db-mcp
+npx @joyous-coder/universal-db-mcp
 ```
 
 ```bash
@@ -273,16 +273,16 @@ Fine-grained permission control is supported for flexible configuration:
 
 ```bash
 # Read-only mode (default)
-npx universal-db-mcp --type mysql ...
+npx @joyous-coder/universal-db-mcp --type mysql ...
 
 # Read/write but no delete
-npx universal-db-mcp --type mysql --permission-mode readwrite ...
+npx @joyous-coder/universal-db-mcp --type mysql --permission-mode readwrite ...
 
 # Custom: only read and insert
-npx universal-db-mcp --type mysql --permissions read,insert ...
+npx @joyous-coder/universal-db-mcp --type mysql --permissions read,insert ...
 
 # Full control (equivalent to --danger-allow-write)
-npx universal-db-mcp --type mysql --permission-mode full ...
+npx @joyous-coder/universal-db-mcp --type mysql --permission-mode full ...
 ```
 
 **Permission Configuration by Transport:**

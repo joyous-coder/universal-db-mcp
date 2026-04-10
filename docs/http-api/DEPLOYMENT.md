@@ -24,7 +24,7 @@ This guide covers various deployment options for Universal Database MCP Server i
 
 ```bash
 # Global installation
-npm install -g universal-db-mcp
+npm install -g @joyous-coder/universal-db-mcp
 
 # Or local installation
 npm install universal-db-mcp
@@ -52,7 +52,7 @@ LOG_LEVEL=info
 npm run start:http
 
 # If installed locally
-npx universal-db-mcp
+npx @joyous-coder/universal-db-mcp
 ```
 
 #### 4. Verify

@@ -571,9 +571,9 @@ GROUP BY u.id
 4. 在 Windows 上，安装 Node.js 后可能需要重启
 5. 或者，全局安装后使用直接命令：
    ```bash
-   npm install -g universal-db-mcp
+   npm install -g @joyous-coder/universal-db-mcp
    ```
-   然后在配置中使用 `universal-db-mcp` 代替 `npx universal-db-mcp`
+   然后在配置中使用 `universal-db-mcp` 代替 `npx @joyous-coder/universal-db-mcp`
 
 ### 问题：响应缓慢
 

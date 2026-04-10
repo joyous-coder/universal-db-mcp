@@ -24,7 +24,7 @@ ChatGPT 通过 MCP Connectors 支持远程 MCP 服务器，可以通过 SSE 或 
 export MODE=http
 export HTTP_PORT=3000
 export API_KEYS=your-secret-api-key
-npx universal-db-mcp
+npx @joyous-coder/universal-db-mcp
 
 # 或使用 Docker
 docker run -d \

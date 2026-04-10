@@ -352,7 +352,7 @@ curl -X POST http://localhost:3000/api/connect \
 ### 对于 Claude Desktop (MCP 模式)
 无需更改！继续像以前一样使用：
 ```bash
-npm install -g universal-db-mcp
+npm install -g @joyous-coder/universal-db-mcp
 # 在 Claude Desktop 配置文件中配置
 ```
 
@@ -360,7 +360,7 @@ npm install -g universal-db-mcp
 
 1. **安装**:
    ```bash
-   npm install -g universal-db-mcp
+   npm install -g @joyous-coder/universal-db-mcp
    ```
 
 2. **配置** (创建 `.env`):
