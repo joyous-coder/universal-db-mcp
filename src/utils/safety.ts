@@ -8,7 +8,9 @@ import type { DbConfig, PermissionType } from '../types/adapter.js';
 /**
  * 操作类型到 SQL 关键字的映射
  */
-const OPERATION_KEYWORDS: Record<Exclude<PermissionType, 'read'>, readonly string[]> = {
+type SqlOperationPermission = Exclude<PermissionType, 'read' | 'script' | 'batch'>;
+
+const OPERATION_KEYWORDS: Record<SqlOperationPermission, readonly string[]> = {
   insert: ['INSERT', 'REPLACE'],
   update: ['UPDATE'],
   delete: ['DELETE', 'TRUNCATE'],
@@ -22,6 +24,7 @@ const PERMISSION_PRESETS: Record<string, readonly PermissionType[]> = {
   safe: ['read'],
   readwrite: ['read', 'insert', 'update'],
   full: ['read', 'insert', 'update', 'delete', 'ddl'],
+  // 'script' and 'batch' are NOT in any preset; users opt-in via custom permissions
 } as const;
 
 /**
@@ -76,12 +79,12 @@ export function isWriteOperation(query: string): boolean {
 /**
  * 检测查询的操作类型
  */
-function detectOperationType(query: string): { type: Exclude<PermissionType, 'read'>; keyword: string } | null {
+function detectOperationType(query: string): { type: SqlOperationPermission; keyword: string } | null {
   const upperQuery = query.trim().toUpperCase();
   for (const [opType, keywords] of Object.entries(OPERATION_KEYWORDS)) {
     for (const keyword of keywords) {
       if (startsWithKeyword(upperQuery, keyword)) {
-        return { type: opType as Exclude<PermissionType, 'read'>, keyword };
+        return { type: opType as SqlOperationPermission, keyword };
       }
     }
   }
@@ -135,7 +138,7 @@ export function getDangerousKeywords(query: string): string[] {
  * 格式化权限列表用于显示
  */
 export function formatPermissions(permissions: PermissionType[]): string {
-  const labels: Record<PermissionType, string> = {
+  const labels: Partial<Record<PermissionType, string>> = {
     read: '读取',
     insert: '插入',
     update: '更新',

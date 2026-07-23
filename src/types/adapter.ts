@@ -160,7 +160,7 @@ export interface RelationshipInfo {
 /**
  * 权限类型
  */
-export type PermissionType = 'read' | 'insert' | 'update' | 'delete' | 'ddl';
+export type PermissionType = 'read' | 'insert' | 'update' | 'delete' | 'ddl' | 'script' | 'batch';
 
 /**
  * 权限模式
