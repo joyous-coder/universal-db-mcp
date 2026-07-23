@@ -5,8 +5,8 @@
  */
 
 import { createClient, ClickHouseClient } from '@clickhouse/client';
+import { BaseAdapter } from './base.js';
 import type {
-  DbAdapter,
   QueryResult,
   SchemaInfo,
   TableInfo,
@@ -15,7 +15,7 @@ import type {
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
 
-export class ClickHouseAdapter implements DbAdapter {
+export class ClickHouseAdapter extends BaseAdapter {
   private client: ClickHouseClient | null = null;
   private config: {
     host: string;
@@ -32,6 +32,7 @@ export class ClickHouseAdapter implements DbAdapter {
     password?: string;
     database?: string;
   }) {
+    super();
     this.config = config;
   }
 
@@ -317,4 +318,8 @@ export class ClickHouseAdapter implements DbAdapter {
   isWriteOperation(query: string): boolean {
     return checkWriteOperation(query);
   }
+  protected getDialect(): import('../utils/adapter-factory.js').DbType {
+    return 'clickhouse';
+  }
+
 }
