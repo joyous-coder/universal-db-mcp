@@ -7,8 +7,8 @@
  */
 
 import oracledb from 'oracledb';
+import { BaseAdapter } from './base.js';
 import type {
-  DbAdapter,
   QueryResult,
   SchemaInfo,
   TableInfo,
@@ -20,7 +20,7 @@ import type {
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
 import { withRetry, isConnectionErrorMessage } from '../utils/retry.js';
 
-export class OracleAdapter implements DbAdapter {
+export class OracleAdapter extends BaseAdapter {
   private pool: oracledb.Pool | null = null;
   private config: {
     host: string;
@@ -46,6 +46,7 @@ export class OracleAdapter implements DbAdapter {
     connectString?: string;
     oracleClientPath?: string;
   }) {
+    super();
     this.config = config;
 
     // 如果提供了 Oracle Client 路径，启用 Thick 模式（支持 11g）
@@ -671,4 +672,8 @@ export class OracleAdapter implements DbAdapter {
 
     return false;
   }
+  protected getDialect(): import('../utils/adapter-factory.js').DbType {
+    return 'oracle';
+  }
+
 }
