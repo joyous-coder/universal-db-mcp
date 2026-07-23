@@ -32,7 +32,7 @@ export async function startMcpServer(): Promise<void> {
     .option('--danger-allow-write', '启用完全写入模式（危险！等价于 --permission-mode=full）', false)
     .option('--permission-mode <mode>', '权限模式: safe(只读) | readwrite(读写不删) | full(完全控制)', 'safe')
     .option('--permissions <list>', '自定义权限列表，逗号分隔: read,insert,update,delete,ddl,script,batch')
-    .option('--allow-sql-file-path <path>', '允许执行 SQL 文件的目录(可重复)。仅当 LLM 传入的文件路径在该目录下时才允许读取。', (value, prev) => {
+    .option('--allow-sql-file-path <path>', '允许执行 SQL 文件的目录(可重复)。仅当 LLM 传入的文件路径在该目录下时才允许读取。', (value: string, prev: string[] | undefined) => {
       return prev ? [...prev, value] : [value];
     })
     .action(async (options) => {
