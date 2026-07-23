@@ -19,6 +19,7 @@ import type {
   RelationshipInfo,
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
+import { isConnectionErrorMessage } from '../utils/retry.js';
 
 const { Pool } = pg;
 
@@ -43,26 +44,16 @@ export class HighGoAdapter implements DbAdapter {
   }
 
   /**
-   * 判断是否为连接类错误
-   */
-  private isConnectionError(error: unknown): boolean {
-    if (!(error instanceof Error)) return false;
-    const msg = error.message || '';
-    const code = (error as any).code || '';
-    return /Connection terminated|ECONNRESET|EPIPE|ETIMEDOUT|ECONNREFUSED|57P01|57P03|08003|08006/.test(
-      msg + code
-    );
-  }
-
-  /**
-   * 带断线重试的执行包装器
+   * 带断线重试的执行包装器（重试前会重建连接池）
    */
   private async withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try {
         return await fn();
       } catch (error) {
-        if (attempt < retries && this.isConnectionError(error)) {
+        const msg = error instanceof Error ? error.message : String(error);
+        const code = (error as any).code || '';
+        if (attempt < retries && (isConnectionErrorMessage(msg) || /Connection terminated|57P01|57P03|08003|08006/.test(msg + code))) {
           // 重建连接池后重试
           await this.connect();
           continue;
