@@ -11,6 +11,27 @@
 import type { DbAdapter, QueryResult } from '../types/adapter.js';
 import { splitStatements } from '../utils/sql-parser.js';
 
+/**
+ * Forbidden patterns in scripts (per spec P0-5):
+ * - DROP DATABASE / DROP SCHEMA
+ * - SHUTDOWN
+ * - TRUNCATE without WHERE
+ */
+const FORBIDDEN_PATTERNS: RegExp[] = [
+  /DROP\s+DATABASE\b/i,
+  /DROP\s+SCHEMA\b/i,
+  /\bSHUTDOWN\b/i,
+  /TRUNCATE\s+(?!.*\bWHERE\b)/i,
+];
+
+function checkForbiddenPatterns(script: string): void {
+  for (const pattern of FORBIDDEN_PATTERNS) {
+    if (pattern.test(script)) {
+      throw new Error(`Forbidden pattern detected in script: ${pattern.source}`);
+    }
+  }
+}
+
 export interface ExecuteScriptOptions {
   useTransaction?: boolean;
   maxStatements?: number;
@@ -41,6 +62,9 @@ export abstract class BaseAdapter implements DbAdapter {
   async executeScript(query: string, options: ExecuteScriptOptions = {}): Promise<QueryResult> {
     const maxStatements = options.maxStatements ?? 1000;
     const useTransaction = options.useTransaction ?? true;
+
+    // Reject forbidden patterns before executing anything
+    checkForbiddenPatterns(query);
 
     const statements = splitStatements(query, this.getDialect()).filter(s => s.trim());
 

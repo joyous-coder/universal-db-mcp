@@ -4,7 +4,7 @@
  * rather than a single statement.
  */
 
-const SCRIPT_KEYWORDS = /^\s*(BEGIN|DECLARE|CALL|CREATE\s+(OR\s+REPLACE\s+)?(PROCEDURE|FUNCTION|TRIGGER|PACKAGE))\b/i;
+const SCRIPT_KEYWORDS = /^\s*(BEGIN|DECLARE|CALL|CREATE\s+(OR\s+REPLACE\s+)?(PROCEDURE|FUNCTION|TRIGGER|PACKAGE)|\/\*|\()/i;
 
 /**
  * Detect if a query looks like a multi-statement script or PL block.
