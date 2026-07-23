@@ -8,8 +8,8 @@
  */
 
 import pg from 'pg';
+import { BaseAdapter } from './base.js';
 import type {
-  DbAdapter,
   QueryResult,
   SchemaInfo,
   TableInfo,
@@ -23,7 +23,7 @@ import { withRetry } from '../utils/retry.js';
 
 const { Pool } = pg;
 
-export class GaussDBAdapter implements DbAdapter {
+export class GaussDBAdapter extends BaseAdapter {
   private pool: pg.Pool | null = null;
   private config: {
     host: string;
@@ -40,6 +40,7 @@ export class GaussDBAdapter implements DbAdapter {
     password?: string;
     database?: string;
   }) {
+    super();
     this.config = config;
   }
 
@@ -469,4 +470,8 @@ export class GaussDBAdapter implements DbAdapter {
   isWriteOperation(query: string): boolean {
     return checkWriteOperation(query);
   }
+  protected getDialect(): import('../utils/adapter-factory.js').DbType {
+    return 'gaussdb';
+  }
+
 }
