@@ -18,6 +18,7 @@ import type {
   RelationshipInfo,
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
+import { withRetry } from '../utils/retry.js';
 
 export class MySQLAdapter implements DbAdapter {
   private pool: mysql.Pool | null = null;
@@ -37,28 +38,6 @@ export class MySQLAdapter implements DbAdapter {
     database?: string;
   }) {
     this.config = config;
-  }
-
-  /**
-   * 检测是否为连接断开类错误
-   */
-  private isConnectionError(error: unknown): boolean {
-    const msg = String((error as any)?.message || '');
-    return /closed state|ECONNRESET|EPIPE|ETIMEDOUT|PROTOCOL_CONNECTION_LOST|Connection lost|ECONNREFUSED/.test(msg);
-  }
-
-  /**
-   * 带断线重试的操作包装器（连接池会自动提供新连接）
-   */
-  private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
-    try {
-      return await fn();
-    } catch (error) {
-      if (this.isConnectionError(error)) {
-        return await fn();
-      }
-      throw error;
-    }
   }
 
   /**
@@ -117,7 +96,7 @@ export class MySQLAdapter implements DbAdapter {
     const startTime = Date.now();
 
     try {
-      const [rows, fields] = await this.withRetry(() => this.pool!.execute(query, params));
+      const [rows, fields] = await withRetry(() => this.pool!.execute(query, params));
       const executionTime = Date.now() - startTime;
 
       // 处理不同类型的查询结果
@@ -161,7 +140,7 @@ export class MySQLAdapter implements DbAdapter {
     }
 
     try {
-      return await this.withRetry(() => this._getSchemaImpl());
+      return await withRetry(() => this._getSchemaImpl());
     } catch (error) {
       throw new Error(
         `获取数据库结构失败: ${error instanceof Error ? error.message : String(error)}`
