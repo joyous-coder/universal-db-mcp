@@ -8,8 +8,8 @@
  */
 
 import pg from 'pg';
+import { BaseAdapter } from './base.js';
 import type {
-  DbAdapter,
   QueryResult,
   SchemaInfo,
   TableInfo,
@@ -23,7 +23,7 @@ import { isConnectionErrorMessage } from '../utils/retry.js';
 
 const { Pool } = pg;
 
-export class HighGoAdapter implements DbAdapter {
+export class HighGoAdapter extends BaseAdapter {
   private pool: pg.Pool | null = null;
   private config: {
     host: string;
@@ -40,6 +40,7 @@ export class HighGoAdapter implements DbAdapter {
     password?: string;
     database?: string;
   }) {
+    super();
     this.config = config;
   }
 
@@ -490,4 +491,8 @@ export class HighGoAdapter implements DbAdapter {
   isWriteOperation(query: string): boolean {
     return checkWriteOperation(query);
   }
+  protected getDialect(): import('../utils/adapter-factory.js').DbType {
+    return 'highgo';
+  }
+
 }
