@@ -45,7 +45,7 @@ export interface SchemaCacheStats {
  * 默认缓存配置
  */
 const DEFAULT_CACHE_CONFIG: SchemaCacheConfig = {
-  ttl: 5 * 60 * 1000, // 5 分钟
+  ttl: 60 * 1000, // 1 minute (P1-3: reduced from 5)
   enabled: true,
 };
 

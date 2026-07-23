@@ -52,11 +52,21 @@ export function resolvePermissions(config: DbConfig): PermissionType[] {
 }
 
 /**
- * 检查 SQL 语句是否以指定关键字开头
+ * Pre-compiled regex cache for keyword detection (P1-2)
  */
+const KEYWORD_REGEX_CACHE = new Map<string, RegExp>();
+
+function getKeywordRegex(keyword: string): RegExp {
+  let regex = KEYWORD_REGEX_CACHE.get(keyword);
+  if (!regex) {
+    regex = new RegExp(`^(\\s|--[\\s\\S]*?|\\/\\*[\\s\\S]*?\\*\\/)*${keyword}\\b`, 'i');
+    KEYWORD_REGEX_CACHE.set(keyword, regex);
+  }
+  return regex;
+}
+
 function startsWithKeyword(query: string, keyword: string): boolean {
-  const pattern = new RegExp(`^(\\s|--.*|/\\*.*?\\*/)*${keyword}\\b`, 'i');
-  return pattern.test(query);
+  return getKeywordRegex(keyword).test(query);
 }
 
 /**
