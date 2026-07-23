@@ -7,15 +7,15 @@
  */
 
 import { MongoClient, Db, Document } from 'mongodb';
+import { BaseAdapter } from './base.js';
 import type {
-  DbAdapter,
   QueryResult,
   SchemaInfo,
   TableInfo,
   ColumnInfo,
 } from '../types/adapter.js';
 
-export class MongoDBAdapter implements DbAdapter {
+export class MongoDBAdapter extends BaseAdapter {
   private client: MongoClient | null = null;
   private db: Db | null = null;
   private config: {
@@ -35,6 +35,7 @@ export class MongoDBAdapter implements DbAdapter {
     database?: string;
     authSource?: string;
   }) {
+    super();
     this.config = config;
   }
 
@@ -496,4 +497,8 @@ export class MongoDBAdapter implements DbAdapter {
 
     return writeOperations.includes(operation);
   }
+  protected getDialect(): import('../utils/adapter-factory.js').DbType {
+    return 'mongodb';
+  }
+
 }
