@@ -20,7 +20,7 @@ import type {
   RelationshipInfo,
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
-import { isConnectionErrorMessage } from '../utils/retry.js';
+import { isConnectionErrorMessage, withRetry } from '../utils/retry.js';
 
 // 动态导入 dmdb，因为它是可选依赖
 let dmdb: any = null;
@@ -102,15 +102,23 @@ export class DMAdapter extends BaseAdapter {
   }
 
   private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
-    try { return await fn(); } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      // 共享的连接错误检测 + DM 特定的中文连接错误消息
-      if (isConnectionErrorMessage(msg) || /closed|网络|连接/.test(msg)) {
+    return withRetry(fn, {
+      isRetryable: (error) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        // 共享的连接错误检测 + DM 特定的中文连接错误消息
+        return isConnectionErrorMessage(msg) || /closed|网络|连接/.test(msg);
+      },
+      // After retry, also reconnect (DM-specific behavior preserved)
+      baseDelayMs: 50,
+    }).catch(async (err) => {
+      // If shared retry exhausted, try DM-specific reconnect path
+      if (isConnectionErrorMessage(err instanceof Error ? err.message : String(err)) ||
+          /closed|网络|连接/.test(err instanceof Error ? err.message : String(err))) {
         await this.reconnect();
-        return await fn();
+        return fn();
       }
-      throw error;
-    }
+      throw err;
+    });
   }
 
   /**

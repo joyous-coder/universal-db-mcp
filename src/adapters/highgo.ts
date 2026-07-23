@@ -19,7 +19,7 @@ import type {
   RelationshipInfo,
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
-import { isConnectionErrorMessage } from '../utils/retry.js';
+import { isConnectionErrorMessage, withRetry } from '../utils/retry.js';
 
 const { Pool } = pg;
 
@@ -48,19 +48,24 @@ export class HighGoAdapter extends BaseAdapter {
    * 带断线重试的执行包装器（重试前会重建连接池）
    */
   private async withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
-    for (let attempt = 0; ; attempt++) {
-      try {
-        return await fn();
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        const code = (error as any).code || '';
-        if (attempt < retries && (isConnectionErrorMessage(msg) || /Connection terminated|57P01|57P03|08003|08006/.test(msg + code))) {
-          // 重建连接池后重试
-          await this.connect();
-          continue;
-        }
-        throw error;
+    try {
+      return await withRetry(fn, {
+        retries,
+        isRetryable: (error) => {
+          const msg = error instanceof Error ? error.message : String(error);
+          const code = (error as any)?.code || '';
+          return isConnectionErrorMessage(msg) || /Connection terminated|57P01|57P03|08003|08006/.test(msg + code);
+        },
+      });
+    } catch (err) {
+      // If shared retry exhausted, do one more pool-rebuild + manual retry
+      const msg = err instanceof Error ? err.message : String(err);
+      const code = (err as any)?.code || '';
+      if (isConnectionErrorMessage(msg) || /Connection terminated|57P01|57P03|08003|08006/.test(msg + code)) {
+        await this.connect();
+        return fn();
       }
+      throw err;
     }
   }
 
