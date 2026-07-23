@@ -8,7 +8,6 @@
 
 import mysql from 'mysql2/promise';
 import type {
-  DbAdapter,
   QueryResult,
   SchemaInfo,
   TableInfo,
@@ -19,8 +18,9 @@ import type {
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
 import { withRetry } from '../utils/retry.js';
+import { BaseAdapter, BatchResult, ExecuteBatchOptions } from './base.js';
 
-export class MySQLAdapter implements DbAdapter {
+export class MySQLAdapter extends BaseAdapter {
   private pool: mysql.Pool | null = null;
   private config: {
     host: string;
@@ -37,6 +37,7 @@ export class MySQLAdapter implements DbAdapter {
     password?: string;
     database?: string;
   }) {
+    super();
     this.config = config;
   }
 
@@ -408,5 +409,42 @@ export class MySQLAdapter implements DbAdapter {
    */
   isWriteOperation(query: string): boolean {
     return checkWriteOperation(query);
+  }
+
+  /**
+   * Override getDialect for sql-parser compatibility
+   */
+  protected getDialect(): import('../utils/adapter-factory.js').DbType {
+    return 'mysql';
+  }
+
+  /**
+   * Override executeBatch with native MySQL batch (single round-trip).
+   * mysql2 supports nested array format: pool.query(sql, [params1, params2, ...])
+   */
+  async executeBatch(sql: string, paramsList: unknown[][], options: ExecuteBatchOptions = {}): Promise<BatchResult> {
+    const maxBatchSize = options.maxBatchSize ?? 1000;
+    const useTransaction = options.useTransaction ?? true;
+
+    if (paramsList.length > maxBatchSize) {
+      throw new Error(`Batch has ${paramsList.length} rows, exceeds limit ${maxBatchSize}`);
+    }
+    if (paramsList.length === 0) {
+      throw new Error('Batch contains no parameter sets');
+    }
+
+    const startTime = Date.now();
+
+    // mysql2 native batch: nested array
+    const [result] = await this.pool!.query(sql, [paramsList]);
+    const affectedRows = (result as any)?.affectedRows ?? 0;
+
+    void useTransaction; // mysql2 batch runs in single statement, autocommit handles atomicity
+
+    return {
+      affectedRowsPerStatement: [],
+      totalAffectedRows: affectedRows,
+      executionTime: Date.now() - startTime,
+    };
   }
 }
