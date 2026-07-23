@@ -19,6 +19,7 @@ import type {
   RelationshipInfo,
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
+import { withRetry } from '../utils/retry.js';
 
 const { Pool } = pg;
 
@@ -40,36 +41,6 @@ export class VastbaseAdapter implements DbAdapter {
     database?: string;
   }) {
     this.config = config;
-  }
-
-  /**
-   * 判断是否为连接类错误
-   */
-  private isConnectionError(error: unknown): boolean {
-    if (!(error instanceof Error)) return false;
-    const msg = error.message || '';
-    const code = (error as any).code || '';
-    return /Connection terminated|ECONNRESET|EPIPE|ETIMEDOUT|ECONNREFUSED|57P01|57P03|08003|08006/.test(
-      msg + code
-    );
-  }
-
-  /**
-   * 带断线重试的执行包装器
-   */
-  private async withRetry<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
-    for (let attempt = 0; ; attempt++) {
-      try {
-        return await fn();
-      } catch (error) {
-        if (attempt < retries && this.isConnectionError(error)) {
-          // 等待一小段时间后重试
-          await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
-          continue;
-        }
-        throw error;
-      }
-    }
   }
 
   /**
@@ -123,7 +94,7 @@ export class VastbaseAdapter implements DbAdapter {
     const startTime = Date.now();
 
     try {
-      const result = await this.withRetry(() => this.pool!.query(query, params));
+      const result = await withRetry(() => this.pool!.query(query, params), { retries: 2, baseDelayMs: 500 });
       const executionTime = Date.now() - startTime;
 
       return {
@@ -153,7 +124,7 @@ export class VastbaseAdapter implements DbAdapter {
       throw new Error('数据库未连接');
     }
 
-    return this.withRetry(() => this._getSchemaImpl());
+    return withRetry(() => this._getSchemaImpl(), { retries: 2, baseDelayMs: 500 });
   }
 
   /**
