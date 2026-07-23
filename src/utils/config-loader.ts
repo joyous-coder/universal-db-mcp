@@ -145,7 +145,18 @@ export function validateConfig(config: AppConfig): void {
       throw new Error('HTTP 模式需要 HTTP 配置');
     }
     if (config.http.apiKeys.length === 0) {
-      console.warn('⚠️  警告: 未配置 API Keys，建议设置 API_KEYS 环境变量');
+      // Check escape hatch
+      if (process.env.ALLOW_INSECURE_NO_AUTH !== 'true') {
+        throw new Error(
+          '❌ HTTP 模式启动失败:未配置 API Keys。\n' +
+          '安全起见,HTTP 模式必须配置至少一个 API Key。\n' +
+          '请设置环境变量 API_KEYS=<comma-separated-keys>\n' +
+          '或在开发环境设置 ALLOW_INSECURE_NO_AUTH=true(不推荐,会打印强警告)'
+        );
+      }
+      console.error('⚠️⚠️⚠️ 严重安全警告: ALLOW_INSECURE_NO_AUTH=true 已启用,HTTP 模式无认证!');
+      console.error('⚠️⚠️⚠️ 任何能访问此端口的人都可以执行任意数据库操作!');
+      console.error('⚠️⚠️⚠️ 仅在本地开发或受控网络中使用!');
     }
   }
 }
