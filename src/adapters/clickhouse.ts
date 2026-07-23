@@ -14,6 +14,7 @@ import type {
   IndexInfo,
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
+import { withRetry } from '../utils/retry.js';
 
 export class ClickHouseAdapter extends BaseAdapter {
   private client: ClickHouseClient | null = null;
@@ -82,12 +83,13 @@ export class ClickHouseAdapter extends BaseAdapter {
     const startTime = Date.now();
 
     try {
-      // ClickHouse 使用命名参数或位置参数
-      const result = await this.client.query({
+      // ClickHouse 使用命名参数或位置参数;包装在共享 retry 中
+      const client = this.client!;
+      const result = await withRetry(() => client.query({
         query,
         query_params: params ? this.convertParams(params) : undefined,
         format: 'JSONEachRow',
-      });
+      }));
 
       const data = await result.json();
       const rows = Array.isArray(data) ? data as Record<string, unknown>[] : [];
