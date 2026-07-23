@@ -11,11 +11,11 @@
 
 `universal-db-mcp` 是一个支持 17 种数据库的 MCP server,提供 stdio 和 HTTP 两种运行模式。本次设计涵盖三个阶段:
 
-| 阶段 | 主题 | 项数 |
+| 阶段 | 主题 | 主项数(含子项) |
 |---|---|---|
 | **P0** | Bug 与安全修复 | 6 项 |
-| **P1** | 性能与可维护性 | 10 项 |
-| **P2** | 新功能 | 5 项 |
+| **P1** | 性能与可维护性 | 9 主项(P1-7/P1-8 各含 4 子项) |
+| **P2** | 新功能 | 3 主项(其中 P2-1 涵盖三个执行入口的职责划分) |
 
 **后续 spec**(本次不展开,留待 v2.x/v3.x):
 - 运维可观测性(连接池指标、Prometheus)
@@ -129,11 +129,13 @@ LLM 传入恶意表名(虽不太可能但理论存在)可执行任意 SQL。
    - 工具描述明确"需要 script 权限"
 
 3. **新增 `executeScript` 方法**(`src/core/database-service.ts` + 各适配器):
-   - PostgreSQL 用 `pool.query()`(simple query mode 支持多语句)
-   - MySQL 用 `pool.query()`(`multipleStatements` 已在 pool 配置中开启)
-   - Oracle/DM 用 `connection.execute()`
-   - SQLite 用 `db.exec()`
-   - 统一抽象基类 `BaseAdapter.executeScript()` 提供默认事务串行实现
+   - **统一策略**: 客户端解析 + 顺序执行(更安全,不依赖驱动多语句模式)
+     - 用 `sql-parser.ts` 把脚本切成单语句序列
+     - `useTransaction: true` 时:BEGIN → 逐条 executeQuery → COMMIT/ROLLBACK
+     - `useTransaction: false` 时:逐条 executeQuery(每条自动提交)
+   - **不使用** `multipleStatements: true`(单条查询池保持 `false` 以防 SQL 注入)
+   - **Oracle/DM 可选优化**: 若脚本全是简单 INSERT/UPDATE/DELETE,可调用 `connection.executeMany()` 走原生 batch(待性能测试后决定是否启用)
+   - 统一抽象基类 `BaseAdapter.executeScript()` 提供默认事务串行实现,各驱动按需 override
 
 4. **`execute_query` 自动降级**(`src/core/database-service.ts`):
    - 检测 `BEGIN|DECLARE|CALL|^\s*\(|^\s*\/\*` 等块语法关键字
@@ -407,7 +409,7 @@ SELECT DISTINCT column FROM (
    - 基于 `@faker-js/faker` zh_CN locale
    - 列名启发式规则(姓名/邮箱/手机号/地址等)
    - 类型 fallback
-   - 支持 9 种 generate 类型: `fixed`, `range`, `pattern`, `faker`, `enum`, `choice`, `sequence`, `regex`, `null`, `skip`
+   - 支持 10 种 generate 类型: `fixed`, `range`, `pattern`, `faker`, `enum`, `choice`, `sequence`, `regex`, `null`, `skip`
    - 模板占位符: 内置 + 跨列引用 + 修饰符(.lower, .upper, .pinyin, .pinyin.first, .first, .last, .N)
    - 行内顺序生成,维护 rowContext 支持跨列引用
 
