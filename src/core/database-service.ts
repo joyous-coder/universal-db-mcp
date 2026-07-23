@@ -155,6 +155,48 @@ export class DatabaseService {
   }
 
   /**
+   * Execute SQL from a file path.
+   * Requires 'script' permission and file path to be in configured allowlist.
+   */
+  async executeSqlFile(options: {
+    filePath: string;
+    useTransaction?: boolean;
+    maxStatements?: number;
+  }): Promise<QueryResult> {
+    const permissions = resolvePermissions(this.config);
+    if (!permissions.includes('script')) {
+      throw new Error('execute_sql_file 需要 script 权限。当前权限: ' + permissions.join(', '));
+    }
+
+    const allowedDirs = (this.config as any).allowedSqlFilePaths as string[] | undefined;
+    if (!allowedDirs || allowedDirs.length === 0) {
+      throw new Error(
+        'execute_sql_file 不可用:未配置 DB_ALLOWED_FILE_PATHS。\n' +
+        '请在 .mcp.json 的 env 中设置 DB_ALLOWED_FILE_PATHS=<comma-separated-dirs>'
+      );
+    }
+
+    // Lazy import to avoid circular deps
+    const { resolveAndValidatePath } = await import('../utils/path-guard.js');
+    const fs = await import('node:fs');
+
+    const realPath = resolveAndValidatePath(options.filePath, allowedDirs, process.cwd());
+
+    const stats = fs.statSync(realPath);
+    const maxFileSize = 50 * 1024 * 1024; // 50MB
+    if (stats.size > maxFileSize) {
+      throw new Error(`File too large: ${stats.size} bytes (max ${maxFileSize})`);
+    }
+
+    const content = fs.readFileSync(realPath, 'utf-8');
+
+    return this.executeScript(content, {
+      useTransaction: options.useTransaction,
+      maxStatements: options.maxStatements,
+    });
+  }
+
+  /**
    * Get complete database schema
    * @param forceRefresh - 是否强制刷新缓存，忽略现有缓存
    */

@@ -15,6 +15,7 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { DbAdapter, DbConfig } from '../types/adapter.js';
 import { DatabaseService, SchemaCacheConfig } from '../core/database-service.js';
 import { createAdapter, normalizeDbType } from '../utils/adapter-factory.js';
+import { resolvePermissions } from '../utils/safety.js';
 
 /**
  * 数据库 MCP 服务器类
@@ -50,11 +51,12 @@ export class DatabaseMCPServer {
   private setupHandlers(): void {
     // 列出可用工具
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      return {
-        tools: [
-          {
-            name: 'execute_query',
-            description: '执行 SQL 查询或数据库命令。支持 SELECT、JOIN、聚合等查询操作。如果启用了写入模式，也可以执行 INSERT、UPDATE、DELETE 等操作。',
+      // Compute permissions for tool registration gating
+      const resolvedPerms = this.config ? resolvePermissions(this.config) : ['read'];
+      const tools: any[] = [
+        {
+          name: 'execute_query',
+          description: '执行 SQL 查询或数据库命令。支持 SELECT、JOIN、聚合等查询操作。如果启用了写入模式，也可以执行 INSERT、UPDATE、DELETE 等操作。',
             inputSchema: {
               type: 'object',
               properties: {
@@ -210,8 +212,63 @@ export class DatabaseMCPServer {
               properties: {},
             },
           },
-        ],
-      };
+        ]
+      ;
+
+      // Conditionally register execute_script
+      if (resolvedPerms.includes('script')) {
+        tools.push({
+          name: 'execute_script',
+          description: '执行多语句 SQL 脚本或 PL/SQL 块。需要 permissions 包含 "script"。',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: { type: 'string', description: '完整脚本内容' },
+              useTransaction: { type: 'boolean', description: '是否在事务中执行(默认 true)', default: true },
+              maxStatements: { type: 'number', description: '最大语句数(默认 1000)', default: 1000 },
+            },
+            required: ['query'],
+          },
+        });
+
+        // execute_sql_file requires both script permission and allowed paths
+        const allowedPaths = (this.config as any)?.allowedSqlFilePaths as string[] | undefined;
+        if (allowedPaths && allowedPaths.length > 0) {
+          tools.push({
+            name: 'execute_sql_file',
+            description: '执行指定的 .sql 文件。支持多语句、PL 块、事务。需要 permissions 包含 "script" 且启动时配置 DB_ALLOWED_FILE_PATHS。',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                filePath: { type: 'string', description: 'SQL 文件路径。相对路径相对 MCP 启动时的 CWD。' },
+                useTransaction: { type: 'boolean', description: '是否在事务中执行(默认 true)', default: true },
+                maxStatements: { type: 'number', description: '最大语句数(默认 1000)', default: 1000 },
+              },
+              required: ['filePath'],
+            },
+          });
+        }
+      }
+
+      // Conditionally register execute_batch
+      if (resolvedPerms.includes('batch')) {
+        tools.push({
+          name: 'execute_batch',
+          description: '批量执行同一条 SQL 的多个参数集(类似 JdbcTemplate.batchUpdate)。需要 permissions 包含 "batch"。',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              sql: { type: 'string', description: '带占位符的 SQL 模板' },
+              paramsList: { type: 'array', items: { type: 'array' }, description: '参数集列表' },
+              useTransaction: { type: 'boolean', description: '是否在事务中执行(默认 true)', default: true },
+              maxBatchSize: { type: 'number', description: '最大行数(默认 1000)', default: 1000 },
+            },
+            required: ['sql', 'paramsList'],
+          },
+        });
+      }
+
+      return { tools };
     });
 
     // 处理工具调用
@@ -391,6 +448,33 @@ export class DatabaseMCPServer {
         }
 
         switch (name) {
+          case 'execute_script': {
+            const { query, useTransaction, maxStatements } = args as {
+              query: string; useTransaction?: boolean; maxStatements?: number;
+            };
+            console.error(`📜 执行脚本 (${query.length} chars)...`);
+            const result = await this.databaseService.executeScript(query, { useTransaction, maxStatements });
+            return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+          }
+
+          case 'execute_sql_file': {
+            const { filePath, useTransaction, maxStatements } = args as {
+              filePath: string; useTransaction?: boolean; maxStatements?: number;
+            };
+            console.error(`📂 执行 SQL 文件: ${filePath}`);
+            const result = await this.databaseService.executeSqlFile({ filePath, useTransaction, maxStatements });
+            return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+          }
+
+          case 'execute_batch': {
+            const { sql, paramsList, useTransaction, maxBatchSize } = args as {
+              sql: string; paramsList: unknown[][]; useTransaction?: boolean; maxBatchSize?: number;
+            };
+            console.error(`📦 批量执行: ${paramsList.length} 行`);
+            const result = await this.databaseService.executeBatch(sql, paramsList, { useTransaction, maxBatchSize });
+            return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+          }
+
           case 'execute_query': {
             const { query, params } = args as { query: string; params?: unknown[] };
 
