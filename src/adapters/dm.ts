@@ -9,8 +9,8 @@
  * 连接管理：使用心跳保活 + 断线自动重连 + 操作自动重试，确保长连接稳定性
  */
 
+import { BaseAdapter } from './base.js';
 import type {
-  DbAdapter,
   QueryResult,
   SchemaInfo,
   TableInfo,
@@ -44,7 +44,7 @@ async function loadDMDB() {
   }
 }
 
-export class DMAdapter implements DbAdapter {
+export class DMAdapter extends BaseAdapter {
   private connection: any = null;
   private pool: any = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -64,6 +64,7 @@ export class DMAdapter implements DbAdapter {
     password?: string;
     database?: string;
   }) {
+    super();
     this.config = config;
   }
 
@@ -819,4 +820,8 @@ export class DMAdapter implements DbAdapter {
 
     return false;
   }
+  protected getDialect(): import('../utils/adapter-factory.js').DbType {
+    return 'dm';
+  }
+
 }
