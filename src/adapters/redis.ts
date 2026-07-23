@@ -7,15 +7,15 @@
  */
 
 import { Redis } from 'ioredis';
+import { BaseAdapter } from './base.js';
 import type {
-  DbAdapter,
   QueryResult,
   SchemaInfo,
   TableInfo,
   ColumnInfo,
 } from '../types/adapter.js';
 
-export class RedisAdapter implements DbAdapter {
+export class RedisAdapter extends BaseAdapter {
   private client: Redis | null = null;
   private config: {
     host: string;
@@ -30,6 +30,7 @@ export class RedisAdapter implements DbAdapter {
     password?: string;
     database?: string;
   }) {
+    super();
     this.config = config;
   }
 
@@ -280,4 +281,8 @@ export class RedisAdapter implements DbAdapter {
     const command = upperQuery.split(/\s+/)[0];
     return writeCommands.includes(command);
   }
+  protected getDialect(): import('../utils/adapter-factory.js').DbType {
+    return 'redis';
+  }
+
 }
