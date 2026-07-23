@@ -18,6 +18,7 @@ import type {
   RelationshipInfo,
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
+import { withRetry, isConnectionErrorMessage } from '../utils/retry.js';
 
 export class OracleAdapter implements DbAdapter {
   private pool: oracledb.Pool | null = null;
@@ -68,15 +69,18 @@ export class OracleAdapter implements DbAdapter {
     oracledb.fetchAsString = [oracledb.CLOB];
   }
 
-  private isConnectionError(error: unknown): boolean {
-    const msg = String((error as any)?.message || '');
-    const errNum = (error as any)?.errorNum;
-    return /NJS-003|NJS-500|NJS-521|DPI-1010|DPI-1080|ECONNRESET|EPIPE|ETIMEDOUT|ECONNREFUSED/.test(msg) ||
-      [3113, 3114, 3135, 12170, 12571, 28547].includes(errNum);
-  }
-
   private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
-    try { return await fn(); } catch (error) { if (this.isConnectionError(error)) { return await fn(); } throw error; }
+    return withRetry(fn, {
+      isRetryable: (err) => {
+        const e = err as { message?: string; errorNum?: number };
+        const msg = e?.message || '';
+        if (isConnectionErrorMessage(msg)) return true;
+        // Oracle-specific connection errors
+        if (/NJS-003|NJS-500|NJS-521|DPI-1010|DPI-1080/.test(msg)) return true;
+        if ([3113, 3114, 3135, 12170, 12571, 28547].includes(e?.errorNum || 0)) return true;
+        return false;
+      }
+    });
   }
 
   private async withConnection<T>(fn: (conn: oracledb.Connection) => Promise<T>): Promise<T> {
