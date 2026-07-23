@@ -7,8 +7,8 @@
  */
 
 import sql from 'mssql';
+import { BaseAdapter } from './base.js';
 import type {
-  DbAdapter,
   QueryResult,
   SchemaInfo,
   TableInfo,
@@ -19,7 +19,7 @@ import type {
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
 
-export class SQLServerAdapter implements DbAdapter {
+export class SQLServerAdapter extends BaseAdapter {
   private pool: sql.ConnectionPool | null = null;
   private config: {
     host: string;
@@ -36,6 +36,7 @@ export class SQLServerAdapter implements DbAdapter {
     password?: string;
     database?: string;
   }) {
+    super();
     this.config = config;
   }
 
@@ -565,4 +566,8 @@ export class SQLServerAdapter implements DbAdapter {
 
     return false;
   }
+  protected getDialect(): import('../utils/adapter-factory.js').DbType {
+    return 'sqlserver';
+  }
+
 }
