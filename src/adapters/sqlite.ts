@@ -143,7 +143,6 @@ export class SQLiteAdapter implements DbAdapter {
       const relationships: RelationshipInfo[] = [];
 
       for (const table of tables) {
-        validateIdentifier(table.name);  // Validate before passing to getTableInfo
         const { tableInfo, tableForeignKeys } = await this.getTableInfo(table.name);
         tableInfos.push(tableInfo);
 
