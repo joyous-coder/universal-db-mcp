@@ -15,6 +15,7 @@ import type {
   RelationshipInfo,
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
+import { validateIdentifier } from '../utils/identifier-validator.js';
 
 export class SQLiteAdapter implements DbAdapter {
   private db: Database.Database | null = null;
@@ -142,6 +143,7 @@ export class SQLiteAdapter implements DbAdapter {
       const relationships: RelationshipInfo[] = [];
 
       for (const table of tables) {
+        validateIdentifier(table.name);  // Validate before passing to getTableInfo
         const { tableInfo, tableForeignKeys } = await this.getTableInfo(table.name);
         tableInfos.push(tableInfo);
 
@@ -179,6 +181,9 @@ export class SQLiteAdapter implements DbAdapter {
     if (!this.db) {
       throw new Error('数据库未连接');
     }
+
+    // Validate identifier to prevent SQL injection
+    validateIdentifier(tableName);
 
     // 获取列信息
     const columns = this.db
