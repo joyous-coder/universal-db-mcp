@@ -5,7 +5,8 @@
  */
 
 import type { DbAdapter, DbConfig, QueryResult, SchemaInfo, TableInfo, EnumValuesResult, SampleDataResult } from '../types/adapter.js';
-import { validateQuery } from '../utils/safety.js';
+import { validateQuery, resolvePermissions } from '../utils/safety.js';
+import { isScriptLike } from '../utils/sql-detector.js';
 import { SchemaEnhancer, SchemaEnhancerConfig } from '../utils/schema-enhancer.js';
 import { DataMasker, createDataMasker } from '../utils/data-masking.js';
 
@@ -89,10 +90,68 @@ export class DatabaseService {
     // Validate query safety
     this.validateQuery(query);
 
+    // Auto-downgrade: if script-like and script permission available, route to executeScript
+    if (isScriptLike(query)) {
+      const permissions = resolvePermissions(this.config);
+      if (permissions.includes('script')) {
+        return this.executeScript(query, { useTransaction: false });
+      } else {
+        throw new Error(
+          `检测到 PL/SQL 块或多语句脚本,需要 script 权限。\n` +
+          `当前权限: ${permissions.join(', ')}\n` +
+          `请使用 execute_script 工具,或在 connect_database 时添加 'script' 到 permissions。`
+        );
+      }
+    }
+
     // Execute query
     const result = await this.adapter.executeQuery(query, params);
 
     return result;
+  }
+
+  /**
+   * Execute a multi-statement script or PL block.
+   * Requires 'script' permission.
+   */
+  async executeScript(query: string, options?: { useTransaction?: boolean; maxStatements?: number }): Promise<QueryResult> {
+    const permissions = resolvePermissions(this.config);
+    if (!permissions.includes('script')) {
+      throw new Error(
+        'execute_script 需要 script 权限。当前权限: ' + permissions.join(', ') +
+        '\n如何启用:connect_database 时设置 permissions 包含 script,或使用 --permissions script'
+      );
+    }
+
+    validateQuery(query, this.config);
+
+    const adapter = this.adapter as any;
+    if (typeof adapter.executeScript !== 'function') {
+      throw new Error('当前数据库适配器不支持 executeScript');
+    }
+    return adapter.executeScript(query, options);
+  }
+
+  /**
+   * Execute a batch DML operation.
+   * Requires 'batch' permission.
+   */
+  async executeBatch(sql: string, paramsList: unknown[][], options?: { useTransaction?: boolean; maxBatchSize?: number }): Promise<{ affectedRowsPerStatement: number[]; totalAffectedRows: number; executionTime?: number }> {
+    const permissions = resolvePermissions(this.config);
+    if (!permissions.includes('batch')) {
+      throw new Error(
+        'execute_batch 需要 batch 权限。当前权限: ' + permissions.join(', ') +
+        '\n如何启用:connect_database 时设置 permissions 包含 batch,或使用 --permissions batch'
+      );
+    }
+
+    validateQuery(sql, this.config);
+
+    const adapter = this.adapter as any;
+    if (typeof adapter.executeBatch !== 'function') {
+      throw new Error('当前数据库适配器不支持 executeBatch');
+    }
+    return adapter.executeBatch(sql, paramsList, options);
   }
 
   /**
