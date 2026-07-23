@@ -250,13 +250,17 @@ export class DatabaseMCPServer {
               newConfig.oracleClientPath = oracleClientPath;
             }
 
-            // 断开旧连接
+            // 断开旧连接(总是清空状态,即使 disconnect 抛错)
             if (this.adapter) {
               console.error('🔄 断开旧数据库连接...');
               if (this.databaseService) {
                 this.databaseService.clearSchemaCache();
               }
-              await this.adapter.disconnect();
+              try {
+                await this.adapter.disconnect();
+              } catch (err) {
+                console.error('断开旧适配器时出错:', err instanceof Error ? err.message : String(err));
+              }
               this.adapter = null;
               this.databaseService = null;
             }
@@ -307,14 +311,21 @@ export class DatabaseMCPServer {
             if (this.databaseService) {
               this.databaseService.clearSchemaCache();
             }
-            await this.adapter.disconnect();
 
             const oldType = this.config?.type;
+
+            // Try disconnect but always clear state regardless of success
+            try {
+              await this.adapter.disconnect();
+            } catch (err) {
+              console.error(`断开适配器时出错 (${oldType}):`, err instanceof Error ? err.message : String(err));
+            }
+
             this.adapter = null;
             this.config = null;
             this.databaseService = null;
 
-            console.error('👋 数据库连接已断开');
+            console.error(`👋 数据库连接已断开: ${oldType || ''}`);
 
             return {
               content: [{
