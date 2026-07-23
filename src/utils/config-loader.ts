@@ -83,6 +83,9 @@ export function loadFromEnv(): Partial<AppConfig> {
       database: process.env.DB_DATABASE,
       filePath: process.env.DB_FILE_PATH,
       allowWrite: process.env.DB_ALLOW_WRITE === 'true',
+      allowedSqlFilePaths: process.env.DB_ALLOWED_FILE_PATHS
+        ? process.env.DB_ALLOWED_FILE_PATHS.split(',').map(p => p.trim()).filter(Boolean)
+        : undefined,
     };
   }
 

@@ -187,6 +187,8 @@ export interface DbConfig {
   permissions?: PermissionType[];
   /** Oracle Instant Client 路径（启用 Thick 模式以支持 11g） */
   oracleClientPath?: string;
+  /** Allowed directories for execute_sql_file tool (relative paths resolved from cwd) */
+  allowedSqlFilePaths?: string[];
 }
 
 /**
