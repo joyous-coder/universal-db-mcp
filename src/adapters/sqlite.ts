@@ -4,8 +4,8 @@
  */
 
 import Database from 'better-sqlite3';
+import { BaseAdapter } from './base.js';
 import type {
-  DbAdapter,
   QueryResult,
   SchemaInfo,
   TableInfo,
@@ -17,7 +17,7 @@ import type {
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
 import { validateIdentifier } from '../utils/identifier-validator.js';
 
-export class SQLiteAdapter implements DbAdapter {
+export class SQLiteAdapter extends BaseAdapter {
   private db: Database.Database | null = null;
   private config: {
     filePath: string;
@@ -28,6 +28,7 @@ export class SQLiteAdapter implements DbAdapter {
     filePath: string;
     readonly?: boolean;
   }) {
+    super();
     this.config = config;
   }
 
@@ -311,4 +312,8 @@ export class SQLiteAdapter implements DbAdapter {
   isWriteOperation(query: string): boolean {
     return checkWriteOperation(query);
   }
+  protected getDialect(): import('../utils/adapter-factory.js').DbType {
+    return 'sqlite';
+  }
+
 }
