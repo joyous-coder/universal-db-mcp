@@ -102,16 +102,30 @@ function parseModifiers(expr: string): ParsedExpr {
   const colName = expr.substring(0, dotIdx);
   let rest = expr.substring(dotIdx + 1);
 
-  // Compound modifier handling: 'pinyin.first' must be kept together
-  const modifiers: string[] = [];
+  // Compound modifier handling: if rest starts with 'pinyin' or 'pinyin.first',
+  // keep them together as one logical modifier
   if (rest === 'pinyin' || rest === 'pinyin.first') {
-    modifiers.push(rest);
+    return { colName, modifiers: [rest] };
+  }
+  if (rest.startsWith('pinyin.') || rest.startsWith('pinyin.first.')) {
+    // e.g., 'pinyin.first.lower' or 'pinyin.lower'
+    // Find boundary between 'pinyin' / 'pinyin.first' and remaining modifiers
+    let compoundEnd: number;
+    if (rest.startsWith('pinyin.first.')) {
+      compoundEnd = 'pinyin.first'.length;
+    } else {
+      // rest starts with 'pinyin.' (but not 'pinyin.first.') - so 'pinyin' is alone
+      compoundEnd = 'pinyin'.length;
+    }
+    const compound = rest.substring(0, compoundEnd);
+    const remaining = rest.substring(compoundEnd + 1); // skip the '.'
+    const modifiers = [compound];
+    if (remaining) modifiers.push(...remaining.split('.'));
     return { colName, modifiers };
   }
 
   // Otherwise split remaining modifiers
-  modifiers.push(...rest.split('.'));
-  return { colName, modifiers };
+  return { colName, modifiers: rest.split('.') };
 }
 
 function applyModifiers(value: string, modifiers: string[]): string {
