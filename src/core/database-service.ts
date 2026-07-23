@@ -64,6 +64,11 @@ export class DatabaseService {
   private cacheHitCount: number = 0;
   private cacheMissCount: number = 0;
 
+  // P1-5: query timeout (default 30s)
+  private queryTimeoutMs: number = 30000;
+  // P1-6: slow query threshold (default 5s)
+  private slowQueryThresholdMs: number = 5000;
+
   // Schema 增强器
   private schemaEnhancer: SchemaEnhancer;
 
@@ -104,10 +109,31 @@ export class DatabaseService {
       }
     }
 
-    // Execute query
-    const result = await this.adapter.executeQuery(query, params);
+    // Execute query with timeout + slow log (P1-5, P1-6)
+    const start = Date.now();
+    const result = await this.withTimeout(
+      this.adapter.executeQuery(query, params),
+      this.queryTimeoutMs,
+      'executeQuery'
+    );
+    const elapsed = Date.now() - start;
+    if (elapsed > this.slowQueryThresholdMs) {
+      console.error(`[SLOW QUERY] ${elapsed}ms: ${query.substring(0, 200)}`);
+    }
 
     return result;
+  }
+
+  private async withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Promise<T> {
+    let timer: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${operation} timed out after ${ms}ms`)), ms);
+    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   /**
