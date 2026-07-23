@@ -95,8 +95,8 @@ describe('resolveTemplate - cross-column references', () => {
   });
 
   it('chains modifiers', () => {
-    // Sequential application: .pinyin → 'zhangsan', .first → 'z', .lower → 'z'
+    // .pinyin.first applied as compound, then .lower → 'zs' → 'zs'
     const result = resolveTemplate('{name.pinyin.first.lower}', { name: '张三' }, 1, 0);
-    expect(result).toBe('z');
+    expect(result).toBe('zs');
   });
 });

@@ -70,17 +70,48 @@ function resolveExpr(expr: string, ctx: ResolveContext): string | null {
   }
 
   // Cross-column reference: column_name[.modifier]+
-  const parts = expr.split('.');
-  const colName = parts[0];
-  const modifiers = parts.slice(1);
+  // Match compound modifiers like 'pinyin.first' before single ones
+  const exprParsed = parseModifiers(expr);
+  const colName = exprParsed.colName;
+  const modifiers = exprParsed.modifiers;
 
   const value = ctx.rowContext[colName];
   if (value === undefined || value === null) {
-    // Unresolved — preserve as-is
     return null;
   }
 
   return applyModifiers(String(value), modifiers);
+}
+
+interface ParsedExpr {
+  colName: string;
+  modifiers: string[];
+}
+
+/**
+ * Parse an expression like 'name.pinyin.first.lower' into:
+ * - colName: 'name'
+ * - modifiers: ['pinyin.first', 'lower']  (compound modifiers kept together)
+ *
+ * The first modifier may be compound if it's 'pinyin' or 'pinyin.first'.
+ * Subsequent modifiers apply sequentially to the result.
+ */
+function parseModifiers(expr: string): ParsedExpr {
+  const dotIdx = expr.indexOf('.');
+  if (dotIdx < 0) return { colName: expr, modifiers: [] };
+  const colName = expr.substring(0, dotIdx);
+  let rest = expr.substring(dotIdx + 1);
+
+  // Compound modifier handling: 'pinyin.first' must be kept together
+  const modifiers: string[] = [];
+  if (rest === 'pinyin' || rest === 'pinyin.first') {
+    modifiers.push(rest);
+    return { colName, modifiers };
+  }
+
+  // Otherwise split remaining modifiers
+  modifiers.push(...rest.split('.'));
+  return { colName, modifiers };
 }
 
 function applyModifiers(value: string, modifiers: string[]): string {
