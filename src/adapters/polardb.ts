@@ -8,8 +8,8 @@
  */
 
 import mysql from 'mysql2/promise';
+import { BaseAdapter } from './base.js';
 import type {
-  DbAdapter,
   QueryResult,
   SchemaInfo,
   TableInfo,
@@ -21,7 +21,7 @@ import type {
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
 import { withRetry } from '../utils/retry.js';
 
-export class PolarDBAdapter implements DbAdapter {
+export class PolarDBAdapter extends BaseAdapter {
   private pool: mysql.Pool | null = null;
   private config: {
     host: string;
@@ -38,6 +38,7 @@ export class PolarDBAdapter implements DbAdapter {
     password?: string;
     database?: string;
   }) {
+    super();
     this.config = config;
   }
 
@@ -399,4 +400,8 @@ export class PolarDBAdapter implements DbAdapter {
   isWriteOperation(query: string): boolean {
     return checkWriteOperation(query);
   }
+  protected getDialect(): import('../utils/adapter-factory.js').DbType {
+    return 'polardb';
+  }
+
 }
