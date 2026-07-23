@@ -20,6 +20,7 @@ import type {
   RelationshipInfo,
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
+import { isConnectionErrorMessage } from '../utils/retry.js';
 
 // 动态导入 dmdb，因为它是可选依赖
 let dmdb: any = null;
@@ -66,11 +67,6 @@ export class DMAdapter implements DbAdapter {
     this.config = config;
   }
 
-  private isConnectionError(error: unknown): boolean {
-    const msg = String((error as any)?.message || '');
-    return /closed|ECONNRESET|EPIPE|ETIMEDOUT|ECONNREFUSED|网络|连接/.test(msg);
-  }
-
   private async reconnect(): Promise<void> {
     try {
       if (this.connection) { try { await this.connection.close(); } catch {} this.connection = null; }
@@ -106,7 +102,12 @@ export class DMAdapter implements DbAdapter {
 
   private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
     try { return await fn(); } catch (error) {
-      if (this.isConnectionError(error)) { await this.reconnect(); return await fn(); }
+      const msg = error instanceof Error ? error.message : String(error);
+      // 共享的连接错误检测 + DM 特定的中文连接错误消息
+      if (isConnectionErrorMessage(msg) || /closed|网络|连接/.test(msg)) {
+        await this.reconnect();
+        return await fn();
+      }
       throw error;
     }
   }
