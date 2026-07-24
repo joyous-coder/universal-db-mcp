@@ -56,6 +56,14 @@ export interface QueryHistoryInput {
   error_code: string | null;
   /** v2.19: nullable. Set to the active profile name when routing via ProfileManager. */
   profile_name?: string | null;
+  /** v3.x: actor (user/agent id). */
+  actor?: string | null;
+  /** v3.x: client IP for HTTP, agent id for MCP. */
+  client_ip?: string | null;
+  /** v3.x: 'read' | 'write' | 'ddl'. */
+  severity?: 'read' | 'write' | 'ddl' | null;
+  /** v3.x: optional JSON blob (e.g. policy tags). */
+  audit_metadata_json?: string | null;
 }
 export interface QueryHistoryEntry extends QueryHistoryInput {
   id: number;
@@ -80,6 +88,12 @@ export interface HistoryFilter {
    * exact phrases, prefix queries (orders*), boolean (orders NOT invoices).
    */
   q?: string;
+  /** v3.x: filter by actor */
+  actor?: string;
+  /** v3.x: filter by severity */
+  severity?: 'read' | 'write' | 'ddl';
+  /** v3.x: filter by client IP */
+  clientIp?: string;
 }
 
 /**

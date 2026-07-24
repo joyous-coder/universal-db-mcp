@@ -75,6 +75,14 @@ export class HistoryStore {
         // column already exists — ignore
       }
       this.conn.exec(`CREATE INDEX IF NOT EXISTS idx_history_profile ON query_history(profile_name)`);
+      // v3.x: audit metadata columns (idempotent migration)
+      try { this.conn.exec(`ALTER TABLE query_history ADD COLUMN actor TEXT`); } catch { /* duplicate */ }
+      try { this.conn.exec(`ALTER TABLE query_history ADD COLUMN client_ip TEXT`); } catch { /* duplicate */ }
+      try { this.conn.exec(`ALTER TABLE query_history ADD COLUMN severity TEXT`); } catch { /* duplicate */ }
+      try { this.conn.exec(`ALTER TABLE query_history ADD COLUMN audit_metadata_json TEXT`); } catch { /* duplicate */ }
+      this.conn.exec(`CREATE INDEX IF NOT EXISTS idx_history_actor ON query_history(actor)`);
+      this.conn.exec(`CREATE INDEX IF NOT EXISTS idx_history_severity ON query_history(severity)`);
+      this.conn.exec(`CREATE INDEX IF NOT EXISTS idx_history_client_ip ON query_history(client_ip)`);
       // v2.20: full-text search via SQLite FTS5 virtual table.
       // Contentless=0 (default) so the FTS table can be rebuilt from query_history.
       // triggers keep both tables in sync; backfill handles pre-existing rows.
@@ -120,8 +128,12 @@ export class HistoryStore {
     await this.init();
     const sql = input.sql.length > 4000 ? input.sql.slice(0, 4000) + ' /* truncated */' : input.sql;
     const profileName = input.profile_name ?? null;
+    const actor = input.actor ?? null;
+    const clientIp = input.client_ip ?? null;
+    const severity = input.severity ?? null;
+    const auditMetadata = input.audit_metadata_json ?? null;
     this.conn!.exec(
-      `INSERT INTO query_history (ts, db, kind, sql, params, duration_ms, rows, error, error_code, profile_name) VALUES (${q(input.ts)}, ${q(input.db)}, ${q(input.kind)}, ${q(sql)}, ${q(input.params)}, ${input.duration_ms}, ${input.rows ?? 'NULL'}, ${q(input.error)}, ${q(input.error_code)}, ${q(profileName)})`
+      `INSERT INTO query_history (ts, db, kind, sql, params, duration_ms, rows, error, error_code, profile_name, actor, client_ip, severity, audit_metadata_json) VALUES (${q(input.ts)}, ${q(input.db)}, ${q(input.kind)}, ${q(sql)}, ${q(input.params)}, ${input.duration_ms}, ${input.rows ?? 'NULL'}, ${q(input.error)}, ${q(input.error_code)}, ${q(profileName)}, ${q(actor)}, ${q(clientIp)}, ${q(severity)}, ${q(auditMetadata)})`
     );
     // LRU: if over maxRows, delete oldest 10%
     const count = (this.conn!.prepare('SELECT COUNT(*) as c FROM query_history').get() as { c: number }).c;
@@ -182,6 +194,16 @@ export class HistoryStore {
       where.push("rowid IN (SELECT rowid FROM history_fts WHERE history_fts MATCH ?)");
       args.push(filter.q.trim());
     }
+    // v3.x: audit filters
+    if (filter && typeof filter.actor === 'string' && filter.actor) {
+      where.push('actor = ?'); args.push(filter.actor);
+    }
+    if (filter && typeof filter.severity === 'string' && filter.severity) {
+      where.push('severity = ?'); args.push(filter.severity);
+    }
+    if (filter && typeof filter.clientIp === 'string' && filter.clientIp) {
+      where.push('client_ip = ?'); args.push(filter.clientIp);
+    }
     const limit = filter.limit ?? 50;
     const sql = `SELECT * FROM query_history ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT ${limit}`;
     const stmt = this.conn!.prepare(sql);
@@ -228,6 +250,11 @@ export class HistoryStore {
       error: (row.error as string) ?? null,
       error_code: (row.error_code as string) ?? null,
       profile_name: (row.profile_name as string | null) ?? null,
+      // v3.x audit metadata (may be null for pre-v3 rows)
+      actor: (row.actor as string | null) ?? null,
+      client_ip: (row.client_ip as string | null) ?? null,
+      severity: (row.severity as 'read' | 'write' | 'ddl' | null) ?? null,
+      audit_metadata_json: (row.audit_metadata_json as string | null) ?? null,
     };
   }
 }
