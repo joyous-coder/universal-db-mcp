@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { unlinkSync, existsSync } from 'node:fs';
 import { metrics } from '../../src/utils/metrics.js';
 import { DatabaseService } from '../../src/core/database-service.js';
 import { SQLiteAdapter } from '../../src/adapters/sqlite/index.js';
+import { QueryAnalyzer } from '../../src/core/query-analyzer.js';
 import type { DbConfig } from '../../src/types/adapter.js';
 
 describe('DatabaseService instrumentation', () => {
@@ -44,5 +46,54 @@ describe('DatabaseService instrumentation', () => {
     expect(errs).toBeDefined();
     expect(errs!.series.length).toBeGreaterThan(0);
     await adapter.disconnect();
+  });
+});
+
+describe('DatabaseService queryAnalyzer integration (v2.17)', () => {
+  const ts = Date.now();
+  const tplPath = `.tmp-qa-ds-tpl-${ts}.db`;
+  const histPath = `.tmp-qa-ds-hist-${ts}.db`;
+
+  it('executeQuery response includes lint result', async () => {
+    const adapter = new SQLiteAdapter({ filePath: ':memory:', readonly: false });
+    await adapter.connect();
+    const svc = new DatabaseService(adapter, { type: 'sqlite', allowWrite: true } as DbConfig);
+    const qa = new QueryAnalyzer({
+      enabled: true,
+      templatesDbPath: tplPath,
+      historyDbPath: histPath,
+      historyTtlDays: 30,
+      historyMaxRows: 100,
+      explainTimeoutMs: 5000,
+    });
+    svc.setQueryAnalyzer(qa);
+    const result = await svc.executeQuery('SELECT * FROM sqlite_master');
+    expect((result as any).lint).toBeDefined();
+    expect((result as any).lint.issues.some((i: any) => i.rule === 'select-star')).toBe(true);
+    await qa.close();
+    await adapter.disconnect();
+    [tplPath, histPath].forEach(p => { if (existsSync(p)) unlinkSync(p); });
+  });
+
+  it('recordQuery is called after executeQuery', async () => {
+    const adapter = new SQLiteAdapter({ filePath: ':memory:', readonly: false });
+    await adapter.connect();
+    const svc = new DatabaseService(adapter, { type: 'sqlite', allowWrite: true } as DbConfig);
+    const qa = new QueryAnalyzer({
+      enabled: true,
+      templatesDbPath: tplPath,
+      historyDbPath: histPath,
+      historyTtlDays: 30,
+      historyMaxRows: 100,
+      explainTimeoutMs: 5000,
+    });
+    svc.setQueryAnalyzer(qa);
+    await svc.executeQuery('SELECT 1 AS v');
+    await new Promise(r => setTimeout(r, 50));
+    const entries = await qa.getHistory({ limit: 10 });
+    expect(entries.length).toBeGreaterThanOrEqual(1);
+    await qa.close();
+    await adapter.disconnect();
+    [tplPath, histPath].forEach(p => { if (existsSync(p)) unlinkSync(p); });
   });
 });

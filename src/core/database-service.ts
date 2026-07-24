@@ -12,6 +12,8 @@ import { SchemaEnhancer, SchemaEnhancerConfig } from '../utils/schema-enhancer.j
 import { DataMasker, createDataMasker } from '../utils/data-masking.js';
 import { metrics } from '../utils/metrics.js';
 import type { RingBuffer } from '../utils/metrics-ringbuffer.js';
+import type { QueryAnalyzer } from './query-analyzer.js';
+import type { LintResult } from './query-analyzer-types.js';
 
 /**
  * Schema 缓存配置
@@ -74,6 +76,8 @@ export class DatabaseService {
   // v2.16: slow query ring buffer
   private slowBufferSize: number = 100;
   private slowQueries: RingBuffer<{ ts: string; db: string; kind: string; seconds: number; sql: string; error: string | null; }>;
+  // v2.17: query analyzer (optional)
+  private queryAnalyzer: QueryAnalyzer | null = null;
 
   // Schema 增强器
   private schemaEnhancer: SchemaEnhancer;
@@ -98,6 +102,14 @@ export class DatabaseService {
     this.slowQueries = metrics.ringBuffer('db_slow_queries', this.slowBufferSize);
     this.schemaEnhancer = new SchemaEnhancer(enhancerConfig);
     this.dataMasker = createDataMasker(true);
+  }
+
+  /**
+   * v2.17: attach a QueryAnalyzer (optional). When set, execute_query response
+   * includes a `lint` field, and queries are recorded to history.db.
+   */
+  setQueryAnalyzer(qa: QueryAnalyzer | null): void {
+    this.queryAnalyzer = qa;
   }
 
   /**
@@ -162,6 +174,23 @@ export class DatabaseService {
         sql: truncated,
         error: errorCode,
       });
+    }
+
+    // v2.17: lint (advisory) + recordQuery (fire-and-forget)
+    if (this.queryAnalyzer) {
+      const lint = this.queryAnalyzer.lint(query);
+      (result as QueryResult & { lint?: LintResult }).lint = lint;
+      this.queryAnalyzer.recordQuery({
+        ts: new Date().toISOString(),
+        db: dbType,
+        kind,
+        sql: query,
+        params: params ? JSON.stringify(params) : null,
+        duration_ms: elapsed,
+        rows: result.rows?.length ?? null,
+        error: null,
+        error_code: null,
+      }).catch(err => console.error('[queryAnalyzer] recordQuery failed:', err));
     }
 
     return result;
