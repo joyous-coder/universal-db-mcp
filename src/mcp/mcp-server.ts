@@ -13,9 +13,11 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { DbAdapter, DbConfig } from '../types/adapter.js';
+import type { AppConfig } from '../types/http.js';
 import { DatabaseService, SchemaCacheConfig } from '../core/database-service.js';
 import { createAdapter, normalizeDbType } from '../utils/adapter-factory.js';
 import { resolvePermissions } from '../utils/safety.js';
+import { buildGetMetricsHandler, GET_METRICS_TOOL_DESCRIPTION, type MetricsCategory } from './tools/metrics.js';
 
 /**
  * 数据库 MCP 服务器类
@@ -26,6 +28,8 @@ export class DatabaseMCPServer {
   private config: DbConfig | null;
   private databaseService: DatabaseService | null = null;
   private cacheConfig: Partial<SchemaCacheConfig>;
+  // v2.16: app-level config (for metrics settings, etc.); set via setAppConfig
+  private appConfig: AppConfig | null = null;
 
   constructor(config?: DbConfig, cacheConfig?: Partial<SchemaCacheConfig>) {
     this.config = config || null;
@@ -43,6 +47,13 @@ export class DatabaseMCPServer {
     );
 
     this.setupHandlers();
+  }
+
+  /**
+   * v2.16: set app-level config (for metrics, etc.). Optional; defaults are used if not set.
+   */
+  setAppConfig(appConfig: AppConfig): void {
+    this.appConfig = appConfig;
   }
 
   /**
@@ -210,6 +221,22 @@ export class DatabaseMCPServer {
             inputSchema: {
               type: 'object',
               properties: {},
+            },
+          },
+          // v2.16: observability
+          {
+            name: 'get_metrics',
+            description: GET_METRICS_TOOL_DESCRIPTION,
+            inputSchema: {
+              type: 'object',
+              properties: {
+                category: {
+                  type: 'string',
+                  enum: ['summary', 'slow_queries', 'all'],
+                  default: 'summary',
+                  description: '返回的指标类别: summary(计数+直方图) / slow_queries(慢查询历史) / all(全部)',
+                },
+              },
             },
           },
         ]
@@ -495,6 +522,20 @@ LLM 当领域专家:用户描述模糊时,LLM 应根据表名/列名推断业务
                   success: true,
                   message: `已断开 ${oldType || ''} 数据库连接`,
                 }, null, 2),
+              }],
+            };
+          }
+
+          case 'get_metrics': {
+            // v2.16: observability — does not require a database connection
+            const handler = buildGetMetricsHandler({
+              enabled: this.appConfig?.metrics?.enabled ?? true,
+            });
+            const result = await handler({ category: (args as any)?.category as MetricsCategory });
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
               }],
             };
           }
