@@ -122,7 +122,31 @@ export function loadFromEnv(): Partial<AppConfig> {
   if (queryTimeoutMs !== undefined) config.queryTimeoutMs = queryTimeoutMs;
   if (slowQueryThresholdMs !== undefined) config.slowQueryThresholdMs = slowQueryThresholdMs;
 
+  // v2.16: observability settings
+  const metricsEnabled = process.env.DB_METRICS_ENABLED;
+  const metricsIpAllowList = process.env.DB_METRICS_IP_ALLOWLIST;
+  const metricsSlowBuffer = process.env.DB_METRICS_SLOW_BUFFER_SIZE;
+  if (metricsEnabled !== undefined || metricsIpAllowList !== undefined || metricsSlowBuffer !== undefined) {
+    config.metrics = {
+      enabled: metricsEnabled === undefined ? true : /^(true|1|yes)$/i.test(metricsEnabled),
+      ipAllowList: metricsIpAllowList
+        ? metricsIpAllowList.split(',').map(s => s.trim()).filter(Boolean)
+        : [],
+      slowBufferSize: parseMetricsBufferSize(metricsSlowBuffer, 100),
+    };
+  }
+
   return config;
+}
+
+function parseMetricsBufferSize(val: string | undefined, def: number): number {
+  if (val === undefined) return def;
+  const n = parseInt(val, 10);
+  if (!Number.isFinite(n) || n < 0) {
+    console.warn(`[config] invalid DB_METRICS_SLOW_BUFFER_SIZE: ${val}, using default ${def}`);
+    return def;
+  }
+  return n;
 }
 
 /**
@@ -131,6 +155,7 @@ export function loadFromEnv(): Partial<AppConfig> {
 export function mergeConfigs(...configs: Partial<AppConfig>[]): AppConfig {
   const merged: AppConfig = {
     mode: 'mcp', // Default mode
+    metrics: { enabled: true, ipAllowList: [], slowBufferSize: 100 }, // v2.16 default
   };
 
   for (const config of configs) {
@@ -142,6 +167,9 @@ export function mergeConfigs(...configs: Partial<AppConfig>[]): AppConfig {
     }
     if (config.http) {
       merged.http = { ...merged.http, ...config.http };
+    }
+    if (config.metrics) {
+      merged.metrics = { ...merged.metrics, ...config.metrics };
     }
   }
 

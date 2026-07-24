@@ -121,4 +121,35 @@ describe('Configuration Loader', () => {
       expect(merged.http?.apiKeys).toEqual(['key2']);
     });
   });
+
+  describe('metrics (v2.16)', () => {
+    it('mergeConfigs provides default metrics when not configured', () => {
+      const merged = mergeConfigs({});
+      expect(merged.metrics).toEqual({ enabled: true, ipAllowList: [], slowBufferSize: 100 });
+    });
+
+    it('reads DB_METRICS_ENABLED=false', () => {
+      process.env.DB_METRICS_ENABLED = 'false';
+      const config = loadFromEnv();
+      expect(config.metrics?.enabled).toBe(false);
+    });
+
+    it('parses DB_METRICS_IP_ALLOWLIST into array', () => {
+      process.env.DB_METRICS_IP_ALLOWLIST = '10.0.0.0/8,192.168.1.5';
+      const config = loadFromEnv();
+      expect(config.metrics?.ipAllowList).toEqual(['10.0.0.0/8', '192.168.1.5']);
+    });
+
+    it('warns and falls back to default on invalid slow buffer size', () => {
+      process.env.DB_METRICS_SLOW_BUFFER_SIZE = 'not-a-number';
+      const config = loadFromEnv();
+      expect(config.metrics?.slowBufferSize).toBe(100);
+    });
+
+    it('accepts 0 to disable slow query recording', () => {
+      process.env.DB_METRICS_SLOW_BUFFER_SIZE = '0';
+      const config = loadFromEnv();
+      expect(config.metrics?.slowBufferSize).toBe(0);
+    });
+  });
 });

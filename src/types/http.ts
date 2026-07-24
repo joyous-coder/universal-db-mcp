@@ -61,6 +61,17 @@ export interface AppConfig {
   queryTimeoutMs?: number;
   /** P0-1: slow query log threshold in ms (overrides default 5000) */
   slowQueryThresholdMs?: number;
+  /** v2.16: observability settings */
+  metrics?: MetricsConfig;
+}
+
+/**
+ * Observability / metrics configuration (v2.16+)
+ */
+export interface MetricsConfig {
+  enabled: boolean;
+  ipAllowList: string[];
+  slowBufferSize: number;
 }
 
 /**
