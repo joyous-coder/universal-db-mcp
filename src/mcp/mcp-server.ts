@@ -29,7 +29,15 @@ import {
   buildExecuteTemplateHandler,
   TOOL_DESCRIPTIONS,
 } from './tools/query-tools.js';
+import {
+  buildSaveProfileHandler,
+  buildListProfilesHandler,
+  buildUseProfileHandler,
+  buildGetGlobalSchemaHandler,
+  PROFILE_TOOL_DESCRIPTIONS,
+} from './tools/profile-tools.js';
 import type { QueryAnalyzer } from '../core/query-analyzer.js';
+import type { ProfileManager } from '../core/profile-manager.js';
 
 /**
  * 数据库 MCP 服务器类
@@ -44,6 +52,10 @@ export class DatabaseMCPServer {
   private appConfig: AppConfig | null = null;
   // v2.17: query analyzer (optional); set via setQueryAnalyzer
   private queryAnalyzer: QueryAnalyzer | null = null;
+  // v2.18: profile manager (optional); set via setProfileManager
+  private profileManager: ProfileManager | null = null;
+  // v2.18: name of the active profile (set via use_profile or connect_database)
+  private activeProfile: string | null = null;
 
   constructor(config?: DbConfig, cacheConfig?: Partial<SchemaCacheConfig>) {
     this.config = config || null;
@@ -76,6 +88,19 @@ export class DatabaseMCPServer {
    */
   setQueryAnalyzer(qa: QueryAnalyzer | null): void {
     this.queryAnalyzer = qa;
+  }
+
+  /**
+   * v2.18: set the ProfileManager. Optional; when not set, profile tools
+   * return a "profileManager not configured" error.
+   */
+  setProfileManager(pm: ProfileManager | null): void {
+    this.profileManager = pm;
+  }
+
+  /** v2.18: get the active profile name (null if none). */
+  getActiveProfile(): string | null {
+    return this.activeProfile;
   }
 
   /**
@@ -301,6 +326,27 @@ export class DatabaseMCPServer {
             name: 'execute_template',
             description: TOOL_DESCRIPTIONS.execute_template,
             inputSchema: { type: 'object', properties: { id: { type: 'string' }, params: { type: 'object' } }, required: ['id'] },
+          },
+          // v2.18: multi-DB profile management
+          {
+            name: 'save_profile',
+            description: PROFILE_TOOL_DESCRIPTIONS.save_profile,
+            inputSchema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, type: { type: 'string' }, config: { type: 'object' }, role: { type: 'string', enum: ['primary', 'replica', 'analytics'] }, tags: { type: 'array' }, enabled: { type: 'boolean' } }, required: ['name', 'type', 'config'] },
+          },
+          {
+            name: 'list_profiles',
+            description: PROFILE_TOOL_DESCRIPTIONS.list_profiles,
+            inputSchema: { type: 'object', properties: { role: { type: 'string' }, tag: { type: 'string' }, enabled: { type: 'boolean' } } },
+          },
+          {
+            name: 'use_profile',
+            description: PROFILE_TOOL_DESCRIPTIONS.use_profile,
+            inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+          },
+          {
+            name: 'get_global_schema',
+            description: PROFILE_TOOL_DESCRIPTIONS.get_global_schema,
+            inputSchema: { type: 'object', properties: {} },
           },
         ]
       ;
@@ -636,6 +682,26 @@ LLM 当领域专家:用户描述模糊时,LLM 应根据表名/列名推断业务
             if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
             if (!this.adapter) throw new Error('connect database first');
             return { content: [{ type: 'text', text: JSON.stringify(await buildExecuteTemplateHandler(this.queryAnalyzer)(args as any, this.adapter), null, 2) }] };
+          }
+
+          // v2.18: profile tools
+          case 'save_profile': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await buildSaveProfileHandler(this.profileManager)(args as any), null, 2) }] };
+          }
+          case 'list_profiles': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await buildListProfilesHandler(this.profileManager)(args as any), null, 2) }] };
+          }
+          case 'use_profile': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            const r = await buildUseProfileHandler(this.profileManager)(args as any);
+            this.activeProfile = r.name;
+            return { content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] };
+          }
+          case 'get_global_schema': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await buildGetGlobalSchemaHandler(this.profileManager)(), null, 2) }] };
           }
 
           case 'get_connection_status': {
