@@ -14,8 +14,8 @@ export async function authMiddleware(
   reply: FastifyReply,
   config: AppConfig
 ): Promise<void> {
-  // Skip auth for health and info endpoints
-  if (request.url === '/api/health' || request.url === '/api/info') {
+  // Skip auth for health, info, and metrics endpoints (v2.16)
+  if (request.url === '/api/health' || request.url === '/api/info' || request.url === '/metrics') {
     return;
   }
 

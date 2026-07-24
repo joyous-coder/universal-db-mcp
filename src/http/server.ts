@@ -10,6 +10,7 @@ import type { AppConfig } from '../types/http.js';
 import { ConnectionManager } from '../core/connection-manager.js';
 import { authMiddleware, setupErrorHandler } from './middleware/index.js';
 import { setupRoutes } from './routes/index.js';
+import { setupMetricsRoute } from './routes/metrics.js';
 
 /**
  * Create and configure HTTP server
@@ -78,6 +79,12 @@ export async function createHttpServer(config: AppConfig) {
 
   // Setup routes
   await setupRoutes(fastify, connectionManager);
+
+  // v2.16: /metrics route (Prometheus exposition)
+  await setupMetricsRoute(fastify, {
+    enabled: config.metrics?.enabled ?? true,
+    ipAllowList: config.metrics?.ipAllowList ?? [],
+  });
 
   // Setup error handler
   setupErrorHandler(fastify);
