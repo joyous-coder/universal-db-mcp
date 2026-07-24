@@ -160,13 +160,25 @@ export function loadFromEnv(): Partial<AppConfig> {
   const pmMax = process.env.DB_PROFILES_MAX;
   const pmDefaultRole = process.env.DB_DEFAULT_PROFILE_ROLE;
   const pmReadRouting = process.env.DB_READ_ROUTING;
-  if (pmEnabled !== undefined || pmProfilesPath !== undefined || pmMax !== undefined || pmDefaultRole !== undefined || pmReadRouting !== undefined) {
+  // v2.19: cipher keys (profiles.db active; templates/history placeholders)
+  const pmCipherKey = process.env.DB_PROFILE_ENCRYPTION_KEY;
+  const pmTemplatesKey = process.env.DB_TEMPLATES_DB_KEY;
+  const pmHistoryKey = process.env.DB_HISTORY_DB_KEY;
+  if (
+    pmEnabled !== undefined || pmProfilesPath !== undefined || pmMax !== undefined ||
+    pmDefaultRole !== undefined || pmReadRouting !== undefined ||
+    pmCipherKey !== undefined || pmTemplatesKey !== undefined || pmHistoryKey !== undefined
+  ) {
     config.profileManager = {
       enabled: pmEnabled === undefined ? true : /^(true|1|yes)$/i.test(pmEnabled),
       profilesDbPath: pmProfilesPath || undefined,
       maxProfiles: parsePositiveInt(pmMax) ?? 50,
       defaultRole: ['primary', 'replica', 'analytics'].includes(pmDefaultRole ?? '') ? (pmDefaultRole as 'primary' | 'replica' | 'analytics') : 'primary',
       readRouting: ['round-robin', 'random', 'least-loaded'].includes(pmReadRouting ?? '') ? (pmReadRouting as 'round-robin' | 'random' | 'least-loaded') : 'round-robin',
+      // v2.19: empty string → undefined (fallback plaintext)
+      cipherKey: pmCipherKey ? pmCipherKey : undefined,
+      templatesDbKey: pmTemplatesKey ? pmTemplatesKey : undefined,
+      historyDbKey: pmHistoryKey ? pmHistoryKey : undefined,
     };
   }
 

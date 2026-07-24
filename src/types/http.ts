@@ -277,4 +277,10 @@ export interface ProfileManagerConfig {
   maxProfiles: number;
   defaultRole: 'primary' | 'replica' | 'analytics';
   readRouting: 'round-robin' | 'random' | 'least-loaded';
+  /** v2.19: SQLCipher key for profiles.db. Undefined/empty → plaintext fallback. */
+  cipherKey?: string;
+  /** v2.19 placeholder: SQLCipher key for templates.db (not yet enabled). */
+  templatesDbKey?: string;
+  /** v2.19 placeholder: SQLCipher key for history.db (not yet enabled). */
+  historyDbKey?: string;
 }

@@ -52,6 +52,8 @@ export interface ProfileManagerOptions {
   maxProfiles: number;
   defaultRole: ProfileRole;
   readRouting: ReadRouting;
+  /** v2.19: SQLCipher key for profiles.db encryption (optional, falls back to plaintext) */
+  cipherKey?: string;
   cacheConfig?: Partial<SchemaCacheConfig>;
 }
 
@@ -70,6 +72,7 @@ export class ProfileManager {
   private maxProfiles: number;
   private defaultRole: ProfileRole;
   private readRouting: ReadRouting;
+  private cipherKey?: string;
   private lruOrder: string[] = [];
   private cacheConfig?: Partial<SchemaCacheConfig>;
 
@@ -78,8 +81,9 @@ export class ProfileManager {
     this.maxProfiles = opts.maxProfiles;
     this.defaultRole = opts.defaultRole;
     this.readRouting = opts.readRouting;
+    this.cipherKey = opts.cipherKey;
     this.cacheConfig = opts.cacheConfig;
-    this.store = new ProfileStore(opts.profilesDbPath);
+    this.store = new ProfileStore(opts.profilesDbPath, { cipherKey: opts.cipherKey });
     this.router = new QueryRouter(opts.readRouting);
   }
 

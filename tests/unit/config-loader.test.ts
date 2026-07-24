@@ -215,4 +215,38 @@ describe('Configuration Loader', () => {
       expect(cfg.profileManager?.readRouting).toBe('round-robin');
     });
   });
+
+  describe('profileManager cipher keys (v2.19)', () => {
+    it('mergeConfigs default does not set cipherKey', () => {
+      const merged = mergeConfigs({});
+      expect(merged.profileManager?.cipherKey).toBeUndefined();
+      expect(merged.profileManager?.templatesDbKey).toBeUndefined();
+      expect(merged.profileManager?.historyDbKey).toBeUndefined();
+    });
+
+    it('reads DB_PROFILE_ENCRYPTION_KEY', () => {
+      process.env.DB_PROFILE_ENCRYPTION_KEY = 'my-secret-key-32-chars-long!!';
+      const cfg = loadFromEnv();
+      expect(cfg.profileManager?.cipherKey).toBe('my-secret-key-32-chars-long!!');
+    });
+
+    it('reads DB_TEMPLATES_DB_KEY placeholder', () => {
+      process.env.DB_TEMPLATES_DB_KEY = 'templates-key';
+      const cfg = loadFromEnv();
+      expect(cfg.profileManager?.templatesDbKey).toBe('templates-key');
+    });
+
+    it('reads DB_HISTORY_DB_KEY placeholder', () => {
+      process.env.DB_HISTORY_DB_KEY = 'history-key';
+      const cfg = loadFromEnv();
+      expect(cfg.profileManager?.historyDbKey).toBe('history-key');
+    });
+
+    it('does not include cipherKey when env var is empty string', () => {
+      process.env.DB_PROFILE_ENCRYPTION_KEY = '';
+      const cfg = loadFromEnv();
+      // empty string should be treated as undefined (fallback to plaintext)
+      expect(cfg.profileManager?.cipherKey).toBeUndefined();
+    });
+  });
 });
