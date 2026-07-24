@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Counter } from '../../src/utils/metrics-counter.js';
 import { Histogram } from '../../src/utils/metrics-histogram.js';
+import { Gauge } from '../../src/utils/metrics-gauge.js';
+import { RingBuffer } from '../../src/utils/metrics-ringbuffer.js';
 
 describe('Counter', () => {
   it('starts at 0 for unseen label set', () => {
@@ -55,5 +57,39 @@ describe('Histogram', () => {
     const h = new Histogram('lat', 'Latency', [0.1, 0.5, 1]);
     const snap = h.snapshot({ op: 'q' });
     expect(snap.cumulativeCounts.length).toBe(4);
+  });
+});
+
+describe('Gauge', () => {
+  it('invokes collect callback to get current value', () => {
+    let v = 10;
+    const g = new Gauge('temp', 'Temp', () => [{ labels: {}, value: v }]);
+    expect(g.collect()[0].value).toBe(10);
+    v = 20;
+    expect(g.collect()[0].value).toBe(20);
+  });
+});
+
+describe('RingBuffer', () => {
+  it('pushes up to capacity then overwrites oldest', () => {
+    const rb = new RingBuffer<number>(3);
+    rb.push(1); rb.push(2); rb.push(3);
+    expect(rb.toArray()).toEqual([3, 2, 1]);
+    rb.push(4);
+    expect(rb.toArray()).toEqual([4, 3, 2]);
+  });
+
+  it('handles capacity 0 by silently dropping', () => {
+    const rb = new RingBuffer<number>(0);
+    rb.push(1);
+    expect(rb.size).toBe(0);
+    expect(rb.toArray()).toEqual([]);
+  });
+
+  it('clear() empties buffer', () => {
+    const rb = new RingBuffer<number>(3);
+    rb.push(1); rb.push(2);
+    rb.clear();
+    expect(rb.size).toBe(0);
   });
 });
