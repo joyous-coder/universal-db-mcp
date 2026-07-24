@@ -8,7 +8,7 @@
  */
 
 import pg from 'pg';
-import { BaseAdapter } from './base.js';
+import { BaseAdapter, ExecuteScriptOptions, TransactionContext } from './base.js';
 import type {
   QueryResult,
   SchemaInfo,
@@ -20,6 +20,7 @@ import type {
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
 import { isConnectionErrorMessage, withRetry } from '../utils/retry.js';
+import { splitStatements } from '../utils/sql-parser.js';
 
 const { Pool } = pg;
 
@@ -508,4 +509,71 @@ export class HighGoAdapter extends BaseAdapter {
     return 'highgo';
   }
 
+  /**
+   * P0-3: Override withTransaction to use a single physical client from the pool.
+   * All statements inside the callback's `tx.executeQuery` are guaranteed to run on
+   * the same connection, so BEGIN/COMMIT/ROLLBACK provide true all-or-nothing semantics.
+   */
+  async withTransaction<T>(fn: (tx: TransactionContext) => Promise<T>): Promise<T> {
+    if (!this.pool) {
+      throw new Error('数据库未连接');
+    }
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const tx: TransactionContext = {
+        executeQuery: async (query: string, params?: unknown[]) => {
+          const startTime = Date.now();
+          const result = await client.query(query, params);
+          const executionTime = Date.now() - startTime;
+          return {
+            rows: result.rows as Record<string, unknown>[],
+            affectedRows: result.rowCount || 0,
+            executionTime,
+            metadata: {
+              command: result.command,
+              fields: result.fields?.map(f => ({
+                name: f.name,
+                dataTypeID: f.dataTypeID,
+              })),
+            },
+          };
+        },
+      };
+      const result = await fn(tx);
+      await client.query('COMMIT');
+      return result;
+    } catch (err) {
+      try { await client.query('ROLLBACK'); } catch { /* ignore */ }
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * P0-3: Override executeScript to use withTransaction.
+   * All statements run on a single connection so BEGIN/COMMIT are atomic.
+   * Non-transactional mode falls back to the BaseAdapter default.
+   */
+  async executeScript(query: string, options: ExecuteScriptOptions = {}): Promise<QueryResult> {
+    if (options.useTransaction === false) {
+      return super.executeScript(query, { ...options, useTransaction: false });
+    }
+    return this.withTransaction(async (tx) => {
+      const statements = splitStatements(query, this.getDialect()).filter(s => s.trim());
+      const startTime = Date.now();
+      const lastResult = statements.length > 0
+        ? await tx.executeQuery(statements[0])
+        : { rows: [], executionTime: 0 };
+      for (let i = 1; i < statements.length; i++) {
+        await tx.executeQuery(statements[i]);
+      }
+      return {
+        rows: [],
+        executionTime: Date.now() - startTime,
+        metadata: { statementCount: statements.length, lastResult },
+      };
+    });
+  }
 }
