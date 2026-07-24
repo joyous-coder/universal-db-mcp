@@ -5,6 +5,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import type { HealthResponse, InfoResponse, ApiResponse } from '../../types/http.js';
+import { metrics } from '../../utils/metrics.js';
 
 export async function setupHealthRoutes(fastify: FastifyInstance): Promise<void> {
   /**
@@ -12,12 +13,24 @@ export async function setupHealthRoutes(fastify: FastifyInstance): Promise<void>
    * Health check endpoint
    */
   fastify.get<{ Reply: ApiResponse<HealthResponse> }>('/api/health', async (request) => {
+    // v2.16: gather observability snapshot for /api/health extension
+    const json = metrics.toJSON();
+    const queryCounter = json.counters.find(c => c.name === 'db_query_total');
+    const errorCounter = json.counters.find(c => c.name === 'db_query_errors_total');
+    const queriesTotal = queryCounter?.series.reduce((sum, x) => sum + x.value, 0) ?? 0;
+    const errorsTotal = errorCounter?.series.reduce((sum, x) => sum + x.value, 0) ?? 0;
+    const activeDb = queryCounter?.series[0]?.labels?.db;
+
     return {
       success: true,
       data: {
         status: 'healthy',
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
+        uptime_seconds: Math.floor(process.uptime()),
+        active_db: activeDb,
+        queries_total: queriesTotal,
+        errors_total: errorsTotal,
       },
       metadata: {
         timestamp: new Date().toISOString(),

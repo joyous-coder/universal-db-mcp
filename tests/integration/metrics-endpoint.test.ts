@@ -67,3 +67,14 @@ describe('GET /metrics', () => {
     expect(res.body).toBe('');
   });
 });
+
+describe('/api/health extension (v2.16)', () => {
+  it('includes uptime_seconds and active_db', async () => {
+    const res = await server.inject({ method: 'GET', url: '/api/health' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.data.status).toBe('healthy');
+    expect(typeof body.data.uptime_seconds).toBe('number');
+    expect(body.data.uptime_seconds).toBeGreaterThanOrEqual(0);
+  });
+});

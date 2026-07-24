@@ -201,6 +201,11 @@ export interface HealthResponse {
   status: 'healthy' | 'unhealthy';
   uptime: number;
   timestamp: string;
+  /** v2.16: optional observability fields (backward compatible — clients must tolerate absence) */
+  uptime_seconds?: number;
+  active_db?: string;
+  queries_total?: number;
+  errors_total?: number;
 }
 
 /**
