@@ -11,7 +11,7 @@ import { OracleAdapter } from '../adapters/oracle.js';
 import { DMAdapter } from '../adapters/dm.js';
 import { SQLServerAdapter } from '../adapters/sqlserver.js';
 import { MongoDBAdapter } from '../adapters/mongodb.js';
-import { SQLiteAdapter } from '../adapters/sqlite.js';
+import { SQLiteAdapter } from '../adapters/sqlite/index.js';
 import { KingbaseAdapter } from '../adapters/kingbase.js';
 import { GaussDBAdapter } from '../adapters/gaussdb.js';
 import { OceanBaseAdapter } from '../adapters/oceanbase.js';

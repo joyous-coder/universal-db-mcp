@@ -1,23 +1,31 @@
 import { defineConfig } from 'vitest/config';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
+import { createRequire } from 'node:module';
 
-const sqliteNativeAvailable = (() => {
-  // Skip sqlite tests when the better-sqlite3 native binding is missing or
-  // built for a different Node ABI (e.g. Node 24 without rebuilt binary).
-  const bindingsDir = path.join(process.cwd(), 'node_modules', 'better-sqlite3', 'build', 'Release');
-  if (!fs.existsSync(bindingsDir)) {
-    const altPaths = [
-      'node_modules/better-sqlite3/build/Release/better_sqlite3.node',
-      'node_modules/better-sqlite3/build/Debug/better_sqlite3.node',
-      'node_modules/better-sqlite3/Release/better_sqlite3.node',
-    ];
-    return altPaths.some(p => fs.existsSync(p));
-  }
-  return fs.readdirSync(bindingsDir).some(f => f.endsWith('.node'));
-})();
+// Detect whether ANY SQLite backend is available. node:sqlite is the preferred
+// (Node 22.5+ built-in, no native deps). Use createRequire so we can test
+// `node:sqlite` from CJS (vitest's ESM resolver doesn't recognize the `node:`
+// scheme for built-in modules).
+const require_ = createRequire(import.meta.url);
 
-const exclude = sqliteNativeAvailable ? [] : ['tests/unit/sqlite-adapter.test.ts'];
+async function isAnySqliteAvailable(): Promise<boolean> {
+  // 1) node:sqlite (Node 22.5+) via CJS require
+  try {
+    const mod = require_('node:sqlite') as any;
+    if (mod && mod.DatabaseSync) return true;
+  } catch {}
+  // 2) better-sqlite3 (prebuilt binary required)
+  try {
+    const mod = await import('better-sqlite3');
+    if (mod && (mod as any).default) return true;
+  } catch {}
+  return false;
+}
+
+const exclude: string[] = [];
+const sqliteOk = await isAnySqliteAvailable();
+if (!sqliteOk) {
+  exclude.push('tests/unit/sqlite-adapter.test.ts');
+}
 
 export default defineConfig({
   test: {
