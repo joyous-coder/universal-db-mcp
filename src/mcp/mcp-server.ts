@@ -17,6 +17,8 @@ import type { AppConfig } from '../types/http.js';
 import { DatabaseService, SchemaCacheConfig } from '../core/database-service.js';
 import { createAdapter, normalizeDbType } from '../utils/adapter-factory.js';
 import { resolvePermissions } from '../utils/safety.js';
+import { ToolRegistry, type ToolGroup } from './tool-registry.js';
+import { buildToolRegistry } from './tool-definitions.js';
 import { buildGetMetricsHandler, GET_METRICS_TOOL_DESCRIPTION, type MetricsCategory } from './tools/metrics.js';
 import {
   buildExplainQueryHandler,
@@ -56,6 +58,12 @@ export class DatabaseMCPServer {
   private profileManager: ProfileManager | null = null;
   // v2.18: name of the active profile (set via use_profile or connect_database)
   private activeProfile: string | null = null;
+  // v3.2: MCP tool registry for lazy-loading (built when queryAnalyzer + profileManager are set)
+  private toolRegistry: ToolRegistry | null = null;
+  // v3.2: per-session MCP sessionId (stdio uses 'stdio-default'; HTTP/SSE uses transport sessionId)
+  private currentSessionId: string = 'stdio-default';
+  // v3.2: whether lazy-loading is enabled (DB_LAZY_LOAD_ENABLED; default false = v3.1 behavior)
+  private lazyLoadEnabled: boolean = false;
 
   constructor(config?: DbConfig, cacheConfig?: Partial<SchemaCacheConfig>) {
     this.config = config || null;
@@ -96,6 +104,7 @@ export class DatabaseMCPServer {
    */
   setProfileManager(pm: ProfileManager | null): void {
     this.profileManager = pm;
+    this.rebuildToolRegistry();
   }
 
   /** v2.18: get the active profile name (null if none). */
@@ -104,11 +113,128 @@ export class DatabaseMCPServer {
   }
 
   /**
+   * v3.2: set lazy-loading enabled (DB_LAZY_LOAD_ENABLED). When true, ListToolsRequest
+   * returns only core+meta+info-lazy (14 tools), and lazy tools must be activated via use_tool_group.
+   */
+  setLazyLoadEnabled(enabled: boolean): void {
+    this.lazyLoadEnabled = enabled;
+    this.rebuildToolRegistry();
+  }
+
+  /**
+   * v3.2: set the current MCP session id. stdio uses 'stdio-default'; SSE/Streamable HTTP
+   * sets this from the transport's sessionId (in mcp-sse.ts).
+   */
+  setSessionId(id: string): void {
+    this.currentSessionId = id;
+  }
+
+  /**
+   * v3.2: rebuild the ToolRegistry after dependencies change.
+   */
+  private rebuildToolRegistry(): void {
+    if (!this.lazyLoadEnabled) {
+      this.toolRegistry = null;
+      return;
+    }
+    const profileStore = (this.profileManager as any)?.profileStore;
+    // PlanHistory is optional — only present when v3.1 PlanHistory is configured
+    const planHistory = (this as any).planHistory;
+    this.toolRegistry = buildToolRegistry({
+      queryAnalyzer: this.queryAnalyzer,
+      profileManager: this.profileManager,
+      profileStore: profileStore ?? null,
+      config: this.config,
+      planHistory,
+      lazyLoadEnabled: true,
+      defaultActiveGroups: [],
+    });
+  }
+
+  /**
+   * v3.2: handle use_tool_group meta-tool.
+   */
+  private async handleUseToolGroup(args: { name: string }) {
+    if (!this.toolRegistry) {
+      return { content: [{ type: 'text', text: JSON.stringify({ error: 'registry not initialized' }) }], isError: true };
+    }
+    const r = this.toolRegistry.activateGroup(this.currentSessionId, args.name as ToolGroup);
+    return { content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] };
+  }
+
+  /**
+   * v3.2: handle use_tool_schema meta-tool.
+   */
+  private async handleUseToolSchema(args: { name: string }) {
+    if (!this.toolRegistry) {
+      return { content: [{ type: 'text', text: JSON.stringify({ error: 'registry not initialized' }) }], isError: true };
+    }
+    const schema = this.toolRegistry.getFullSchema(args.name);
+    if (!schema) {
+      return { content: [{ type: 'text', text: JSON.stringify({ error: `tool ${args.name} is not info-lazy or not found`, available: ['generate_sample_data'] }) }], isError: true };
+    }
+    return { content: [{ type: 'text', text: JSON.stringify({ name: args.name, schema }, null, 2) }] };
+  }
+
+  /**
+   * v3.2: return error response when LLM calls a lazy tool without activating the group.
+   */
+  private lazyToolErrorResponse(toolName: string, group: ToolGroup) {
+    const activeGroups = this.toolRegistry ? this.toolRegistry.getActiveGroups(this.currentSessionId) : [];
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          error: 'tool not available in current session',
+          tool: toolName,
+          group,
+          hint: `call use_tool_group({ name: "${group}" }) first`,
+          activeGroups,
+        }, null, 2),
+      }],
+      isError: true,
+    };
+  }
+
+  /**
+   * v3.2: return validation error response (info-lazy missing fields, etc).
+   */
+  private validationErrorResponse(validation: { ok: boolean; error?: string; hint?: string }) {
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({ error: validation.error ?? 'invalid arguments', hint: validation.hint }, null, 2),
+      }],
+      isError: true,
+    };
+  }
+
+  /**
    * 设置 MCP 协议处理器
    */
   private setupHandlers(): void {
     // 列出可用工具
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+      // v3.2: when lazy-loading is enabled, ListToolsRequest returns core+meta+info-lazy + active groups
+      // from the registry. Otherwise, fall through to v3.1 behavior (all 22+4 conditional tools).
+      if (this.lazyLoadEnabled && this.toolRegistry) {
+        const active = this.toolRegistry.listActiveTools(this.currentSessionId);
+        const resolvedPerms = this.config ? resolvePermissions(this.config) : ['read'];
+        const tools: any[] = active.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
+        // Add conditional execute_script/execute_sql_file/execute_batch to core if permitted
+        if (resolvedPerms.includes('script')) {
+          tools.push({ name: 'execute_script', description: '执行多语句 SQL 脚本或 PL/SQL 块。需要 permissions 包含 "script"。', inputSchema: { type: 'object', properties: { query: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['query'] } });
+          const allowedPaths = (this.config as any)?.allowedSqlFilePaths as string[] | undefined;
+          if (allowedPaths && allowedPaths.length > 0) {
+            tools.push({ name: 'execute_sql_file', description: '执行 .sql 文件。需要 script 权限 + DB_ALLOWED_FILE_PATHS。', inputSchema: { type: 'object', properties: { filePath: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['filePath'] } });
+          }
+        }
+        if (resolvedPerms.includes('batch')) {
+          tools.push({ name: 'execute_batch', description: '批量执行同一条 SQL 的多个参数集。需要 batch 权限。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, paramsList: { type: 'array', items: { type: 'array' } }, useTransaction: { type: 'boolean', default: true }, maxBatchSize: { type: 'number', default: 1000 } }, required: ['sql', 'paramsList'] } });
+        }
+        return { tools };
+      }
+      // v3.1 behavior (unchanged): all tools always listed
       // Compute permissions for tool registration gating
       const resolvedPerms = this.config ? resolvePermissions(this.config) : ['read'];
       const tools: any[] = [
@@ -495,6 +621,37 @@ export class DatabaseMCPServer {
     // 处理工具调用
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
+
+      // v3.2: meta-tool routing (use_tool_group / use_tool_schema) when registry is enabled
+      if (this.lazyLoadEnabled && this.toolRegistry) {
+        if (name === 'use_tool_group') {
+          return await this.handleUseToolGroup(args as any);
+        }
+        if (name === 'use_tool_schema') {
+          return await this.handleUseToolSchema(args as any);
+        }
+        // v3.2: route lazy/info-lazy tools through registry
+        if (this.toolRegistry.isToolActive(this.currentSessionId, name)) {
+          // info-lazy validation
+          const v = this.toolRegistry.validateArgs(name, args);
+          if (!v.ok) {
+            return this.validationErrorResponse(v);
+          }
+          try {
+            const result = await this.toolRegistry.callTool(name, args, this.currentSessionId);
+            return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return { content: [{ type: 'text', text: `执行失败: ${msg}` }], isError: true };
+          }
+        }
+        // Tool not active in current session → lazy error
+        const t = this.toolRegistry.findToolByName(name);
+        if (t && t.group) {
+          return this.lazyToolErrorResponse(name, t.group as ToolGroup);
+        }
+        // Tool not in registry at all — fall through to switch (stateful tools)
+      }
 
       try {
         // 连接管理类 tool 不需要检查数据库连接
@@ -908,6 +1065,71 @@ export class DatabaseMCPServer {
                 },
               ],
             };
+          }
+
+          // v3.2: 11 newly registered tools (handlers wired via ToolRegistry, but these
+          // cases handle v3.1 fallback when DB_LAZY_LOAD_ENABLED=false and tool is called).
+          case 'compare_profile_schemas': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/data-governance.js')).buildCompareProfileSchemasHandler(this.profileManager)(args as any), null, 2) }] };
+          }
+          case 'export_backup': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/data-governance.js')).buildExportBackupHandler(this.profileManager)(args as any), null, 2) }] };
+          }
+          case 'audit_log': {
+            if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/data-governance.js')).buildAuditLogHandler(this.queryAnalyzer)(args as any), null, 2) }] };
+          }
+          case 'get_pii_config': {
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/data-governance.js')).buildGetPiiConfigHandler()(), null, 2) }] };
+          }
+          case 'set_pii_config': {
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/data-governance.js')).buildSetPiiConfigHandler()(args as any), null, 2) }] };
+          }
+          case 'export_profiles': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildExportProfilesHandler(this.profileManager)(args as any), null, 2) }] };
+          }
+          case 'import_profiles': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildImportProfilesHandler(this.profileManager)(args as any), null, 2) }] };
+          }
+          case 'get_profile': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildGetProfileHandler(this.profileManager)(args as any), null, 2) }] };
+          }
+          case 'delete_profile': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildDeleteProfileHandler(this.profileManager)(args as any), null, 2) }] };
+          }
+          case 'enable_profile': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildEnableProfileHandler(this.profileManager, (this.profileManager as any).profileStore)(args as any), null, 2) }] };
+          }
+          case 'disable_profile': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildDisableProfileHandler(this.profileManager, (this.profileManager as any).profileStore)(args as any), null, 2) }] };
+          }
+          case 'disconnect_profile': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildDisconnectProfileHandler(this.profileManager)(args as any), null, 2) }] };
+          }
+          case 'explain_query_with_advice': {
+            if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
+            const ph = (this as any).planHistory;
+            if (!ph) throw new Error('planHistory not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/plan-history.js')).buildExplainQueryWithAdviceHandler(this.queryAnalyzer, ph)(args as any), null, 2) }] };
+          }
+          case 'compare_query_plans': {
+            const ph = (this as any).planHistory;
+            if (!ph) throw new Error('planHistory not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/plan-history.js')).buildCompareQueryPlansHandler(ph)(args as any), null, 2) }] };
+          }
+          case 'list_query_plans': {
+            const ph = (this as any).planHistory;
+            if (!ph) throw new Error('planHistory not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/plan-history.js')).buildListQueryPlansHandler(ph)(args as any), null, 2) }] };
           }
 
           default:

@@ -32,7 +32,6 @@ export function buildExportBackupHandler(pm: ProfileManager) {
     return BackupWriter.dump(pm, args.profileName, {
       schemaOnly: args.schemaOnly,
       tables: args.tables,
-      outputPath: args.outputPath,
     });
   };
 }
@@ -68,7 +67,7 @@ export function buildSetPiiConfigHandler() {
     }[];
   }) => {
     const { PiiMasker } = await import('../../core/pii-masker.js');
-    PiiMasker.setConfig(args.profileName, args.rules);
+    PiiMasker.setProfileConfig(args.profileName, args.rules, true);
     return { success: true, profileName: args.profileName, ruleCount: args.rules.length };
   };
 }

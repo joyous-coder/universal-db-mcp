@@ -24,7 +24,7 @@ vi.mock('../../src/core/pii-masker.js', () => {
   return {
     PiiMasker: {
       getConfig: vi.fn().mockImplementation(() => config),
-      setConfig: vi.fn(),
+      setProfileConfig: vi.fn(),
     },
   };
 });
@@ -48,16 +48,18 @@ describe('data-governance MCP tool handlers', () => {
     expect(result.profiles.prod[0].strategy).toBe('hash');
   });
 
-  it('buildSetPiiConfigHandler calls PiiMasker.setConfig and returns count', async () => {
+  it('buildSetPiiConfigHandler calls PiiMasker.setProfileConfig and returns count', async () => {
     const { PiiMasker } = await import('../../src/core/pii-masker.js');
     const handler = buildSetPiiConfigHandler();
     const result = await handler({
       profileName: 'prod',
       rules: [{ table: 'users', column: 'email', strategy: 'hash' }],
     });
-    expect(PiiMasker.setConfig).toHaveBeenCalledWith('prod', [
-      { table: 'users', column: 'email', strategy: 'hash' },
-    ]);
+    expect(PiiMasker.setProfileConfig).toHaveBeenCalledWith(
+      'prod',
+      [{ table: 'users', column: 'email', strategy: 'hash' }],
+      true
+    );
     expect(result).toEqual({ success: true, profileName: 'prod', ruleCount: 1 });
   });
 });
