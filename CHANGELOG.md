@@ -2,6 +2,33 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [2.20.0] - 2026-07-24
+
+### 新增 (Profile Hardening)
+- **`templates.db` / `history.db` SQLCipher 加密** — v2.19 占位兑现，`DB_TEMPLATES_DB_KEY` / `DB_HISTORY_DB_KEY` 现在真生效。cipher 错误抛清晰错误不 silent fallback
+- **Profile YAML / JSON 导入导出** — `exportProfiles(format)` / `importProfiles(input, opts)` 方法，默认 redact 密码 (`REDACTED`)，`--include-secrets` flag 输出明文；`merge` / `replace` 两种 import 模式；`dryRun` 预览；未知 type + 非法 role 自动拒绝
+- **Key rotation (3 个 DB 都支持)** — `ProfileStore.rotateKey` / `TemplateStore.rotateKey` / `HistoryStore.rotateKey`；原子替换 (`.rotating.tmp` + `rename()`)；环境变量 `*_KEY_OLD` / `*_KEY` 一对用于 startup 期迁移
+- **`HistoryStore.query({ q })` FTS5 全文搜索** — SQLite 内置 FTS5 virtual table `history_fts` + 同步 trigger (INSERT/DELETE/UPDATE)；init 自动 backfill；支持自然语言 / 短语 / boolean / prefix 查询；与 `db` / `kind` / `profileName` 等过滤组合
+
+### 配置
+- 6 个 env var (3 对 cipher + rotation)，全为空值时保持 v2.17-v2.19 行为
+
+### 文档
+- **新文档** `docs/deferred-items.md` — 全 v2.x deferred items 清算 ledger（三态：delivered / pending / abandoned）
+- `docs/multi-profile.md` 增加 v2.20 sections
+
+### 测试
+- 新增 5 测试文件 (`template-store-cipher` / `profile-serializer` / `key-rotator` / `history-store-fts` / `profile-import-export` integration)
+- 总数: 413 测试全过 (v2.19.0: 375)
+
+### 依赖
+- 0 强制新增
+- 0 optional 新增（仍沿用 v2.19 `better-sqlite3-multiple-ciphers`）
+
+### 安全
+- profiles.db / templates.db / history.db 全部支持 SQLCipher；rotation 在 atomic rename 下不会产生半写状态
+- YAML 导出默认 redact 密码字段（password / passwd / secret / token / key）
+
 ## [2.19.0] - 2026-07-24
 
 ### 新增 (Multi-Profile v2)

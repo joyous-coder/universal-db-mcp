@@ -134,3 +134,105 @@ Both MCP tool and HTTP endpoint accept the same shape.
 | `DB_HISTORY_DB_KEY` | (empty) | Reserved for future SQLCipher encryption of `history.db`. No effect in v2.19. |
 
 Backward compatibility: v2.14 → v2.18 callers see no behavioral change unless they opt into cipher via env.
+
+---
+
+## v2.20 additions
+
+Profile Hardening: extends SQLCipher coverage to all 3 stores, adds profile
+YAML/JSON import/export, cipher key rotation, and history FTS5 full-text search.
+
+### SQLCipher for `templates.db` and `history.db`
+
+v2.19 listed `DB_TEMPLATES_DB_KEY` and `DB_HISTORY_DB_KEY` as **placeholders**.
+v2.20 actually wires them through:
+
+```bash
+export DB_TEMPLATES_DB_KEY="my-templates-passphrase"
+export DB_HISTORY_DB_KEY="my-history-passphrase"
+```
+
+Without the env vars, the stores fall back to plaintext (v2.17-v2.19 behavior).
+The cipher flag is exposed via `<Store>.encrypted` (boolean) for diagnostics.
+
+### Profile YAML / JSON import/export
+
+```bash
+# Export to YAML (passwords redacted by default)
+universal-db-mcp export-profiles > profiles.yaml
+
+# Include actual passwords (avoid committing the file!)
+universal-db-mcp export-profiles --include-secrets > profiles.yaml
+
+# JSON round-trip (machine-friendly)
+universal-db-mcp export-profiles --format json > profiles.json
+
+# Import (merge by default; replace to wipe existing)
+universal-db-mcp import-profiles < profiles.yaml
+universal-db-mcp import-profiles --mode replace < profiles.yaml
+```
+
+Format version: `1` (in YAML as `version: 1` first line). Importers reject:
+- Unknown `type` values (e.g. typos, deprecated adapters).
+- Invalid `role` (must be primary/replica/analytics).
+- Non-object `config`.
+
+Re-importing a previously-redacted file requires the operator to provide
+missing passwords separately (e.g. `--password name=prod password=...`).
+
+### Cipher key rotation
+
+Three env-var pairs let you rotate keys without downtime:
+
+| Old | New |
+|---|---|
+| `DB_PROFILE_ENCRYPTION_KEY_OLD` | `DB_PROFILE_ENCRYPTION_KEY` |
+| `DB_TEMPLATES_DB_KEY_OLD` | `DB_TEMPLATES_DB_KEY` |
+| `DB_HISTORY_DB_KEY_OLD` | `DB_HISTORY_DB_KEY` |
+
+Procedure:
+
+1. Start the server once with both old + new keys set. The server migrates
+   the DB atomically (temp file + rename), then warns the operator to unset
+   the `_OLD` env var.
+2. Subsequent startups use the new key only.
+
+If the old key is wrong, startup fails loudly (`failed to decrypt X.db —
+check _OLD key`); the original DB is never touched.
+
+Programmatic rotation: `profileStore.rotateKey(newKey)` /
+`templateStore.rotateKey(newKey)` / `historyStore.rotateKey(newKey)`.
+
+### History FTS5 full-text search
+
+`get_query_history` (MCP) and `/api/query-history` (HTTP) accept a new `q`
+parameter with SQLite FTS5 query syntax:
+
+- Simple: `orders`, `SELECT`, `users`
+- Phrase: `"FROM orders"`
+- Boolean: `orders NOT invoices`, `orders OR returns`
+- Prefix: `orders*`
+
+Combined with the existing filters (`db`, `kind`, `since`, `until`,
+`profileName`, `onlyErrors`, `limit`).
+
+The FTS5 virtual table (`history_fts`) is created automatically on first
+init() of any pre-existing or new history.db — no migration step required.
+
+### Configuration (v2.20)
+
+| Env var | Default | Effect |
+|---------|---------|--------|
+| `DB_PROFILE_ENCRYPTION_KEY` | (empty) | profiles.db cipher (v2.19 active) |
+| `DB_PROFILE_ENCRYPTION_KEY_OLD` | (empty) | profiles.db rotation old key (v2.20) |
+| `DB_TEMPLATES_DB_KEY` | (empty) | templates.db cipher (v2.20 — was v2.19 placeholder) |
+| `DB_TEMPLATES_DB_KEY_OLD` | (empty) | templates.db rotation old key |
+| `DB_HISTORY_DB_KEY` | (empty) | history.db cipher (v2.20 — was v2.19 placeholder) |
+| `DB_HISTORY_DB_KEY_OLD` | (empty) | history.db rotation old key |
+
+Backward compatibility: v2.14 → v2.19 callers see no behavior change unless
+the new env vars are set; the FTS5 migration is also automatic and
+transparent.
+
+See `docs/deferred-items.md` for the deferred-items ledger covering
+v2.16-v2.20.
