@@ -65,6 +65,8 @@ export interface AppConfig {
   metrics?: MetricsConfig;
   /** v2.17: query analyzer settings (Explain / Lint / History / Template) */
   queryAnalyzer?: QueryAnalyzerConfig;
+  /** v2.18: multi-database profile manager settings */
+  profileManager?: ProfileManagerConfig;
 }
 
 /**
@@ -263,4 +265,16 @@ export interface HttpQueryResult {
  */
 export interface AuthenticatedRequest {
   apiKey?: string;
+}
+
+/**
+ * Profile Manager configuration (v2.18+)
+ * Controls multi-database profile management (save / use / route / global schema).
+ */
+export interface ProfileManagerConfig {
+  enabled: boolean;
+  profilesDbPath?: string;
+  maxProfiles: number;
+  defaultRole: 'primary' | 'replica' | 'analytics';
+  readRouting: 'round-robin' | 'random' | 'least-loaded';
 }

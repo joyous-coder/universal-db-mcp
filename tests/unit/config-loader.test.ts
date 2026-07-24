@@ -178,4 +178,41 @@ describe('Configuration Loader', () => {
       expect(cfg.queryAnalyzer?.historyTtlDays).toBe(30);
     });
   });
+
+  describe('profileManager config (v2.18)', () => {
+    it('mergeConfigs provides default profileManager', () => {
+      const merged = mergeConfigs({});
+      expect(merged.profileManager).toEqual({
+        enabled: true,
+        profilesDbPath: undefined,
+        maxProfiles: 50,
+        defaultRole: 'primary',
+        readRouting: 'round-robin',
+      });
+    });
+
+    it('reads DB_MULTI_DB_ENABLED=false', () => {
+      process.env.DB_MULTI_DB_ENABLED = 'false';
+      const cfg = loadFromEnv();
+      expect(cfg.profileManager?.enabled).toBe(false);
+    });
+
+    it('warns and falls back on invalid maxProfiles', () => {
+      process.env.DB_PROFILES_MAX = 'abc';
+      const cfg = loadFromEnv();
+      expect(cfg.profileManager?.maxProfiles).toBe(50);
+    });
+
+    it('accepts DB_DEFAULT_PROFILE_ROLE=replica', () => {
+      process.env.DB_DEFAULT_PROFILE_ROLE = 'replica';
+      const cfg = loadFromEnv();
+      expect(cfg.profileManager?.defaultRole).toBe('replica');
+    });
+
+    it('falls back to round-robin on invalid DB_READ_ROUTING', () => {
+      process.env.DB_READ_ROUTING = 'foo';
+      const cfg = loadFromEnv();
+      expect(cfg.profileManager?.readRouting).toBe('round-robin');
+    });
+  });
 });

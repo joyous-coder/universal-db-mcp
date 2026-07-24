@@ -154,6 +154,22 @@ export function loadFromEnv(): Partial<AppConfig> {
     };
   }
 
+  // v2.18: multi-DB profile manager
+  const pmEnabled = process.env.DB_MULTI_DB_ENABLED;
+  const pmProfilesPath = process.env.DB_PROFILES_DB_PATH;
+  const pmMax = process.env.DB_PROFILES_MAX;
+  const pmDefaultRole = process.env.DB_DEFAULT_PROFILE_ROLE;
+  const pmReadRouting = process.env.DB_READ_ROUTING;
+  if (pmEnabled !== undefined || pmProfilesPath !== undefined || pmMax !== undefined || pmDefaultRole !== undefined || pmReadRouting !== undefined) {
+    config.profileManager = {
+      enabled: pmEnabled === undefined ? true : /^(true|1|yes)$/i.test(pmEnabled),
+      profilesDbPath: pmProfilesPath || undefined,
+      maxProfiles: parsePositiveInt(pmMax) ?? 50,
+      defaultRole: ['primary', 'replica', 'analytics'].includes(pmDefaultRole ?? '') ? (pmDefaultRole as 'primary' | 'replica' | 'analytics') : 'primary',
+      readRouting: ['round-robin', 'random', 'least-loaded'].includes(pmReadRouting ?? '') ? (pmReadRouting as 'round-robin' | 'random' | 'least-loaded') : 'round-robin',
+    };
+  }
+
   return config;
 }
 
@@ -175,6 +191,7 @@ export function mergeConfigs(...configs: Partial<AppConfig>[]): AppConfig {
     mode: 'mcp', // Default mode
     metrics: { enabled: true, ipAllowList: [], slowBufferSize: 100 }, // v2.16 default
     queryAnalyzer: { enabled: true, historyTtlDays: 30, historyMaxRows: 10000, explainTimeoutMs: 10000 }, // v2.17 default
+    profileManager: { enabled: true, maxProfiles: 50, defaultRole: 'primary', readRouting: 'round-robin' }, // v2.18 default
   };
 
   for (const config of configs) {
@@ -192,6 +209,9 @@ export function mergeConfigs(...configs: Partial<AppConfig>[]): AppConfig {
     }
     if (config.queryAnalyzer) {
       merged.queryAnalyzer = { ...merged.queryAnalyzer, ...config.queryAnalyzer };
+    }
+    if (config.profileManager) {
+      merged.profileManager = { ...merged.profileManager, ...config.profileManager };
     }
   }
 
