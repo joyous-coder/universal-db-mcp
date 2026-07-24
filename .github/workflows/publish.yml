@@ -31,7 +31,9 @@ jobs:
       - name: Install dependencies
         # Use `npm install` (not `npm ci`) so platform-specific optional deps
         # (e.g. esbuild prebuilt binaries) for the CI runner are resolved.
-        run: npm install --no-audit --no-fund
+        # Force official registry to avoid corp mirrors (e.g. nvwa.jiuqi.com.cn)
+        # that may be configured in the CI runner's user-level npmrc.
+        run: npm install --no-audit --no-fund --registry https://registry.npmjs.org/
 
       - name: Build project
         run: npm run build
@@ -46,7 +48,7 @@ jobs:
       # Trusted Publishing via OIDC — no NPM_TOKEN secret required.
       # Configure the trusted publisher on npmjs.com first (see docs/superpowers/specs).
       - name: Publish to NPM
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --registry https://registry.npmjs.org/
 
       - name: Success notification
         if: success()
