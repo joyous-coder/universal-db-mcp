@@ -24,7 +24,13 @@ export async function setupQueryExperienceRoutes(fastify: FastifyInstance, qa: Q
     const q = request.query as Record<string, string>;
     const limit = q.limit ? Number(q.limit) : 50;
     const onlyErrors = q.onlyErrors === 'true';
-    return { success: true, data: { entries: await qa.getHistory({ ...q, limit, onlyErrors }) } };
+    // v2.19: build filter preserving groupBy + 3-state profileName
+    const filter: Record<string, unknown> = { ...q, limit, onlyErrors };
+    if (q.profileName !== undefined) {
+      filter.profileName = q.profileName === 'null' ? null : q.profileName;
+    }
+    if (q.groupBy !== undefined) filter.groupBy = q.groupBy;
+    return { success: true, data: { entries: await qa.getHistory(filter as any) } };
   });
 
   fastify.post('/api/templates', async (request) => {
@@ -32,8 +38,13 @@ export async function setupQueryExperienceRoutes(fastify: FastifyInstance, qa: Q
   });
 
   fastify.get('/api/templates', async (request) => {
-    const q = request.query as { tag?: string };
-    return { success: true, data: { templates: await qa.listTemplates(q) } };
+    const q = request.query as { tag?: string; profileName?: string };
+    const filter: Record<string, unknown> = {};
+    if (q.tag) filter.tag = q.tag;
+    if (q.profileName !== undefined) {
+      filter.profileName = q.profileName === 'null' ? null : q.profileName;
+    }
+    return { success: true, data: { templates: await qa.listTemplates(filter as any) } };
   });
 
   fastify.get<{ Params: { id: string } }>('/api/templates/:id', async (request) => {

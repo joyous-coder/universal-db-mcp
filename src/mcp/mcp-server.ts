@@ -300,17 +300,32 @@ export class DatabaseMCPServer {
           {
             name: 'get_query_history',
             description: TOOL_DESCRIPTIONS.get_query_history,
-            inputSchema: { type: 'object', properties: { db: { type: 'string' }, kind: { type: 'string' }, since: { type: 'string' }, until: { type: 'string' }, limit: { type: 'number' }, onlyErrors: { type: 'boolean' } } },
+            inputSchema: { type: 'object', properties: {
+              db: { type: 'string' }, kind: { type: 'string' }, since: { type: 'string' }, until: { type: 'string' },
+              limit: { type: 'number' }, onlyErrors: { type: 'boolean' },
+              // v2.19
+              profileName: { type: ['string', 'null'], description: "Filter by profile. null = global-only; string = that profile. v2.19." },
+              groupBy: { type: 'string', enum: ['profile'], description: "Aggregate query. v2.19." },
+            } },
           },
           {
             name: 'save_template',
             description: TOOL_DESCRIPTIONS.save_template,
-            inputSchema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, sql: { type: 'string' }, parameters: { type: 'array' }, tags: { type: 'array' } }, required: ['name', 'sql'] },
+            inputSchema: { type: 'object', properties: {
+              name: { type: 'string' }, description: { type: 'string' }, sql: { type: 'string' },
+              parameters: { type: 'array' }, tags: { type: 'array' },
+              // v2.19
+              profile_name: { type: ['string', 'null'], description: "Bind template to a profile. Omit/null = global. v2.19." },
+            }, required: ['name', 'sql'] },
           },
           {
             name: 'list_templates',
             description: TOOL_DESCRIPTIONS.list_templates,
-            inputSchema: { type: 'object', properties: { tag: { type: 'string' } } },
+            inputSchema: { type: 'object', properties: {
+              tag: { type: 'string' },
+              // v2.19
+              profileName: { type: ['string', 'null'], description: "Filter by profile. null = global-only; string = that profile. v2.19." },
+            } },
           },
           {
             name: 'get_template',
