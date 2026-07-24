@@ -2,6 +2,14 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [2.15.1] - 2026-07-24
+
+### 修复
+- **env vars 接入**:`DB_QUERY_TIMEOUT_MS` 和 `DB_SLOW_QUERY_THRESHOLD_MS` 现在能被 config-loader 解析并应用到 DatabaseService
+- **HTTP 错误状态码**: timeout 返回 504、auth 返回 401/403、not-found 返回 404(之前统一 500)
+- **Pooled adapter 事务语义** (Phase 1): mysql/postgres/oracle/dm/mssql 的 `executeScript` 现在保证 all-or-nothing 事务(单一连接)
+- **HTTP /api/execute-sql-file**: HTTP 模式支持 SQL 文件执行,与 MCP `execute_sql_file` 工具对齐
+
 ## [2.15.0] - 2026-07-24
 
 ### 新增 (P2)
