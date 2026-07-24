@@ -75,6 +75,43 @@ export class HistoryStore {
         // column already exists — ignore
       }
       this.conn.exec(`CREATE INDEX IF NOT EXISTS idx_history_profile ON query_history(profile_name)`);
+      // v2.20: full-text search via SQLite FTS5 virtual table.
+      // Contentless=0 (default) so the FTS table can be rebuilt from query_history.
+      // triggers keep both tables in sync; backfill handles pre-existing rows.
+      this.conn.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS history_fts USING fts5(
+          sql,
+          content='query_history',
+          content_rowid='id',
+          tokenize='unicode61 remove_diacritics 2'
+        );
+      `);
+      // sync triggers — INSERT/DELETE/UPDATE mirror FTS row lifecycle.
+      this.conn.exec(`DROP TRIGGER IF EXISTS trg_history_ai`);
+      this.conn.exec(`DROP TRIGGER IF EXISTS trg_history_ad`);
+      this.conn.exec(`DROP TRIGGER IF EXISTS trg_history_au`);
+      this.conn.exec(`
+        CREATE TRIGGER trg_history_ai AFTER INSERT ON query_history BEGIN
+          INSERT INTO history_fts(rowid, sql) VALUES (new.id, new.sql);
+        END;
+      `);
+      this.conn.exec(`
+        CREATE TRIGGER trg_history_ad AFTER DELETE ON query_history BEGIN
+          INSERT INTO history_fts(history_fts, rowid, sql) VALUES ('delete', old.id, old.sql);
+        END;
+      `);
+      this.conn.exec(`
+        CREATE TRIGGER trg_history_au AFTER UPDATE ON query_history BEGIN
+          INSERT INTO history_fts(history_fts, rowid, sql) VALUES ('delete', old.id, old.sql);
+          INSERT INTO history_fts(rowid, sql) VALUES (new.id, new.sql);
+        END;
+      `);
+      // Backfill: copy any pre-existing rows into FTS. INSERT OR IGNORE
+      // handles the case where the trigger already added them.
+      this.conn.exec(`
+        INSERT OR IGNORE INTO history_fts(rowid, sql)
+        SELECT id, sql FROM query_history;
+      `);
     })();
     return this.initPromise;
   }
@@ -137,6 +174,13 @@ export class HistoryStore {
         where.push('profile_name = ?');
         args.push(filter.profileName);
       }
+    }
+    // v2.20: FTS5 full-text search. Whitelist chars in the query to mitigate
+    // FTS5 syntax errors on raw LLM input; we still pass through simple
+    // AND / OR / NOT / quoted phrases.
+    if (filter && typeof filter.q === 'string' && filter.q.trim().length > 0) {
+      where.push("rowid IN (SELECT rowid FROM history_fts WHERE history_fts MATCH ?)");
+      args.push(filter.q.trim());
     }
     const limit = filter.limit ?? 50;
     const sql = `SELECT * FROM query_history ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT ${limit}`;

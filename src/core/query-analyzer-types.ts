@@ -74,6 +74,12 @@ export interface HistoryFilter {
    * - 'profile' → return `{profileName, count, errors, avg_ms}[]` instead of entries
    */
   groupBy?: 'profile';
+  /**
+   * v2.20: full-text search via SQLite FTS5.
+   * Use natural-language search like 'SELECT ORDERS' or 'orders' — quoted
+   * exact phrases, prefix queries (orders*), boolean (orders NOT invoices).
+   */
+  q?: string;
 }
 
 /**
