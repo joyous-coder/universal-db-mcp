@@ -31,47 +31,32 @@ export async function setupQueryRoutes(
         },
       },
     },
-  }, async (request, reply) => {
-    try {
-      const { sessionId, query, params } = request.body;
+  }, async (request) => {
+    const { sessionId, query, params } = request.body;
 
-      // Get database service
-      const service = connectionManager.getService(sessionId);
+    // Get database service
+    const service = connectionManager.getService(sessionId);
 
-      // Execute query
-      const result = await service.executeQuery(query, params);
+    // Execute query
+    const result = await service.executeQuery(query, params);
 
-      // Convert rows to JSON string for Coze compatibility
-      const httpResult: HttpQueryResult = {
-        rows: JSON.stringify(result.rows),
-        affectedRows: result.affectedRows,
+    // Convert rows to JSON string for Coze compatibility
+    const httpResult: HttpQueryResult = {
+      rows: JSON.stringify(result.rows),
+      affectedRows: result.affectedRows,
+      executionTime: result.executionTime,
+      metadata: result.metadata,
+    };
+
+    return {
+      success: true,
+      data: httpResult,
+      metadata: {
         executionTime: result.executionTime,
-        metadata: result.metadata,
-      };
-
-      return {
-        success: true,
-        data: httpResult,
-        metadata: {
-          executionTime: result.executionTime,
-          timestamp: new Date().toISOString(),
-          requestId: request.id,
-        },
-      };
-    } catch (error) {
-      reply.code(500);
-      return {
-        success: false,
-        error: {
-          code: 'QUERY_FAILED',
-          message: error instanceof Error ? error.message : 'Failed to execute query',
-        },
-        metadata: {
-          timestamp: new Date().toISOString(),
-          requestId: request.id,
-        },
-      };
-    }
+        timestamp: new Date().toISOString(),
+        requestId: request.id,
+      },
+    };
   });
 
   /**
@@ -93,38 +78,23 @@ export async function setupQueryRoutes(
         },
       },
     },
-  }, async (request, reply) => {
-    try {
-      const { sessionId, query, params } = request.body;
+  }, async (request) => {
+    const { sessionId, query, params } = request.body;
 
-      // Get database service
-      const service = connectionManager.getService(sessionId);
+    // Get database service
+    const service = connectionManager.getService(sessionId);
 
-      // Execute query (validation happens in service)
-      const result = await service.executeQuery(query, params);
+    // Execute query (validation happens in service)
+    const result = await service.executeQuery(query, params);
 
-      return {
-        success: true,
-        data: result,
-        metadata: {
-          executionTime: result.executionTime,
-          timestamp: new Date().toISOString(),
-          requestId: request.id,
-        },
-      };
-    } catch (error) {
-      reply.code(500);
-      return {
-        success: false,
-        error: {
-          code: 'EXECUTE_FAILED',
-          message: error instanceof Error ? error.message : 'Failed to execute operation',
-        },
-        metadata: {
-          timestamp: new Date().toISOString(),
-          requestId: request.id,
-        },
-      };
-    }
+    return {
+      success: true,
+      data: result,
+      metadata: {
+        executionTime: result.executionTime,
+        timestamp: new Date().toISOString(),
+        requestId: request.id,
+      },
+    };
   });
 }

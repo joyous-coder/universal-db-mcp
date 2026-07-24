@@ -45,39 +45,24 @@ export async function setupConnectionRoutes(
         },
       },
     },
-  }, async (request, reply) => {
-    try {
-      const config = request.body;
+  }, async (request) => {
+    const config = request.body;
 
-      // Connect to database
-      const sessionId = await connectionManager.connect(config as any);
+    // Connect to database
+    const sessionId = await connectionManager.connect(config as any);
 
-      return {
-        success: true,
-        data: {
-          sessionId,
-          databaseType: config.type,
-          connected: true,
-        },
-        metadata: {
-          timestamp: new Date().toISOString(),
-          requestId: request.id,
-        },
-      };
-    } catch (error) {
-      reply.code(500);
-      return {
-        success: false,
-        error: {
-          code: 'CONNECTION_FAILED',
-          message: error instanceof Error ? error.message : 'Failed to connect to database',
-        },
-        metadata: {
-          timestamp: new Date().toISOString(),
-          requestId: request.id,
-        },
-      };
-    }
+    return {
+      success: true,
+      data: {
+        sessionId,
+        databaseType: config.type,
+        connected: true,
+      },
+      metadata: {
+        timestamp: new Date().toISOString(),
+        requestId: request.id,
+      },
+    };
   });
 
   /**
@@ -97,36 +82,21 @@ export async function setupConnectionRoutes(
         },
       },
     },
-  }, async (request, reply) => {
-    try {
-      const { sessionId } = request.body;
+  }, async (request) => {
+    const { sessionId } = request.body;
 
-      // Disconnect from database
-      await connectionManager.disconnect(sessionId);
+    // Disconnect from database
+    await connectionManager.disconnect(sessionId);
 
-      return {
-        success: true,
-        data: {
-          disconnected: true,
-        },
-        metadata: {
-          timestamp: new Date().toISOString(),
-          requestId: request.id,
-        },
-      };
-    } catch (error) {
-      reply.code(500);
-      return {
-        success: false,
-        error: {
-          code: 'DISCONNECTION_FAILED',
-          message: error instanceof Error ? error.message : 'Failed to disconnect from database',
-        },
-        metadata: {
-          timestamp: new Date().toISOString(),
-          requestId: request.id,
-        },
-      };
-    }
+    return {
+      success: true,
+      data: {
+        disconnected: true,
+      },
+      metadata: {
+        timestamp: new Date().toISOString(),
+        requestId: request.id,
+      },
+    };
   });
 }
