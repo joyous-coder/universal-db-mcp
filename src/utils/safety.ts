@@ -166,6 +166,9 @@ export function getDangerousKeywords(query: string): string[] {
 
 /**
  * 格式化权限列表用于显示
+ *
+ * 注意: labels 使用 Partial,因为 'script' / 'batch' 不是核心操作类型
+ * 而是 opt-in 工具权限 —— 它们在显示时仍然需要有可读的中文标签。
  */
 export function formatPermissions(permissions: PermissionType[]): string {
   const labels: Partial<Record<PermissionType, string>> = {
@@ -174,6 +177,8 @@ export function formatPermissions(permissions: PermissionType[]): string {
     update: '更新',
     delete: '删除',
     ddl: 'DDL',
+    script: '脚本',
+    batch: '批量',
   };
   return permissions.map(p => `${labels[p]}(${p})`).join(', ');
 }
