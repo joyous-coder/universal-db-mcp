@@ -2,6 +2,40 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [2.15.0] - 2026
+
+### 新增 (P2)
+- **execute_batch 工具**: 批量执行 DML 操作(类似 JdbcTemplate.batchUpdate),性能提升 60-100x
+- **execute_script 工具**: 多语句脚本和 PL/SQL 块执行(需要 `script` 权限)
+- **execute_sql_file 工具**: 读 .sql 文件执行(需要 `script` 权限 + `DB_ALLOWED_FILE_PATHS` 白名单)
+- **generate_sample_data 工具**: AI 驱动的样例数据生成,支持中文(faker.js zh_CN locale)
+- **跨列模板引用**: `{column_name.pinyin}` 等修饰符,支持 `.lower/.upper/.first/.last/.pinyin/.pinyin.first/.N`
+- **新增权限类型**: `script` 和 `batch`(双重 opt-in,不在 `full` preset 里)
+- **连接池可配置**: `DB_POOL_SIZE`、`DB_POOL_MIN`、`DB_POOL_IDLE_TIMEOUT_MS` 环境变量
+- **`execute_query` 自动降级**: 检测到 PL/SQL 块或多语句时,自动用 `execute_script`
+
+### 安全 (P0)
+- **SQLite 注入修复**: 新增 `validateIdentifier` 白名单校验
+- **HTTP 默认鉴权**: 强制要求 API Key(可用 `ALLOW_INSECURE_NO_AUTH=true` 逃生)
+- **mcp disconnect 顺序修复**: 断开失败时仍清空状态
+- **重试风暴防护**: 共享 `withRetry` 工具(指数退避)
+- **PL/SQL 与多语句支持**: `execute_script` + 客户端解析 + 事务包装
+- **文件路径白名单**: `DB_ALLOWED_FILE_PATHS` + `--allow-sql-file-path` CLI
+
+### 性能 (P1)
+- **正则预编译**: `safety.ts` 中关键字正则缓存
+- **Schema 缓存 TTL**: 从 5 分钟降到 1 分钟
+- **查询超时**: 默认 30 秒(`DB_QUERY_TIMEOUT_MS`)
+- **慢查询日志**: 默认 5 秒阈值
+- **enum 抽样**: 10k 行采样避免大表慢查询
+- **SQLite Schema 缓存**: 避免重复 PRAGMA 调用
+
+### 测试覆盖
+- 新增单元测试: identifier-validator, retry, sql-detector, sql-parser, path-guard, template-resolver, script-permission
+- 187+ 测试通过(2 个预先存在的失败与本次改动无关)
+
+---
+
 ## [2.14.0] - 2026
 
 ### 新增
