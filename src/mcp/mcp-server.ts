@@ -18,6 +18,18 @@ import { DatabaseService, SchemaCacheConfig } from '../core/database-service.js'
 import { createAdapter, normalizeDbType } from '../utils/adapter-factory.js';
 import { resolvePermissions } from '../utils/safety.js';
 import { buildGetMetricsHandler, GET_METRICS_TOOL_DESCRIPTION, type MetricsCategory } from './tools/metrics.js';
+import {
+  buildExplainQueryHandler,
+  buildLintSqlHandler,
+  buildGetQueryHistoryHandler,
+  buildSaveTemplateHandler,
+  buildListTemplatesHandler,
+  buildGetTemplateHandler,
+  buildDeleteTemplateHandler,
+  buildExecuteTemplateHandler,
+  TOOL_DESCRIPTIONS,
+} from './tools/query-tools.js';
+import type { QueryAnalyzer } from '../core/query-analyzer.js';
 
 /**
  * 数据库 MCP 服务器类
@@ -30,6 +42,8 @@ export class DatabaseMCPServer {
   private cacheConfig: Partial<SchemaCacheConfig>;
   // v2.16: app-level config (for metrics settings, etc.); set via setAppConfig
   private appConfig: AppConfig | null = null;
+  // v2.17: query analyzer (optional); set via setQueryAnalyzer
+  private queryAnalyzer: QueryAnalyzer | null = null;
 
   constructor(config?: DbConfig, cacheConfig?: Partial<SchemaCacheConfig>) {
     this.config = config || null;
@@ -54,6 +68,14 @@ export class DatabaseMCPServer {
    */
   setAppConfig(appConfig: AppConfig): void {
     this.appConfig = appConfig;
+  }
+
+  /**
+   * v2.17: set the QueryAnalyzer. Optional; when not set, query-experience tools
+   * will return a "queryAnalyzer disabled" error.
+   */
+  setQueryAnalyzer(qa: QueryAnalyzer | null): void {
+    this.queryAnalyzer = qa;
   }
 
   /**
@@ -238,6 +260,47 @@ export class DatabaseMCPServer {
                 },
               },
             },
+          },
+          // v2.17: query experience
+          {
+            name: 'explain_query',
+            description: TOOL_DESCRIPTIONS.explain_query,
+            inputSchema: { type: 'object', properties: { sql: { type: 'string' }, params: { type: 'array' } }, required: ['sql'] },
+          },
+          {
+            name: 'lint_sql',
+            description: TOOL_DESCRIPTIONS.lint_sql,
+            inputSchema: { type: 'object', properties: { sql: { type: 'string' } }, required: ['sql'] },
+          },
+          {
+            name: 'get_query_history',
+            description: TOOL_DESCRIPTIONS.get_query_history,
+            inputSchema: { type: 'object', properties: { db: { type: 'string' }, kind: { type: 'string' }, since: { type: 'string' }, until: { type: 'string' }, limit: { type: 'number' }, onlyErrors: { type: 'boolean' } } },
+          },
+          {
+            name: 'save_template',
+            description: TOOL_DESCRIPTIONS.save_template,
+            inputSchema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, sql: { type: 'string' }, parameters: { type: 'array' }, tags: { type: 'array' } }, required: ['name', 'sql'] },
+          },
+          {
+            name: 'list_templates',
+            description: TOOL_DESCRIPTIONS.list_templates,
+            inputSchema: { type: 'object', properties: { tag: { type: 'string' } } },
+          },
+          {
+            name: 'get_template',
+            description: TOOL_DESCRIPTIONS.get_template,
+            inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+          },
+          {
+            name: 'delete_template',
+            description: TOOL_DESCRIPTIONS.delete_template,
+            inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+          },
+          {
+            name: 'execute_template',
+            description: TOOL_DESCRIPTIONS.execute_template,
+            inputSchema: { type: 'object', properties: { id: { type: 'string' }, params: { type: 'object' } }, required: ['id'] },
           },
         ]
       ;
@@ -538,6 +601,41 @@ LLM 当领域专家:用户描述模糊时,LLM 应根据表名/列名推断业务
                 text: JSON.stringify(result, null, 2),
               }],
             };
+          }
+
+          // v2.17: query experience tools
+          case 'explain_query': {
+            if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await buildExplainQueryHandler(this.queryAnalyzer)(args as any), null, 2) }] };
+          }
+          case 'lint_sql': {
+            if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(buildLintSqlHandler(this.queryAnalyzer)(args as any), null, 2) }] };
+          }
+          case 'get_query_history': {
+            if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await buildGetQueryHistoryHandler(this.queryAnalyzer)(args as any), null, 2) }] };
+          }
+          case 'save_template': {
+            if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await buildSaveTemplateHandler(this.queryAnalyzer)(args as any), null, 2) }] };
+          }
+          case 'list_templates': {
+            if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await buildListTemplatesHandler(this.queryAnalyzer)(args as any), null, 2) }] };
+          }
+          case 'get_template': {
+            if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await buildGetTemplateHandler(this.queryAnalyzer)(args as any), null, 2) }] };
+          }
+          case 'delete_template': {
+            if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await buildDeleteTemplateHandler(this.queryAnalyzer)(args as any), null, 2) }] };
+          }
+          case 'execute_template': {
+            if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
+            if (!this.adapter) throw new Error('connect database first');
+            return { content: [{ type: 'text', text: JSON.stringify(await buildExecuteTemplateHandler(this.queryAnalyzer)(args as any, this.adapter), null, 2) }] };
           }
 
           case 'get_connection_status': {
