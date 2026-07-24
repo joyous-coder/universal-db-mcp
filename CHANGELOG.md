@@ -2,6 +2,41 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.1.0] - 2026-07-24
+
+### 新增 (Index Advisor v3.1)
+- **`ExplainPlanParser`** — 17 adapter 覆盖：sqlite/mysql/pg/mongodb native JSON；其它 11 adapter (oracle/dameng/mssql/clickhouse/kingbase/gaussdb/opengauss/oceanbase/tidb/polardb/vastbase/highgo/goldendb) raw passthrough；redis 'unsupported'
+- **`IndexAdvisor.analyze(plan, dbType)`** — 4 heuristic rules (seq_scan / large_estimate / no_index_join / sort_no_index)，输出 CREATE INDEX SQL + impact (low/medium/high)
+- **`PlanDiff.compare(planA, planB)`** — added/removed/changed + costDelta + rowsDelta，按 op+table 标识相同节点
+- **`PlanHistory`** — 独立 `plan_history.db` SQLite 文件，存储 query_hash (sha256(normalized SQL)) + sql_template + planJson + captured_at
+- **`SqlNormalizer`** — strip literals → "SELECT * FROM t WHERE id = ?"，hash 相同查询
+
+### MCP tools (3 个)
+- `explain_query_with_advice` — EXPLAIN + IndexAdvisor advice；可选 persist 到 PlanHistory
+- `compare_query_plans` — 跨时间/同 queryHash 比较 plan，输出 costDelta
+- `list_query_plans` — recent entries 或按 queryHash 过滤
+
+### HTTP endpoints (3 个)
+- `POST /api/query-explain-advice`
+- `POST /api/query-plan-diff`
+- `GET /api/query-plans` (filters: `limit`, `queryHash`)
+
+### 文档
+- **新文档** `docs/index-advisor.md` — 3 capability API + adapter 覆盖表 + 安全提示
+- `docs/deferred-items.md` 更新 — 索引建议 / Query plan diff 标 v3.1 ✅
+
+### 测试
+- 新增 4 测试文件 (`explain-parser` / `plan-diff` / `plan-history` / `plan-capture-e2e`)
+- 总数: 485 测试全过 (v3.0.0: 450)
+
+### 依赖
+- 0 强制新增
+- 0 optional 新增
+
+### 安全
+- `IndexAdvisor` 仅建议 SQL，**绝不执行** CREATE INDEX；human-in-loop 由 LLM 负责 review & apply
+- PlanHistory 存 { sqlOriginal + planJson metadata }，无 query 结果数据
+
 ## [3.0.0] - 2026-07-24
 
 ### 新增 (Data Governance)
