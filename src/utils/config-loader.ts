@@ -206,6 +206,21 @@ export function loadFromEnv(): Partial<AppConfig> {
     (config as any).planHistoryPath = planHistoryPath;
   }
 
+  // v3.2: MCP tool lazy-loading
+  const lazyEnabled = process.env.DB_LAZY_LOAD_ENABLED;
+  const lazyDefaultGroups = process.env.DB_LAZY_DEFAULT_GROUP;
+  if (lazyEnabled !== undefined || lazyDefaultGroups !== undefined) {
+    config.lazyLoad = {
+      enabled: lazyEnabled === undefined ? true : /^(true|1|yes)$/i.test(lazyEnabled),
+      defaultActiveGroups: (lazyDefaultGroups ?? '')
+        .split(',')
+        .map(s => s.trim())
+        .filter((s): s is 'query-experience' | 'profiles' | 'data-governance' | 'index-advisor' =>
+          ['query-experience', 'profiles', 'data-governance', 'index-advisor'].includes(s)
+        ),
+    };
+  }
+
   return config;
 }
 
@@ -228,6 +243,7 @@ export function mergeConfigs(...configs: Partial<AppConfig>[]): AppConfig {
     metrics: { enabled: true, ipAllowList: [], slowBufferSize: 100 }, // v2.16 default
     queryAnalyzer: { enabled: true, historyTtlDays: 30, historyMaxRows: 10000, explainTimeoutMs: 10000 }, // v2.17 default
     profileManager: { enabled: true, maxProfiles: 50, defaultRole: 'primary', readRouting: 'round-robin' }, // v2.18 default
+    lazyLoad: { enabled: false, defaultActiveGroups: [] }, // v3.2 default: SAFE = disabled (no behavior change from v3.1)
   };
 
   for (const config of configs) {
@@ -248,6 +264,9 @@ export function mergeConfigs(...configs: Partial<AppConfig>[]): AppConfig {
     }
     if (config.profileManager) {
       merged.profileManager = { ...merged.profileManager, ...config.profileManager };
+    }
+    if (config.lazyLoad) {
+      merged.lazyLoad = { ...merged.lazyLoad, ...config.lazyLoad };
     }
   }
 

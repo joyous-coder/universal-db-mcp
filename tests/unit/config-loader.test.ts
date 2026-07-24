@@ -268,4 +268,34 @@ describe('Configuration Loader', () => {
       expect((cfg as any).planHistoryPath).toBe('/tmp/plan.db');
     });
   });
+
+  describe('lazy-loading config (v3.2)', () => {
+    it('lazyLoad defaults to enabled=false (safe v3.1 fallback)', () => {
+      delete process.env.DB_LAZY_LOAD_ENABLED;
+      delete process.env.DB_LAZY_DEFAULT_GROUP;
+      const cfg = mergeConfigs({}, loadFromEnv());
+      expect(cfg.lazyLoad?.enabled).toBe(false);
+      expect(cfg.lazyLoad?.defaultActiveGroups).toEqual([]);
+    });
+
+    it('DB_LAZY_LOAD_ENABLED=true sets enabled=true', () => {
+      process.env.DB_LAZY_LOAD_ENABLED = 'true';
+      const cfg = mergeConfigs({}, loadFromEnv());
+      expect(cfg.lazyLoad?.enabled).toBe(true);
+    });
+
+    it('DB_LAZY_DEFAULT_GROUP comma-separated → array', () => {
+      process.env.DB_LAZY_LOAD_ENABLED = 'true';
+      process.env.DB_LAZY_DEFAULT_GROUP = 'query-experience,profiles';
+      const cfg = mergeConfigs({}, loadFromEnv());
+      expect(cfg.lazyLoad?.defaultActiveGroups).toEqual(['query-experience', 'profiles']);
+    });
+
+    it('invalid group name in DB_LAZY_DEFAULT_GROUP is silently dropped', () => {
+      process.env.DB_LAZY_LOAD_ENABLED = 'true';
+      process.env.DB_LAZY_DEFAULT_GROUP = 'query-experience,invalid-name,profiles';
+      const cfg = mergeConfigs({}, loadFromEnv());
+      expect(cfg.lazyLoad?.defaultActiveGroups).toEqual(['query-experience', 'profiles']);
+    });
+  });
 });
