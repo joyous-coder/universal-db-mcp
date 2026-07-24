@@ -16,16 +16,16 @@ jobs:
 
     permissions:
       contents: read
-      id-token: write
+      id-token: write  # Required for Trusted Publishing OIDC
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
@@ -41,16 +41,16 @@ jobs:
           echo "version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
           echo "📦 Package version: $PACKAGE_VERSION"
 
+      # Trusted Publishing via OIDC — no NPM_TOKEN secret required.
+      # Configure the trusted publisher on npmjs.com first (see docs/superpowers/specs).
       - name: Publish to NPM
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Success notification
         if: success()
         run: |
-          echo "✅ Successfully published version ${{ steps.version.outputs.version }} to NPM"
-          echo "📦 Package: https://www.npmjs.com/package/universal-db-mcp"
+          echo "✅ Successfully published version ${{ steps.version.outputs.version }} to NPM via Trusted Publishing"
+          echo "📦 Package: https://www.npmjs.com/package/@joyous-coder/universal-db-mcp"
 
       - name: Failure notification
         if: failure()
