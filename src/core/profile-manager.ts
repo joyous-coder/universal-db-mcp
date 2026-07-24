@@ -84,7 +84,7 @@ export class ProfileManager {
     this.readRouting = opts.readRouting;
     this.cipherKey = opts.cipherKey;
     this.cacheConfig = opts.cacheConfig;
-    this.store = new ProfileStore(opts.profilesDbPath);
+    this.store = new ProfileStore(opts.profilesDbPath, { cipherKey: opts.cipherKey });
     this.router = new QueryRouter(opts.readRouting);
     // Log a startup hint when SQLCipher is configured (verbose only at debug).
     if (process.env.DEBUG_PROFILE_CIPHER === '1' && this.cipherKey) {

@@ -1,26 +1,60 @@
 /**
- * ProfileStore (v2.18)
+ * ProfileStore (v2.18 + v2.19 cipher support)
  *
- * SQLite-backed CRUD for profile definitions. Uses v2.16 multi-backend SQLite.
+ * SQLite-backed CRUD for profile definitions. Uses v2.16 multi-backend SQLite,
+ * and transparently switches to SQLCipher when a non-empty `cipherKey` is
+ * passed to the constructor (v2.19).
  */
 
 import { nanoid } from 'nanoid';
-import { detectSqliteBackend } from '../adapters/sqlite/types.js';
 import type { SQLiteConnection } from '../adapters/sqlite/types.js';
+import { detectEncryptedBackend } from '../utils/encrypted-sqlite.js';
 import type { Profile, ProfileInput, ProfileRole } from './profile-manager.js';
+
+export interface ProfileStoreOptions {
+  /**
+   * v2.19: SQLCipher key for transparent encryption of the entire
+   * profiles.db. Undefined/empty → plaintext (v2.18 behavior).
+   * Caller is responsible for sourcing this from a safe location
+   * (env var, OS keyring, etc.).
+   */
+  cipherKey?: string;
+}
 
 export class ProfileStore {
   private conn: SQLiteConnection | null = null;
   private initPromise: Promise<void> | null = null;
+  private cipherKey?: string;
+  private _encrypted = false;
+  /** v2.19: true after init() once the backend is known to be SQLCipher. */
+  public get encrypted(): boolean { return this._encrypted; }
 
-  constructor(public readonly dbPath: string) {}
+  constructor(public readonly dbPath: string, options?: ProfileStoreOptions) {
+    this.cipherKey = options?.cipherKey;
+    if (this.cipherKey && this.cipherKey.length < 8) {
+      console.warn(
+        `[profile] WARNING: DB_PROFILE_ENCRYPTION_KEY is short (<8 chars). Use a stronger key.`,
+      );
+    }
+  }
 
   private async init(): Promise<void> {
     if (this.conn) return;
     if (this.initPromise) return this.initPromise;
     this.initPromise = (async () => {
-      const backend = await detectSqliteBackend();
-      this.conn = await backend.open(this.dbPath, { readonly: false });
+      // v2.19: pick encrypted or native backend based on cipherKey.
+      const backend = detectEncryptedBackend(this.cipherKey);
+      this._encrypted = backend.name === 'cipher';
+      try {
+        this.conn = await backend.open(this.dbPath, {
+          readonly: false,
+          cipherKey: this.cipherKey,
+        });
+      } catch (err) {
+        // Reset so a subsequent call can retry; surface the error.
+        this.initPromise = null;
+        throw err;
+      }
       this.conn.exec(`
         CREATE TABLE IF NOT EXISTS profiles (
           id TEXT PRIMARY KEY,
