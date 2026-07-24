@@ -45,6 +45,7 @@ import { QueryRouter } from './query-router.js';
 import { createAdapter } from '../utils/adapter-factory.js';
 import { DatabaseService, SchemaCacheConfig } from './database-service.js';
 import type { DbAdapter, QueryResult } from '../types/adapter.js';
+import type { QueryAnalyzer } from './query-analyzer.js';
 
 export interface ProfileManagerOptions {
   enabled: boolean;
@@ -76,6 +77,8 @@ export class ProfileManager {
   public readonly cipherKey?: string;
   private lruOrder: string[] = [];
   private cacheConfig?: Partial<SchemaCacheConfig>;
+  /** v2.19: optional QueryAnalyzer for routeQuery history recording. */
+  private queryAnalyzer: QueryAnalyzer | null = null;
 
   constructor(opts: ProfileManagerOptions) {
     this.enabled = opts.enabled;
@@ -90,6 +93,19 @@ export class ProfileManager {
     if (process.env.DEBUG_PROFILE_CIPHER === '1' && this.cipherKey) {
       console.error(`[profile] SQLCipher enabled with key length ${this.cipherKey.length}`);
     }
+  }
+
+  /**
+   * v2.19: wire a QueryAnalyzer so {@link routeQuery} records history rows
+   * tagged with `profile_name`. Pass `null` to detach.
+   */
+  setQueryAnalyzer(qa: QueryAnalyzer | null): void {
+    this.queryAnalyzer = qa;
+  }
+
+  /** v2.19: diagnostic accessor. */
+  getQueryAnalyzer(): QueryAnalyzer | null {
+    return this.queryAnalyzer;
   }
 
   isEnabled(): boolean { return this.enabled; }
@@ -129,6 +145,13 @@ export class ProfileManager {
     const adapter = createAdapter(profile.config as any);
     await adapter.connect();
     const service = new DatabaseService(adapter, profile.config as any, this.cacheConfig);
+    // v2.19: forward QA + active-profile provider to the per-profile
+    // DatabaseService so history rows executed via this profile get the
+    // right profile_name.
+    if (this.queryAnalyzer) {
+      service.setQueryAnalyzer(this.queryAnalyzer);
+      service.setActiveProfileProvider(() => name);
+    }
     const live: LiveProfile = { profile, adapter, service, connectedAt: new Date() };
     this.liveProfiles.set(name, live);
     this.touchLRU(name);
@@ -155,13 +178,34 @@ export class ProfileManager {
   async routeQuery(profileName: string, sql: string, kind: 'read' | 'write', params?: unknown[]): Promise<QueryResult> {
     if (!this.enabled) throw new Error('multi-db disabled');
     const sourceLive = await this.loadProfile(profileName);
+    let result: QueryResult;
     if (kind === 'write' || sourceLive.profile.role === 'primary') {
-      return sourceLive.adapter.executeQuery(sql, params);
+      result = await sourceLive.adapter.executeQuery(sql, params);
+    } else {
+      const peers = Array.from(this.liveProfiles.values())
+        .filter(lp => lp.profile.role === sourceLive.profile.role);
+      const pick = this.router.pickReadReplica(peers) ?? sourceLive;
+      result = await pick.adapter.executeQuery(sql, params);
     }
-    const peers = Array.from(this.liveProfiles.values())
-      .filter(lp => lp.profile.role === sourceLive.profile.role);
-    const pick = this.router.pickReadReplica(peers) ?? sourceLive;
-    return pick.adapter.executeQuery(sql, params);
+    // v2.19: tag history with profile_name when a QueryAnalyzer is wired.
+    // Execute the record async (fire-and-forget) — callers don't block on history.
+    if (this.queryAnalyzer) {
+      this.queryAnalyzer.recordQuery({
+        ts: new Date().toISOString(),
+        db: sourceLive.profile.type,
+        kind: kind === 'read' ? 'select' : (kind === 'write' ? 'write' : kind),
+        sql,
+        params: params ? JSON.stringify(params) : null,
+        duration_ms: 0,
+        rows: Array.isArray((result as any).rows) ? (result as any).rows.length : null,
+        error: null,
+        error_code: null,
+        profile_name: profileName,
+      }).catch(err => {
+        console.error('[profileManager] routeQuery recordQuery failed:', err);
+      });
+    }
+    return result;
   }
 
   async closeAll(): Promise<void> {
