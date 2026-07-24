@@ -2,6 +2,32 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [2.16.0] - 2026-07-24
+
+### 新增 (Observability)
+- **HTTP `/metrics` 端点**: Prometheus 文本格式（exposition format 0.0.4），匿名 + `DB_METRICS_IP_ALLOWLIST` 控制访问
+- **MCP `get_metrics` tool**: 返回 `summary` / `slow_queries` / `all` 三类 JSON（不需数据库连接）
+- **MetricsRegistry**: `Counter` / `Histogram` / `Gauge` / `RingBuffer<T>` 单例，手写 Prometheus format
+- **4 类指标埋点**: query_total / query_seconds / query_errors_total / slow_queries_total + 慢查询环形 buffer
+- **`/api/health` 扩展**: 新增 `uptime_seconds` / `active_db` / `queries_total` / `errors_total` 字段（向后兼容）
+- **3 个 env var**: `DB_METRICS_ENABLED` / `DB_METRICS_IP_ALLOWLIST` / `DB_METRICS_SLOW_BUFFER_SIZE`
+- **0 新增 npm 依赖**: 全部手写
+
+### 测试
+- 新增 `tests/unit/metrics.test.ts` (18 cases)
+- 新增 `tests/unit/mcp-metrics-tool.test.ts` (4 cases)
+- 新增 `tests/unit/metrics-adapter-instrumentation.test.ts` (3 cases)
+- 新增 `tests/integration/metrics-endpoint.test.ts` (4 cases)
+- 新增 `tests/unit/config-loader.test.ts` metrics cases (5 cases)
+- 总数: **258** 测试全过 (v2.15.4: 224)
+
+### 文档
+- 新增 `docs/observability.md` (Prometheus scrape + MCP tool + env vars + use cases)
+
+### 已知局限
+- `db_pool_acquire_*` 指标未独立暴露（pool acquire 时间包含在 `db_query_seconds` 中），完整 pool 维度分解计划 v2.17
+- Pool acquire 计时当前在 DatabaseService 层（query 总时间 = acquire + execute），13 个 adapter 无侵入
+
 ## [2.15.4] - 2026-07-24
 
 ### 修复
