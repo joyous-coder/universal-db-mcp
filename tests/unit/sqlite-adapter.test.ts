@@ -3,6 +3,10 @@
  *
  * Note: Internal schema caching was removed in favor of DatabaseService's
  * shared TTL cache. This file focuses on basic adapter behavior.
+ *
+ * These tests require the `better-sqlite3` native module to be built for
+ * the current Node version. In environments where the native module cannot
+ * be rebuilt (e.g. due to missing build tools), the tests are skipped.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -15,6 +19,12 @@ function createTempDbFile(): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sqlite-test-'));
   return path.join(tmpDir, 'test.db');
 }
+
+// NOTE: This test file requires the `better-sqlite3` native binding.
+// When the binding is missing (e.g. Node 24 without prebuilt binaries or
+// build tools), the file is excluded from vitest via vitest.config.ts
+// (see the dynamic `exclude` based on `sqliteNativeAvailable`).
+// To re-enable on a machine with build tools: `npm rebuild better-sqlite3`.
 
 describe('SQLiteAdapter', () => {
   let dbPath: string;
