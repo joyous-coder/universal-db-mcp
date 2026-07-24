@@ -142,6 +142,17 @@ export class TemplateStore {
     }
   }
 
+  /** v2.20: rotate cipher key. */
+  async rotateKey(newKey: string): Promise<void> {
+    await this.close();
+    const { rotateDbKey } = await import('./key-rotator.js');
+    const oldKey = this.cipherKey;
+    await rotateDbKey(this.dbPath, 'templates', oldKey, newKey);
+    this.cipherKey = newKey;
+    this.initPromise = null;
+    await this.init();
+  }
+
   private queryAll(sql: string): Array<Record<string, unknown>> {
     const stmt = this.conn!.prepare(sql);
     return stmt.all() as Array<Record<string, unknown>>;

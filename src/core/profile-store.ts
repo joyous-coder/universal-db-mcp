@@ -133,6 +133,23 @@ export class ProfileStore {
     if (this.conn) { this.conn.close(); this.conn = null; }
   }
 
+  /**
+   * v2.20: rotate the cipher key of profiles.db.
+   * Atomically re-encrypts all rows under the new key.
+   * The store's existing connection is closed before rotation and reopened
+   * with `newKey` after success.
+   */
+  async rotateKey(newKey: string): Promise<void> {
+    await this.close();
+    const { rotateDbKey } = await import('./key-rotator.js');
+    const oldKey = this.cipherKey;
+    await rotateDbKey(this.dbPath, 'profile', oldKey, newKey);
+    this.cipherKey = newKey;
+    // Reset init so next call picks up new key.
+    this.initPromise = null;
+    await this.init();
+  }
+
   private queryAll(sql: string): Array<Record<string, unknown>> {
     return this.conn!.prepare(sql).all() as Array<Record<string, unknown>>;
   }

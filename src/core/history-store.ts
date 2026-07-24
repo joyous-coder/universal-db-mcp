@@ -160,6 +160,17 @@ export class HistoryStore {
     }
   }
 
+  /** v2.20: rotate cipher key. */
+  async rotateKey(newKey: string): Promise<void> {
+    await this.close();
+    const { rotateDbKey } = await import('./key-rotator.js');
+    const oldKey = this.cipherKey;
+    await rotateDbKey(this.dbPath, 'history', oldKey, newKey);
+    this.cipherKey = newKey;
+    this.initPromise = null;
+    await this.init();
+  }
+
   private rowToEntry(row: Record<string, unknown>): QueryHistoryEntry {
     return {
       id: row.id as number,
