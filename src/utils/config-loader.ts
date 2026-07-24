@@ -136,6 +136,24 @@ export function loadFromEnv(): Partial<AppConfig> {
     };
   }
 
+  // v2.17: query analyzer settings
+  const qaEnabled = process.env.DB_QUERY_ANALYZER_ENABLED;
+  const qaTemplates = process.env.DB_TEMPLATES_DB_PATH;
+  const qaHistory = process.env.DB_HISTORY_DB_PATH;
+  const qaTtl = process.env.DB_HISTORY_TTL_DAYS;
+  const qaMax = process.env.DB_HISTORY_MAX_ROWS;
+  const qaTimeout = process.env.DB_EXPLAIN_TIMEOUT_MS;
+  if (qaEnabled !== undefined || qaTemplates !== undefined || qaHistory !== undefined || qaTtl !== undefined || qaMax !== undefined || qaTimeout !== undefined) {
+    config.queryAnalyzer = {
+      enabled: qaEnabled === undefined ? true : /^(true|1|yes)$/i.test(qaEnabled),
+      templatesDbPath: qaTemplates || undefined,
+      historyDbPath: qaHistory || undefined,
+      historyTtlDays: parsePositiveInt(qaTtl) ?? 30,
+      historyMaxRows: parsePositiveInt(qaMax) ?? 10000,
+      explainTimeoutMs: parsePositiveInt(qaTimeout) ?? 10000,
+    };
+  }
+
   return config;
 }
 
@@ -156,6 +174,7 @@ export function mergeConfigs(...configs: Partial<AppConfig>[]): AppConfig {
   const merged: AppConfig = {
     mode: 'mcp', // Default mode
     metrics: { enabled: true, ipAllowList: [], slowBufferSize: 100 }, // v2.16 default
+    queryAnalyzer: { enabled: true, historyTtlDays: 30, historyMaxRows: 10000, explainTimeoutMs: 10000 }, // v2.17 default
   };
 
   for (const config of configs) {
@@ -170,6 +189,9 @@ export function mergeConfigs(...configs: Partial<AppConfig>[]): AppConfig {
     }
     if (config.metrics) {
       merged.metrics = { ...merged.metrics, ...config.metrics };
+    }
+    if (config.queryAnalyzer) {
+      merged.queryAnalyzer = { ...merged.queryAnalyzer, ...config.queryAnalyzer };
     }
   }
 

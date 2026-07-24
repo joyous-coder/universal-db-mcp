@@ -152,4 +152,30 @@ describe('Configuration Loader', () => {
       expect(config.metrics?.slowBufferSize).toBe(0);
     });
   });
+
+  describe('queryAnalyzer config (v2.17)', () => {
+    it('mergeConfigs provides default queryAnalyzer', () => {
+      const merged = mergeConfigs({});
+      expect(merged.queryAnalyzer).toEqual({
+        enabled: true,
+        templatesDbPath: undefined,
+        historyDbPath: undefined,
+        historyTtlDays: 30,
+        historyMaxRows: 10000,
+        explainTimeoutMs: 10000,
+      });
+    });
+
+    it('reads DB_QUERY_ANALYZER_ENABLED=false', () => {
+      process.env.DB_QUERY_ANALYZER_ENABLED = 'false';
+      const cfg = loadFromEnv();
+      expect(cfg.queryAnalyzer?.enabled).toBe(false);
+    });
+
+    it('warns and falls back on invalid historyTtlDays', () => {
+      process.env.DB_HISTORY_TTL_DAYS = 'abc';
+      const cfg = loadFromEnv();
+      expect(cfg.queryAnalyzer?.historyTtlDays).toBe(30);
+    });
+  });
 });

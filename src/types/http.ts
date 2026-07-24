@@ -63,6 +63,8 @@ export interface AppConfig {
   slowQueryThresholdMs?: number;
   /** v2.16: observability settings */
   metrics?: MetricsConfig;
+  /** v2.17: query analyzer settings (Explain / Lint / History / Template) */
+  queryAnalyzer?: QueryAnalyzerConfig;
 }
 
 /**
@@ -72,6 +74,19 @@ export interface MetricsConfig {
   enabled: boolean;
   ipAllowList: string[];
   slowBufferSize: number;
+}
+
+/**
+ * Query analyzer configuration (v2.17+)
+ * Controls Explain Plan, SQL Lint, query history, and parameterized templates.
+ */
+export interface QueryAnalyzerConfig {
+  enabled: boolean;
+  templatesDbPath?: string;
+  historyDbPath?: string;
+  historyTtlDays: number;
+  historyMaxRows: number;
+  explainTimeoutMs: number;
 }
 
 /**
