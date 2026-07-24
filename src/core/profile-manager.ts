@@ -46,6 +46,11 @@ import { createAdapter } from '../utils/adapter-factory.js';
 import { DatabaseService, SchemaCacheConfig } from './database-service.js';
 import type { DbAdapter, QueryResult } from '../types/adapter.js';
 import type { QueryAnalyzer } from './query-analyzer.js';
+import {
+  ProfileSerializer,
+  type ImportMode,
+  type ImportResult,
+} from './profile-serializer.js';
 
 export interface ProfileManagerOptions {
   enabled: boolean;
@@ -108,6 +113,82 @@ export class ProfileManager {
   /** v2.19: diagnostic accessor. */
   getQueryAnalyzer(): QueryAnalyzer | null {
     return this.queryAnalyzer;
+  }
+
+  /**
+   * v2.20: export profiles to a YAML or JSON string.
+   * Passwords are REDACTED by default; pass `{ includeSecrets: true }` to keep them.
+   */
+  async exportProfiles(format: 'yaml' | 'json' = 'yaml', opts?: { includeSecrets?: boolean }): Promise<string> {
+    const all = await this.listProfiles();
+    return format === 'json'
+      ? ProfileSerializer.toJSON(all, opts)
+      : ProfileSerializer.toYAML(all, opts);
+  }
+
+  /**
+   * v2.20: import profiles from a YAML or JSON string.
+   * `mode`:
+   *   - 'merge' (default): insert new profiles, update existing ones
+   *   - 'replace': delete all current profiles and replace with input
+   * `dryRun`: when true, do not actually save; returns a what-if preview.
+   *
+   * Profiles whose config contains REDACTED placeholders for sensitive fields
+   * MUST be re-supplied by the caller via `passwords: { [name]: { password: 'x' } }`.
+   * Without those, importing leaves the redaction in place.
+   */
+  async importProfiles(
+    input: string,
+    opts?: { mode?: ImportMode; format?: 'yaml' | 'json'; dryRun?: boolean; passwords?: Record<string, Record<string, string>> },
+  ): Promise<ImportResult> {
+    const format = opts?.format ?? 'yaml';
+    const doc = ProfileSerializer.parse(input, format);
+    const mode = opts?.mode ?? 'merge';
+    const dryRun = opts?.dryRun ?? false;
+
+    const result: ImportResult = { inserted: 0, updated: 0, skipped: 0, errors: [] };
+
+    if (!dryRun && mode === 'replace' && this.enabled) {
+      const current = await this.listProfiles();
+      for (const p of current) {
+        await this.deleteProfile(p.name);
+      }
+    }
+
+    for (const p of doc.profiles) {
+      const errs = ProfileSerializer.validate(p);
+      if (errs.length > 0) {
+        result.skipped++;
+        result.errors.push(`profile ${p.name || '?'}: ${errs.join('; ')}`);
+        continue;
+      }
+      // Restore redacted secrets from opts.passwords if provided.
+      const cfg: Record<string, unknown> = { ...p.config };
+      const overrides = opts?.passwords?.[p.name];
+      if (overrides) {
+        for (const [k, v] of Object.entries(overrides)) {
+          cfg[k] = v;
+        }
+      }
+      const existing = await this.getProfile(p.name);
+      if (!dryRun) {
+        await this.saveProfile({
+          name: p.name,
+          description: p.description,
+          type: p.type,
+          config: cfg as any,
+          role: p.role,
+          tags: p.tags,
+          enabled: p.enabled,
+        }, p.created_by || 'yaml-import');
+        if (existing) result.updated++;
+        else result.inserted++;
+      } else {
+        if (existing) result.updated++;
+        else result.inserted++;
+      }
+    }
+    return result;
   }
 
   isEnabled(): boolean { return this.enabled; }
