@@ -24,11 +24,6 @@ export class SQLiteAdapter extends BaseAdapter {
     readonly?: boolean;
   };
 
-  // P1: Schema cache (TTL: 5 minutes) — avoids repeated PRAGMA scans
-  private schemaCache: SchemaInfo | null = null;
-  private schemaCacheTime: number = 0;
-  private static readonly SCHEMA_CACHE_TTL_MS = 5 * 60 * 1000;
-
   constructor(config: {
     filePath: string;
     readonly?: boolean;
@@ -123,17 +118,18 @@ export class SQLiteAdapter extends BaseAdapter {
   /**
    * 获取数据库结构信息
    *
-   * P1: Results are cached for 5 minutes to avoid repeated PRAGMA scans,
-   * which are expensive on large SQLite databases.
+   * 注意: 之前在此处内置了 5 分钟 TTL 的 Schema 缓存以避免重复的 PRAGMA 扫描。
+   * 但是 DatabaseService 已经维护了一个独立的、TTL=1 分钟的 Schema 缓存,
+   * 且实现了 forceRefresh / clearSchemaCache / cache stats 语义。
+   * 两个独立的缓存会让 DatabaseService 的缓存控制(包括 forceRefresh)失效 —
+   * 调用者清除外层缓存后,SQLite 适配器仍然返回旧的缓存结果。
+   *
+   * 因此这里删除了适配器内部的缓存:每次 getSchema 调用都会重新执行 PRAGMA。
+   * DatabaseService 的外层缓存仍然生效;若需要频繁刷新,可以调整其 TTL。
    */
   async getSchema(): Promise<SchemaInfo> {
     if (!this.db) {
       throw new Error('数据库未连接');
-    }
-
-    // P1: 返回缓存的 Schema（如果仍然有效）
-    if (this.schemaCache && (Date.now() - this.schemaCacheTime) < SQLiteAdapter.SCHEMA_CACHE_TTL_MS) {
-      return this.schemaCache;
     }
 
     try {
@@ -181,14 +177,8 @@ export class SQLiteAdapter extends BaseAdapter {
         relationships: relationships.length > 0 ? relationships : undefined,
       };
 
-      // P1: 缓存成功的 Schema
-      this.schemaCache = schema;
-      this.schemaCacheTime = Date.now();
-
       return schema;
     } catch (error) {
-      // P1: 出错时清除缓存，避免下次返回过时的数据
-      this.clearSchemaCache();
       throw new Error(
         `获取数据库结构失败: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -196,12 +186,14 @@ export class SQLiteAdapter extends BaseAdapter {
   }
 
   /**
-   * P1: 清除 Schema 缓存
-   * 用于在 schema 发生变化（如 ALTER TABLE）后强制刷新
+   * 清除 Schema 缓存
+   *
+   * 现在是一个 no-op,保留仅为向后兼容。
+   * Schema 缓存由 DatabaseService 统一管理;若要强制刷新,请改用
+   * DatabaseService.clearSchemaCache() 或 getSchema({ forceRefresh: true })。
    */
   clearSchemaCache(): void {
-    this.schemaCache = null;
-    this.schemaCacheTime = 0;
+    // no-op: caching removed; retained for API compatibility
   }
 
   /**
