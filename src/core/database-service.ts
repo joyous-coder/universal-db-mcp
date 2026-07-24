@@ -721,10 +721,22 @@ export class DatabaseService {
    * P1: 使用抽样策略避免对大表做完整的 DISTINCT 扫描。
    * 先随机抽样 10000 行（按 RANDOM()/RAND() 排序后取 LIMIT），
    * 再对这些样本做 DISTINCT 并按值排序，最后取所需 limit。
+   *
+   * 注意:抽样仅在支持 RAND()/RANDOM() + LIMIT 子查询的方言上启用:
+   *   MySQL / TiDB / OceanBase / PolarDB / GoldenDB / PostgreSQL / SQLite。
+   * Oracle 和 SQL Server 不能在子查询中使用 RANDOM()/RAND() 或 LIMIT,
+   * 因此回退到简单的全表 DISTINCT(稍慢但是语义正确)。
    */
   private buildEnumValuesQuery(tableName: string, columnName: string, limit: number): string {
     const quotedTable = this.quoteIdentifier(tableName);
     const quotedColumn = this.quoteIdentifier(columnName);
+
+    // 抽样策略仅对支持 RAND()/RANDOM() + LIMIT 子查询的方言可用
+    if (!this.supportsEnumSampling()) {
+      // Oracle / SQL Server: 回退到简单 DISTINCT,无抽样
+      const baseQuery = `SELECT DISTINCT ${quotedColumn} as value FROM ${quotedTable} WHERE ${quotedColumn} IS NOT NULL ORDER BY ${quotedColumn}`;
+      return this.appendLimit(baseQuery, limit);
+    }
 
     // 抽样大小：固定 10000 行（足以覆盖大多数枚举分布）
     const sampleSize = 10000;
@@ -738,6 +750,28 @@ export class DatabaseService {
     const baseQuery = `SELECT DISTINCT ${quotedColumn} as value FROM (${sampleSubquery}) ORDER BY ${quotedColumn}`;
 
     return this.appendLimit(baseQuery, limit);
+  }
+
+  /**
+   * 是否对当前方言启用 get_enum_values 的随机抽样优化。
+   * 返回 false 时,buildEnumValuesQuery 回退到简单 DISTINCT。
+   */
+  private supportsEnumSampling(): boolean {
+    const dbType = this.config.type;
+    switch (dbType) {
+      case 'mysql':
+      case 'tidb':
+      case 'oceanbase':
+      case 'polardb':
+      case 'goldendb':
+      case 'postgres':
+      case 'sqlite':
+        return true;
+      // Oracle / DM / Kingbase / GaussDB / Vastbase / HighGo / ClickHouse / SQL Server:
+      // 由于 RAND() 不可用或子查询 + LIMIT 语义不同,禁用抽样
+      default:
+        return false;
+    }
   }
 
   /**
