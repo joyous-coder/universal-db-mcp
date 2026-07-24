@@ -2,6 +2,16 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [2.15.4] - 2026-07-24
+
+### 修复
+- **mcp-mode 测试**: 更新 import 路径为 `src/adapters/sqlite/index.js`(适配 v2.15.3 目录化重构)；`should require adapter before starting` 改为验证 v2.14 引入的"零配置 / 无连接模式"行为
+- **CORS 测试**: OPTIONS 预检现在带 `Origin` 头模拟跨域请求
+
+### 测试
+- **新增测试**: `tests/unit/adapter-factory.test.ts`(131 行)、`config-loader.test.ts`(42 行)、`sample-data-generator.test.ts`
+- **总测试数**: 224(原 221),75 个 suite 全过,`success=true`
+
 ## [2.15.3] - 2026-07-24
 
 ### 改进
