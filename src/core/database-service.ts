@@ -78,6 +78,8 @@ export class DatabaseService {
   private slowQueries: RingBuffer<{ ts: string; db: string; kind: string; seconds: number; sql: string; error: string | null; }>;
   // v2.17: query analyzer (optional)
   private queryAnalyzer: QueryAnalyzer | null = null;
+  // v2.19: active profile provider — nullptr means legacy single-DB mode.
+  private activeProfileProvider: (() => string | null) | null = null;
 
   // Schema 增强器
   private schemaEnhancer: SchemaEnhancer;
@@ -110,6 +112,30 @@ export class DatabaseService {
    */
   setQueryAnalyzer(qa: QueryAnalyzer | null): void {
     this.queryAnalyzer = qa;
+    // v2.19: propagate active-profile provider to the analyzer so
+    // recordQuery automatically tags history rows.
+    if (qa && this.activeProfileProvider) {
+      qa.setProfileProvider(this.activeProfileProvider);
+    }
+  }
+
+  /**
+   * v2.19: register a callback returning the currently active profile name
+   * (or `null` for legacy single-DB mode). The DatabaseService forwards
+   * this to its QueryAnalyzer (when one is registered), so any history
+   * recorded while executing a query automatically gets profile_name
+   * populated. Pass `null` to clear.
+   */
+  setActiveProfileProvider(fn: (() => string | null) | null): void {
+    this.activeProfileProvider = fn;
+    if (fn && this.queryAnalyzer) {
+      this.queryAnalyzer.setProfileProvider(fn);
+    }
+  }
+
+  /** v2.19: returns the registered active-profile provider (for diagnostics). */
+  getActiveProfileProvider(): (() => string | null) | null {
+    return this.activeProfileProvider;
   }
 
   /**

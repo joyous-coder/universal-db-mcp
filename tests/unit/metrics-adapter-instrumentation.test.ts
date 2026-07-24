@@ -47,6 +47,72 @@ describe('DatabaseService instrumentation', () => {
     expect(errs!.series.length).toBeGreaterThan(0);
     await adapter.disconnect();
   });
+
+  // v2.19: DatabaseService.setActiveProfileProvider forwards to QueryAnalyzer
+  it('executeQuery history records profile_name from active provider', async () => {
+    const adapter = new SQLiteAdapter({ filePath: ':memory:', readonly: false });
+    await adapter.connect();
+    const svc = new DatabaseService(adapter, { type: 'sqlite', allowWrite: true } as DbConfig);
+    const ts = Date.now();
+    const tplPath = `.tmp-ds-v219-tpl-${ts}-${Math.random().toString(36).slice(2)}.db`;
+    const histPath = `.tmp-ds-v219-hist-${ts}-${Math.random().toString(36).slice(2)}.db`;
+    const qa = new QueryAnalyzer({
+      enabled: true,
+      templatesDbPath: tplPath,
+      historyDbPath: histPath,
+      historyTtlDays: 30,
+      historyMaxRows: 100,
+      explainTimeoutMs: 5000,
+    });
+    svc.setQueryAnalyzer(qa);
+    svc.setActiveProfileProvider(() => 'prod-mysql');
+    await svc.executeQuery('SELECT 1 AS v');
+    // recordQuery is async — give it a moment to flush
+    await new Promise(r => setTimeout(r, 50));
+    const entries = await qa.getHistory({ profileName: 'prod-mysql' });
+    expect(entries.length).toBeGreaterThanOrEqual(1);
+    expect((entries[0] as any).profile_name).toBe('prod-mysql');
+    await qa.close();
+    await adapter.disconnect();
+    [tplPath, histPath].forEach(p => { if (existsSync(p)) unlinkSync(p); });
+  });
+
+  it('setActiveProfileProvider can be cleared with null', () => {
+    const adapter = new SQLiteAdapter({ filePath: ':memory:', readonly: false });
+    const svc = new DatabaseService(adapter, { type: 'sqlite', allowWrite: true } as DbConfig);
+    svc.setActiveProfileProvider(() => 'p1');
+    expect(svc.getActiveProfileProvider()).not.toBeNull();
+    svc.setActiveProfileProvider(null);
+    expect(svc.getActiveProfileProvider()).toBeNull();
+  });
+
+  it('setActiveProfileProvider called BEFORE setQueryAnalyzer still propagates', async () => {
+    const adapter = new SQLiteAdapter({ filePath: ':memory:', readonly: false });
+    await adapter.connect();
+    const svc = new DatabaseService(adapter, { type: 'sqlite', allowWrite: true } as DbConfig);
+    svc.setActiveProfileProvider(() => 'late-prop');
+    const ts = Date.now();
+    const tplPath = `.tmp-ds-v219-late-tpl-${ts}.db`;
+    const histPath = `.tmp-ds-v219-late-hist-${ts}.db`;
+    const qa = new QueryAnalyzer({
+      enabled: true,
+      templatesDbPath: tplPath,
+      historyDbPath: histPath,
+      historyTtlDays: 30,
+      historyMaxRows: 100,
+      explainTimeoutMs: 5000,
+    });
+    // Wire QueryAnalyzer AFTER setting the provider; both branches covered.
+    svc.setQueryAnalyzer(qa);
+    await svc.executeQuery('SELECT 2 AS v');
+    await new Promise(r => setTimeout(r, 50));
+    const entries = await qa.getHistory({ profileName: 'late-prop' });
+    expect(entries.length).toBeGreaterThanOrEqual(1);
+    expect((entries[0] as any).profile_name).toBe('late-prop');
+    await qa.close();
+    await adapter.disconnect();
+    [tplPath, histPath].forEach(p => { if (existsSync(p)) unlinkSync(p); });
+  });
 });
 
 describe('DatabaseService queryAnalyzer integration (v2.17)', () => {
