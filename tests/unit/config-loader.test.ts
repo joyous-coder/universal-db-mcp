@@ -44,6 +44,48 @@ describe('Configuration Loader', () => {
       expect(config.database?.host).toBe('localhost');
       expect(config.database?.port).toBe(3306);
     });
+
+    it('should load pool config when DB_POOL_* env vars are set', () => {
+      process.env.DB_TYPE = 'mysql';
+      process.env.DB_HOST = 'localhost';
+      process.env.DB_PORT = '3306';
+      process.env.DB_POOL_SIZE = '10';
+      process.env.DB_POOL_MIN = '2';
+      process.env.DB_POOL_IDLE_TIMEOUT_MS = '30000';
+
+      const config = loadFromEnv();
+      expect(config.database?.poolConfig).toEqual({
+        max: 10,
+        min: 2,
+        idleTimeoutMs: 30000,
+      });
+    });
+
+    it('should leave poolConfig undefined when no DB_POOL_* env vars are set', () => {
+      process.env.DB_TYPE = 'mysql';
+      process.env.DB_HOST = 'localhost';
+      process.env.DB_PORT = '3306';
+      delete process.env.DB_POOL_SIZE;
+      delete process.env.DB_POOL_MIN;
+      delete process.env.DB_POOL_IDLE_TIMEOUT_MS;
+
+      const config = loadFromEnv();
+      expect(config.database?.poolConfig).toBeUndefined();
+    });
+
+    it('should parse partial pool config (only some DB_POOL_* env vars)', () => {
+      process.env.DB_TYPE = 'mysql';
+      process.env.DB_HOST = 'localhost';
+      process.env.DB_PORT = '3306';
+      delete process.env.DB_POOL_MIN;
+      delete process.env.DB_POOL_IDLE_TIMEOUT_MS;
+      process.env.DB_POOL_SIZE = '5';
+
+      const config = loadFromEnv();
+      expect(config.database?.poolConfig?.max).toBe(5);
+      expect(config.database?.poolConfig?.min).toBeUndefined();
+      expect(config.database?.poolConfig?.idleTimeoutMs).toBeUndefined();
+    });
   });
 
   describe('mergeConfigs', () => {

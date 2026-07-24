@@ -126,10 +126,16 @@ describe('HTTP API Integration Tests', () => {
   });
 
   describe('CORS', () => {
-    it('should include CORS headers', async () => {
+    it('should include CORS headers on cross-origin preflight', async () => {
+      // CORS headers are only emitted for cross-origin requests. Pass an
+      // Origin header to simulate a browser preflight from a different origin.
       const response = await server.inject({
         method: 'OPTIONS',
-        url: '/api/health'
+        url: '/api/health',
+        headers: {
+          origin: 'https://example.com',
+          'access-control-request-method': 'GET',
+        }
       });
 
       expect(response.headers['access-control-allow-origin']).toBeDefined();

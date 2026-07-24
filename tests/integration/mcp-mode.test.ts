@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { DatabaseMCPServer } from '../../src/mcp/mcp-server';
-import { SQLiteAdapter } from '../../src/adapters/sqlite.js';
+import { SQLiteAdapter } from '../../src/adapters/sqlite/index.js';
 import type { DbConfig } from '../../src/types/adapter';
 
 describe('MCP Mode Integration Tests', () => {
@@ -20,7 +20,9 @@ describe('MCP Mode Integration Tests', () => {
       expect(server).toBeDefined();
     });
 
-    it('should require adapter before starting', async () => {
+    it('should start in no-connection mode when no adapter is set (v2.14 zero-config)', async () => {
+      // v2.14 引入了"零配置启动 / 无连接模式"：start() 在没 adapter 时不再 throw，
+      // 而是 resolve 并进入"等待 AI 调用 connect_database"状态。
       const config: DbConfig = {
         type: 'sqlite',
         filePath: ':memory:',
@@ -29,7 +31,9 @@ describe('MCP Mode Integration Tests', () => {
 
       const server = new DatabaseMCPServer(config);
 
-      await expect(server.start()).rejects.toThrow('必须先设置数据库适配器');
+      await expect(server.start()).resolves.toBeUndefined();
+      // 释放 stdio 监听器，避免进程挂起
+      await server.stop();
     });
   });
 
