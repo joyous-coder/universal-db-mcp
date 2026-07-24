@@ -18,6 +18,7 @@ import type {
   QueryHistoryEntry,
   QueryHistoryInput,
   HistoryFilter,
+  ProfileHistoryAggregate,
   Template,
   TemplateInput,
   QueryAnalyzerOptions,
@@ -64,7 +65,9 @@ export class QueryAnalyzer {
     }
   }
 
-  async getHistory(filter?: HistoryFilter): Promise<QueryHistoryEntry[]> {
+  async getHistory(
+    filter?: HistoryFilter,
+  ): Promise<QueryHistoryEntry[] | ProfileHistoryAggregate[]> {
     if (!this.enabled) return [];
     return this.history.query(filter ?? {});
   }

@@ -1,13 +1,18 @@
 /**
- * HistoryStore (v2.17)
+ * HistoryStore (v2.17 + v2.19)
  *
  * SQLite-backed query history with TTL + LRU eviction.
- * Uses v2.16 multi-backend SQLite.
+ * v2.19: adds profile_name column + filter + groupBy='profile' aggregate.
  */
 
 import { detectSqliteBackend } from '../adapters/sqlite/types.js';
 import type { SQLiteConnection } from '../adapters/sqlite/types.js';
-import type { QueryHistoryEntry, QueryHistoryInput, HistoryFilter } from './query-analyzer-types.js';
+import type {
+  QueryHistoryEntry,
+  QueryHistoryInput,
+  HistoryFilter,
+  ProfileHistoryAggregate,
+} from './query-analyzer-types.js';
 
 export interface HistoryStoreOptions {
   ttlDays: number;
@@ -43,6 +48,14 @@ export class HistoryStore {
         CREATE INDEX IF NOT EXISTS idx_history_db ON query_history(db, kind);
         PRAGMA journal_mode = WAL;
       `);
+      // v2.19: idempotent migration — add profile_name column for cross-profile
+      // history queries. Older history.db files from v2.17 get NULL.
+      try {
+        this.conn.exec(`ALTER TABLE query_history ADD COLUMN profile_name TEXT`);
+      } catch {
+        // column already exists — ignore
+      }
+      this.conn.exec(`CREATE INDEX IF NOT EXISTS idx_history_profile ON query_history(profile_name)`);
     })();
     return this.initPromise;
   }
@@ -50,8 +63,9 @@ export class HistoryStore {
   async record(input: QueryHistoryInput): Promise<void> {
     await this.init();
     const sql = input.sql.length > 4000 ? input.sql.slice(0, 4000) + ' /* truncated */' : input.sql;
+    const profileName = input.profile_name ?? null;
     this.conn!.exec(
-      `INSERT INTO query_history (ts, db, kind, sql, params, duration_ms, rows, error, error_code) VALUES (${q(input.ts)}, ${q(input.db)}, ${q(input.kind)}, ${q(sql)}, ${q(input.params)}, ${input.duration_ms}, ${input.rows ?? 'NULL'}, ${q(input.error)}, ${q(input.error_code)})`
+      `INSERT INTO query_history (ts, db, kind, sql, params, duration_ms, rows, error, error_code, profile_name) VALUES (${q(input.ts)}, ${q(input.db)}, ${q(input.kind)}, ${q(sql)}, ${q(input.params)}, ${input.duration_ms}, ${input.rows ?? 'NULL'}, ${q(input.error)}, ${q(input.error_code)}, ${q(profileName)})`
     );
     // LRU: if over maxRows, delete oldest 10%
     const count = (this.conn!.prepare('SELECT COUNT(*) as c FROM query_history').get() as { c: number }).c;
@@ -61,8 +75,31 @@ export class HistoryStore {
     }
   }
 
-  async query(filter: HistoryFilter): Promise<QueryHistoryEntry[]> {
+  async query(filter: HistoryFilter): Promise<QueryHistoryEntry[] | ProfileHistoryAggregate[]> {
     await this.init();
+
+    // v2.19: groupBy='profile' returns aggregates, not raw entries.
+    if (filter.groupBy === 'profile') {
+      const aggSql = `
+        SELECT
+          profile_name,
+          COUNT(*) as count,
+          SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) as errors,
+          AVG(duration_ms) as avg_ms
+        FROM query_history
+        GROUP BY profile_name
+        ORDER BY count DESC
+      `;
+      const stmt = this.conn!.prepare(aggSql);
+      const rows = stmt.all() as Array<Record<string, unknown>>;
+      return rows.map(r => ({
+        profileName: (r.profile_name as string | null) ?? null,
+        count: Number(r.count ?? 0),
+        errors: Number(r.errors ?? 0),
+        avg_ms: Number(r.avg_ms ?? 0),
+      }));
+    }
+
     const where: string[] = [];
     const args: unknown[] = [];
     if (filter.db) { where.push('db = ?'); args.push(filter.db); }
@@ -70,6 +107,18 @@ export class HistoryStore {
     if (filter.since) { where.push('ts >= ?'); args.push(filter.since); }
     if (filter.until) { where.push('ts <= ?'); args.push(filter.until); }
     if (filter.onlyErrors) { where.push('error IS NOT NULL'); }
+    // v2.19: profileName is 3-state:
+    //   - omitted    → all
+    //   - null       → only profile_name IS NULL
+    //   - 'name'     → only profile_name = ?
+    if (filter && 'profileName' in filter) {
+      if (filter.profileName === null) {
+        where.push('profile_name IS NULL');
+      } else if (filter.profileName !== undefined) {
+        where.push('profile_name = ?');
+        args.push(filter.profileName);
+      }
+    }
     const limit = filter.limit ?? 50;
     const sql = `SELECT * FROM query_history ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY id DESC LIMIT ${limit}`;
     const stmt = this.conn!.prepare(sql);
@@ -104,6 +153,7 @@ export class HistoryStore {
       rows: (row.rows as number) ?? null,
       error: (row.error as string) ?? null,
       error_code: (row.error_code as string) ?? null,
+      profile_name: (row.profile_name as string | null) ?? null,
     };
   }
 }

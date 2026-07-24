@@ -54,6 +54,8 @@ export interface QueryHistoryInput {
   rows: number | null;
   error: string | null;
   error_code: string | null;
+  /** v2.19: nullable. Set to the active profile name when routing via ProfileManager. */
+  profile_name?: string | null;
 }
 export interface QueryHistoryEntry extends QueryHistoryInput {
   id: number;
@@ -65,6 +67,24 @@ export interface HistoryFilter {
   until?: string;
   limit?: number;
   onlyErrors?: boolean;
+  /** v2.19: filter by profile (null = global-only, 'name' = local-only, undefined = all). */
+  profileName?: string | null;
+  /**
+   * v2.19: aggregate the result set.
+   * - 'profile' → return `{profileName, count, errors, avg_ms}[]` instead of entries
+   */
+  groupBy?: 'profile';
+}
+
+/**
+ * v2.19: per-profile aggregate row, returned by `HistoryStore.query`
+ * when `HistoryFilter.groupBy === 'profile'`.
+ */
+export interface ProfileHistoryAggregate {
+  profileName: string | null;
+  count: number;
+  errors: number;
+  avg_ms: number;
 }
 
 export interface TemplateParam {
