@@ -2,6 +2,32 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [2.17.0] - 2026-07-24
+
+### 新增 (Query Experience)
+- **Explain Plan** — `explain_query` MCP tool + `POST /api/explain` 端点，per-DB EXPLAIN + 解析 `plan` 数组 + 保留 raw 输出
+- **SQL Lint** — `lint_sql` MCP tool + `POST /api/lint`，10 条规则 (select-star / no-where-update / in-thousand / leading-wildcard-like 等)，纯 advisory 不阻止执行
+- **查询历史** — `get_query_history` MCP tool + `GET /api/query-history`，SQLite 持久化 + 30 天 TTL + 10000 行 LRU + WAL
+- **参数化模板** — `save_template` / `list_templates` / `get_template` / `delete_template` / `execute_template` MCP + 5 个 HTTP 端点，SQLite 存储 + 5 种参数类型 (sql_identifier 走 validateIdentifier 防注入)
+- **execute_query 响应扩展** — 增 `lint: LintResult` 字段 (advisory)，向后兼容
+- **QueryAnalyzer 单例** — `src/core/query-analyzer.ts` 统一入口，DatabaseService 旁路
+
+### 配置
+- 6 个新 env var: `DB_QUERY_ANALYZER_ENABLED` / `DB_TEMPLATES_DB_PATH` / `DB_HISTORY_DB_PATH` / `DB_HISTORY_TTL_DAYS` / `DB_HISTORY_MAX_ROWS` / `DB_EXPLAIN_TIMEOUT_MS`
+
+### 测试
+- 新增 6 测试文件 (~400 行)
+- 总数: 305 测试全过 (v2.16.0: 258)
+
+### 文档
+- 新增 `docs/query-experience.md`
+
+### 依赖
+- 0 新增（复用 v2.16 multi-backend SQLite）
+
+### 修复
+- SQLiteAdapter 现在识别 `EXPLAIN` 开头的语句为查询（之前误归为写操作，rows 为空）
+
 ## [2.16.0] - 2026-07-24
 
 ### 新增 (Observability)
