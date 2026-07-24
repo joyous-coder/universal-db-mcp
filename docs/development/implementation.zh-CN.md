@@ -3,6 +3,7 @@
 ## ✅ 实现状态
 
 ### 阶段 1: 核心重构 (已完成)
+
 - ✅ 创建 `src/utils/adapter-factory.ts` - 集中式适配器创建
 - ✅ 创建 `src/utils/config-loader.ts` - 多源配置管理
 - ✅ 创建 `src/core/database-service.ts` - 共享业务逻辑
@@ -10,6 +11,7 @@
 - ✅ 创建 `src/types/http.ts` - HTTP 特定类型定义
 
 ### 阶段 2: MCP 模式重构 (已完成)
+
 - ✅ 移动 `src/server.ts` → `src/mcp/mcp-server.ts` (重构以使用 DatabaseService)
 - ✅ 移动 `src/index.ts` → `src/mcp/mcp-index.ts` (重构以使用适配器工厂)
 - ✅ 创建 `src/index.ts` - 模式选择器入口点
@@ -17,6 +19,7 @@
 - ✅ **MCP 模式保持 100% 功能正常**
 
 ### 阶段 3: HTTP 服务器实现 (已完成)
+
 - ✅ 创建 `src/http/server.ts` - Fastify 服务器设置
 - ✅ 创建 `src/http/http-index.ts` - HTTP 入口点
 - ✅ 创建 `src/http/middleware/auth.ts` - API 密钥认证
@@ -27,11 +30,13 @@
 - ✅ 创建 `src/http/routes/health.ts` - 健康/信息端点
 
 ### 阶段 4: 配置与环境 (已完成)
+
 - ✅ 创建 `.env.example` - 环境变量模板
 - ✅ 创建 `config/default.json` - 默认配置
 - ✅ 更新 `package.json` - 添加依赖和脚本
 
 ### 阶段 5: Docker 与部署 (已完成)
+
 - ✅ 创建 `docker/Dockerfile` - 多阶段构建
 - ✅ 创建 `docker/docker-compose.yml` - Docker Compose 配置
 - ✅ 创建 `.dockerignore` - Docker 忽略规则
@@ -39,12 +44,14 @@
 - ✅ 创建 PaaS 配置 (Railway、Render、Fly.io)
 
 ### 阶段 6: 文档 (已完成)
+
 - ✅ 更新 `README.md` - 添加 HTTP API 模式文档
 - ✅ 创建 API 参考文档 (英文和中文版本)
 - ✅ 创建部署指南 (英文和中文版本)
 - ✅ 创建集成指南 (Coze、n8n、Dify - 英文和中文版本)
 
 ### 阶段 7: 测试 (已完成)
+
 - ✅ 创建单元测试
 - ✅ 创建集成测试
 - ✅ 设置测试框架
@@ -52,6 +59,7 @@
 ## 🎯 当前可用功能
 
 ### MCP 模式 (完全功能)
+
 ```bash
 # 启动 MCP 模式 (默认)
 npm start -- --type mysql --host localhost --port 3306 --user root --password xxx --database mydb
@@ -61,6 +69,7 @@ npm run start:mcp -- --type mysql --host localhost --port 3306 --user root --pas
 ```
 
 ### HTTP API 模式 (完全功能)
+
 ```bash
 # 设置环境变量
 export MODE=http
@@ -76,18 +85,22 @@ npm run start:http
 所有端点均已完全实现并可用：
 
 ### 健康与信息
+
 - `GET /api/health` - 健康检查 (无需认证)
 - `GET /api/info` - 服务信息 (无需认证)
 
 ### 连接管理
+
 - `POST /api/connect` - 连接到数据库 (返回 sessionId)
 - `POST /api/disconnect` - 断开数据库连接
 
 ### 查询执行
+
 - `POST /api/query` - 执行读取查询
 - `POST /api/execute` - 执行写入操作 (需要 allowWrite: true)
 
 ### Schema 信息
+
 - `GET /api/tables?sessionId=xxx` - 列出所有表
 - `GET /api/schema?sessionId=xxx` - 获取完整数据库 schema
 - `GET /api/schema/:table?sessionId=xxx` - 获取特定表信息
@@ -95,6 +108,7 @@ npm run start:http
 ## 🔧 配置
 
 ### 环境变量
+
 基于 `.env.example` 创建 `.env` 文件：
 
 ```bash
@@ -124,6 +138,7 @@ SESSION_CLEANUP_INTERVAL=300000
 ```
 
 ### NPM 脚本
+
 ```json
 {
   "start": "node dist/index.js",           // 从环境自动检测模式
@@ -138,6 +153,7 @@ SESSION_CLEANUP_INTERVAL=300000
 ## 🐳 Docker 部署
 
 ### 构建和运行
+
 ```bash
 # 构建镜像
 docker build -t universal-db-mcp -f docker/Dockerfile .
@@ -156,6 +172,7 @@ docker run -p 3000:3000 \
 ```
 
 ### Docker Compose
+
 ```bash
 cd docker
 docker-compose up -d
@@ -164,6 +181,7 @@ docker-compose up -d
 ## 🔒 安全特性
 
 ### 已实现
+
 - ✅ API 密钥认证 (X-API-Key 请求头或 Authorization: Bearer)
 - ✅ CORS 配置
 - ✅ 速率限制 (按 API 密钥或 IP)
@@ -173,6 +191,7 @@ docker-compose up -d
 - ✅ 非 root Docker 用户
 
 ### 配置
+
 ```bash
 # API 密钥 (逗号分隔)
 API_KEYS=key1,key2,key3
@@ -189,6 +208,7 @@ RATE_LIMIT_WINDOW=1m
 ## 📊 架构
 
 ### 目录结构
+
 ```
 src/
 ├── adapters/          [未更改] 所有 17 个数据库适配器
@@ -227,6 +247,7 @@ src/
 ### 手动测试
 
 #### 测试 MCP 模式
+
 ```bash
 # 构建
 npm run build
@@ -248,6 +269,7 @@ npm run start:mcp -- --type mysql --host localhost --port 3306 --user root --pas
 ```
 
 #### 测试 HTTP 模式
+
 ```bash
 # 设置环境
 export MODE=http
@@ -292,34 +314,39 @@ curl -X POST http://localhost:3000/api/connect \
 ## 📝 后续步骤 (已完成)
 
 ### 高优先级
+
 1. ✅ **创建 API 参考文档** (`docs/http-api/API_REFERENCE.md` 和 `API_REFERENCE.zh-CN.md`)
+
    - 完整的端点文档
    - 请求/响应示例
    - 错误代码参考
-
 2. ✅ **创建部署指南** (`docs/http-api/DEPLOYMENT.md` 和 `DEPLOYMENT.zh-CN.md`)
+
    - 本地部署 (Node.js、PM2)
    - Docker 部署
    - 云部署选项
-
 3. ✅ **创建集成指南**
+
    - `docs/integrations/COZE.md` 和 `COZE.zh-CN.md` - Coze 平台集成
    - `docs/integrations/N8N.md` 和 `N8N.zh-CN.md` - n8n 工作流示例
    - `docs/integrations/DIFY.md` 和 `DIFY.zh-CN.md` - Dify 代理配置
 
 ### 中优先级
+
 4. ✅ **Serverless 配置**
+
    - 阿里云函数计算
    - 腾讯云 Serverless 云函数
    - AWS Lambda
    - Vercel Edge Functions
-
 5. ✅ **PaaS 配置**
+
    - Railway 部署
    - Render 部署
    - Fly.io 部署
 
 ### 低优先级
+
 6. ✅ **测试**
    - 核心逻辑单元测试
    - HTTP API 集成测试
@@ -328,29 +355,32 @@ curl -X POST http://localhost:3000/api/connect \
 ## 🎉 成功标准
 
 ### ✅ 已完成
-- [x] MCP 模式与之前完全一致 (100% 向后兼容)
-- [x] HTTP API 模式启动并运行
-- [x] 所有 HTTP 端点实现并可用
-- [x] API 密钥认证工作正常
-- [x] 速率限制工作正常
-- [x] CORS 配置工作正常
-- [x] Docker 构建成功
-- [x] 所有 17 个数据库适配器在两种模式下都能工作
-- [x] README 更新了 HTTP API 文档
-- [x] TypeScript 编译成功，无错误
-- [x] 完整的 API 参考文档
-- [x] 完整的部署指南
-- [x] 完整的集成指南
-- [x] Serverless 配置已创建
-- [x] PaaS 配置已创建
-- [x] 单元测试已编写
-- [x] 集成测试已编写
-- [x] 所有测试通过
+
+- [X] MCP 模式与之前完全一致 (100% 向后兼容)
+- [X] HTTP API 模式启动并运行
+- [X] 所有 HTTP 端点实现并可用
+- [X] API 密钥认证工作正常
+- [X] 速率限制工作正常
+- [X] CORS 配置工作正常
+- [X] Docker 构建成功
+- [X] 所有 17 个数据库适配器在两种模式下都能工作
+- [X] README 更新了 HTTP API 文档
+- [X] TypeScript 编译成功，无错误
+- [X] 完整的 API 参考文档
+- [X] 完整的部署指南
+- [X] 完整的集成指南
+- [X] Serverless 配置已创建
+- [X] PaaS 配置已创建
+- [X] 单元测试已编写
+- [X] 集成测试已编写
+- [X] 所有测试通过
 
 ## 🚀 如何立即使用
 
 ### 对于 Claude Desktop (MCP 模式)
+
 无需更改！继续像以前一样使用：
+
 ```bash
 npm install -g @joyous-coder/universal-db-mcp
 # 在 Claude Desktop 配置文件中配置
@@ -359,23 +389,24 @@ npm install -g @joyous-coder/universal-db-mcp
 ### 对于第三方平台 (HTTP API 模式)
 
 1. **安装**:
+
    ```bash
    npm install -g @joyous-coder/universal-db-mcp
    ```
-
 2. **配置** (创建 `.env`):
+
    ```bash
    MODE=http
    HTTP_PORT=3000
    API_KEYS=your-secret-key
    ```
-
 3. **启动**:
+
    ```bash
    npm run start:http
    ```
-
 4. **使用 API**:
+
    ```bash
    # 连接到数据库
    curl -X POST http://localhost:3000/api/connect \
@@ -393,6 +424,7 @@ npm install -g @joyous-coder/universal-db-mcp
 ## 📦 添加的依赖
 
 ### 生产依赖
+
 - `fastify` (^4.26.0) - HTTP 服务器框架
 - `@fastify/cors` (^9.0.1) - CORS 支持
 - `@fastify/rate-limit` (^9.1.0) - 速率限制
@@ -400,12 +432,14 @@ npm install -g @joyous-coder/universal-db-mcp
 - `nanoid` (^5.0.4) - 会话 ID 生成
 
 ### 开发依赖
+
 - `vitest` (^1.2.0) - 测试框架
 - `@vitest/ui` (^1.2.0) - 测试 UI
 
 ## 🔍 验证
 
 ### 构建状态
+
 ```bash
 $ npm run build
 > universal-db-mcp@1.0.0 build
@@ -415,11 +449,13 @@ $ npm run build
 ```
 
 ### 文件统计
+
 - **创建的新文件**: 45+
 - **修改的文件**: 3 (index.ts、server.ts、package.json)
 - **未更改的文件**: 20+ (所有适配器、类型、工具)
 
 ### 代码质量
+
 - ✅ TypeScript 严格模式已启用
 - ✅ 所有类型正确定义
 - ✅ 无隐式 any 类型

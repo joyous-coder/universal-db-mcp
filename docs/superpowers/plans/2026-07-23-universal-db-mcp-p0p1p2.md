@@ -1,3 +1,5 @@
+    
+
 # Universal DB MCP P0/P1/P2 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -13,44 +15,46 @@
 ## File Structure
 
 ### New files
-| File | Purpose | Phase |
-|---|---|---|
-| `src/utils/identifier-validator.ts` | Whitelist validation for SQL identifiers | P0-1 |
-| `src/utils/retry.ts` | Shared `withRetry` with backoff | P0-4 |
-| `src/utils/sql-detector.ts` | Detect if query is script-like | P0-5 |
-| `src/utils/sql-parser.ts` | Split SQL scripts into statements | P0-5 |
-| `src/utils/path-guard.ts` | Validate file paths against allowlist | P0-6 |
-| `src/utils/sample-data-generator.ts` | Generate sample data per column rules | P2-3 |
-| `src/utils/template-resolver.ts` | Resolve template placeholders | P2-3 |
-| `src/adapters/base.ts` | Abstract base class with executeScript/executeBatch defaults | P0-5/P2-2 |
-| `tests/unit/identifier-validator.test.ts` | Validator tests | P0-1 |
-| `tests/unit/retry.test.ts` | Retry tests | P0-4 |
-| `tests/unit/sql-detector.test.ts` | Detector tests | P0-5 |
-| `tests/unit/sql-parser.test.ts` | Parser tests | P0-5 |
-| `tests/unit/script-permission.test.ts` | Permission gating tests | P0-5 |
-| `tests/unit/path-guard.test.ts` | Path guard tests | P0-6 |
-| `tests/unit/sample-data-generator.test.ts` | Generator tests | P2-3 |
-| `tests/unit/template-resolver.test.ts` | Template resolver tests | P2-3 |
-| `tests/unit/chinese-data.test.ts` | Chinese locale tests | P2-3 |
-| `tests/unit/cross-column-reference.test.ts` | Cross-column ref tests | P2-3 |
+
+| File                                          | Purpose                                                      | Phase     |
+| --------------------------------------------- | ------------------------------------------------------------ | --------- |
+| `src/utils/identifier-validator.ts`         | Whitelist validation for SQL identifiers                     | P0-1      |
+| `src/utils/retry.ts`                        | Shared`withRetry` with backoff                             | P0-4      |
+| `src/utils/sql-detector.ts`                 | Detect if query is script-like                               | P0-5      |
+| `src/utils/sql-parser.ts`                   | Split SQL scripts into statements                            | P0-5      |
+| `src/utils/path-guard.ts`                   | Validate file paths against allowlist                        | P0-6      |
+| `src/utils/sample-data-generator.ts`        | Generate sample data per column rules                        | P2-3      |
+| `src/utils/template-resolver.ts`            | Resolve template placeholders                                | P2-3      |
+| `src/adapters/base.ts`                      | Abstract base class with executeScript/executeBatch defaults | P0-5/P2-2 |
+| `tests/unit/identifier-validator.test.ts`   | Validator tests                                              | P0-1      |
+| `tests/unit/retry.test.ts`                  | Retry tests                                                  | P0-4      |
+| `tests/unit/sql-detector.test.ts`           | Detector tests                                               | P0-5      |
+| `tests/unit/sql-parser.test.ts`             | Parser tests                                                 | P0-5      |
+| `tests/unit/script-permission.test.ts`      | Permission gating tests                                      | P0-5      |
+| `tests/unit/path-guard.test.ts`             | Path guard tests                                             | P0-6      |
+| `tests/unit/sample-data-generator.test.ts`  | Generator tests                                              | P2-3      |
+| `tests/unit/template-resolver.test.ts`      | Template resolver tests                                      | P2-3      |
+| `tests/unit/chinese-data.test.ts`           | Chinese locale tests                                         | P2-3      |
+| `tests/unit/cross-column-reference.test.ts` | Cross-column ref tests                                       | P2-3      |
 
 ### Modified files
-| File | Change | Phase |
-|---|---|---|
-| `src/types/adapter.ts` | Add `'script'` and `'batch'` to `PermissionType` | P0-5/P2-2 |
-| `src/utils/safety.ts` | Add script permission preset, regex pre-compile, blacklist | P0-5/P1-2 |
-| `src/utils/config-loader.ts` | Add DB_ALLOWED_FILE_PATHS, DB_POOL_SIZE, etc. | P0-6/P1-9 |
-| `src/mcp/mcp-index.ts` | New CLI flags: `--allow-sql-file-path`, `--permissions` enhancements | P0-5/P0-6 |
-| `src/mcp/mcp-server.ts` | Fix disconnect order; conditional tool registration | P0-3/P0-5/P2-2/P2-3 |
-| `src/http/middleware/auth.ts` | Refuse startup without API keys | P0-2 |
-| `src/http/server.ts` | Pool config from env | P1-9 |
-| `src/core/database-service.ts` | Timeout, slow log, executeScript, executeBatch, generateSampleData | P0-5/P1-5/P1-6/P2-2/P2-3 |
-| `src/core/connection-manager.ts` | Pass pool config to adapters | P1-9 |
-| All 17 adapters | Pool config, executeScript, executeBatch, withRetry | P0-4/P0-5/P1-9/P2-2 |
-| `src/adapters/sqlite.ts` | validateIdentifier, N+1 fix, executeScript | P0-1/P0-5/P1-1 |
-| `src/http/routes/query.ts` | Timeout handling, new routes | P1-5/P2-2 |
-| `src/http/routes/connection.ts` | File path config | P0-6 |
-| `package.json` | Add faker, pinyin | P2-3 |
+
+| File                               | Change                                                                  | Phase                    |
+| ---------------------------------- | ----------------------------------------------------------------------- | ------------------------ |
+| `src/types/adapter.ts`           | Add`'script'` and `'batch'` to `PermissionType`                   | P0-5/P2-2                |
+| `src/utils/safety.ts`            | Add script permission preset, regex pre-compile, blacklist              | P0-5/P1-2                |
+| `src/utils/config-loader.ts`     | Add DB_ALLOWED_FILE_PATHS, DB_POOL_SIZE, etc.                           | P0-6/P1-9                |
+| `src/mcp/mcp-index.ts`           | New CLI flags:`--allow-sql-file-path`, `--permissions` enhancements | P0-5/P0-6                |
+| `src/mcp/mcp-server.ts`          | Fix disconnect order; conditional tool registration                     | P0-3/P0-5/P2-2/P2-3      |
+| `src/http/middleware/auth.ts`    | Refuse startup without API keys                                         | P0-2                     |
+| `src/http/server.ts`             | Pool config from env                                                    | P1-9                     |
+| `src/core/database-service.ts`   | Timeout, slow log, executeScript, executeBatch, generateSampleData      | P0-5/P1-5/P1-6/P2-2/P2-3 |
+| `src/core/connection-manager.ts` | Pass pool config to adapters                                            | P1-9                     |
+| All 17 adapters                    | Pool config, executeScript, executeBatch, withRetry                     | P0-4/P0-5/P1-9/P2-2      |
+| `src/adapters/sqlite.ts`         | validateIdentifier, N+1 fix, executeScript                              | P0-1/P0-5/P1-1           |
+| `src/http/routes/query.ts`       | Timeout handling, new routes                                            | P1-5/P2-2                |
+| `src/http/routes/connection.ts`  | File path config                                                        | P0-6                     |
+| `package.json`                   | Add faker, pinyin                                                       | P2-3                     |
 
 ---
 
@@ -59,16 +63,20 @@
 ## Task 1: Add 'script' and 'batch' permission types
 
 **Files:**
+
 - Modify: `src/types/adapter.ts:160-163`
 - Modify: `src/utils/safety.ts:21-25, 30-49`
 
 - [ ] **Step 1: Add types to adapter.ts**
 
 In `src/types/adapter.ts`, change line 163 from:
+
 ```typescript
 export type PermissionType = 'read' | 'insert' | 'update' | 'delete' | 'ddl';
 ```
+
 to:
+
 ```typescript
 export type PermissionType = 'read' | 'insert' | 'update' | 'delete' | 'ddl' | 'script' | 'batch';
 ```
@@ -76,6 +84,7 @@ export type PermissionType = 'read' | 'insert' | 'update' | 'delete' | 'ddl' | '
 - [ ] **Step 2: Update PERMISSION_PRESETS in safety.ts**
 
 In `src/utils/safety.ts`, change the `PERMISSION_PRESETS` (lines 21-25) from:
+
 ```typescript
 const PERMISSION_PRESETS: Record<string, readonly PermissionType[]> = {
   safe: ['read'],
@@ -83,7 +92,9 @@ const PERMISSION_PRESETS: Record<string, readonly PermissionType[]> = {
   full: ['read', 'insert', 'update', 'delete', 'ddl'],
 } as const;
 ```
+
 to (NOT including 'script' or 'batch' in any preset):
+
 ```typescript
 const PERMISSION_PRESETS: Record<string, readonly PermissionType[]> = {
   safe: ['read'],
@@ -96,11 +107,13 @@ const PERMISSION_PRESETS: Record<string, readonly PermissionType[]> = {
 - [ ] **Step 3: Update resolvePermissions to handle custom mode**
 
 In `src/utils/safety.ts`, the existing `resolvePermissions` (lines 30-49) already handles `custom` mode by reading `config.permissions` array. Verify line 43:
+
 ```typescript
 if (config.permissionMode && config.permissionMode !== 'custom') {
   return [...PERMISSION_PRESETS[config.permissionMode]];
 }
 ```
+
 This means `permissionMode: 'custom'` falls through to use `config.permissions`. No code change needed.
 
 - [ ] **Step 4: Build and verify**
@@ -120,12 +133,14 @@ git commit -m "feat(permissions): add 'script' and 'batch' permission types"
 ## Task 2: Create identifier-validator utility
 
 **Files:**
+
 - Create: `src/utils/identifier-validator.ts`
 - Create: `tests/unit/identifier-validator.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 Create `tests/unit/identifier-validator.test.ts`:
+
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { validateIdentifier } from '../../src/utils/identifier-validator.js';
@@ -181,6 +196,7 @@ Expected: FAIL with "Cannot find module"
 - [ ] **Step 3: Implement validator**
 
 Create `src/utils/identifier-validator.ts`:
+
 ```typescript
 /**
  * Identifier Validator
@@ -239,12 +255,14 @@ git commit -m "feat(util): add identifier-validator for safe dynamic SQL"
 ## Task 3: Apply validator to SQLite adapter (P0-1)
 
 **Files:**
+
 - Modify: `src/adapters/sqlite.ts:178-302`
 - Modify: `tests/integration/mcp-mode.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 Add to `tests/integration/mcp-mode.test.ts` (create file if not exists):
+
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { SQLiteAdapter } from '../../src/adapters/sqlite.js';
@@ -268,11 +286,13 @@ Expected: FAIL with "table users; DROP TABLE x not found" or similar (current be
 Modify `src/adapters/sqlite.ts`:
 
 Add import at top:
+
 ```typescript
 import { validateIdentifier } from '../utils/identifier-validator.js';
 ```
 
 In `getTableInfo` method (around line 178), add validation at the start:
+
 ```typescript
 private async getTableInfo(tableName: string): Promise<{ tableInfo: TableInfo; tableForeignKeys: ForeignKeyInfo[] }> {
   if (!this.db) {
@@ -287,11 +307,14 @@ private async getTableInfo(tableName: string): Promise<{ tableInfo: TableInfo; t
 ```
 
 In `getSchema` method, validate each table name before calling `getTableInfo`. Find the loop:
+
 ```typescript
 for (const table of tables) {
   const { tableInfo, tableForeignKeys } = await this.getTableInfo(table.name);
 ```
+
 Replace with:
+
 ```typescript
 for (const table of tables) {
   validateIdentifier(table.name);  // Validate before passing to getTableInfo
@@ -320,6 +343,7 @@ git commit -m "fix(sqlite): validate identifier to prevent SQL injection"
 ## Task 4: Fix HTTP default auth (P0-2)
 
 **Files:**
+
 - Modify: `src/utils/config-loader.ts:142-151`
 - Modify: `src/http/index.ts` (or `src/http/http-index.ts:13-15`)
 
@@ -328,6 +352,7 @@ git commit -m "fix(sqlite): validate identifier to prevent SQL injection"
 The HTTP startup currently warns (not errors) when API keys are missing. Search `src/utils/config-loader.ts` for `validateConfig`:
 
 Currently at lines 142-151:
+
 ```typescript
 export function validateConfig(config: AppConfig): void {
   if (config.mode === 'http') {
@@ -344,6 +369,7 @@ export function validateConfig(config: AppConfig): void {
 - [ ] **Step 2: Update validateConfig to refuse startup**
 
 Replace with:
+
 ```typescript
 export function validateConfig(config: AppConfig): void {
   if (config.mode === 'http') {
@@ -395,11 +421,13 @@ git commit -m "fix(http): refuse startup without API keys by default"
 ## Task 5: Fix mcp-server disconnect order (P0-3)
 
 **Files:**
+
 - Modify: `src/mcp/mcp-server.ts:253-262, 297-315`
 
 - [ ] **Step 1: Add failing test**
 
 Add to `tests/unit/` (create `tests/unit/disconnect-order.test.ts`):
+
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
 import { DatabaseMCPServer } from '../../src/mcp/mcp-server.js';
@@ -443,6 +471,7 @@ Expected: May fail due to test API mismatch. If so, adjust the test to directly 
 Modify `src/mcp/mcp-server.ts`, find the `disconnect_database` case (around lines 297-315):
 
 Current:
+
 ```typescript
 case 'disconnect_database': {
   if (!this.adapter) {
@@ -479,6 +508,7 @@ case 'disconnect_database': {
 ```
 
 Replace with (try/catch + always null out):
+
 ```typescript
 case 'disconnect_database': {
   if (!this.adapter) {
@@ -524,6 +554,7 @@ case 'disconnect_database': {
 - [ ] **Step 4: Apply same fix to connect_database's old connection cleanup**
 
 Find the `connect_database` case (around lines 224-295), specifically the old adapter cleanup block:
+
 ```typescript
 // 断开旧连接
 if (this.adapter) {
@@ -538,6 +569,7 @@ if (this.adapter) {
 ```
 
 Replace with:
+
 ```typescript
 // 断开旧连接(总是清空状态,即使 disconnect 抛错)
 if (this.adapter) {
@@ -572,12 +604,14 @@ git commit -m "fix(mcp): always clear adapter state even if disconnect throws"
 ## Task 6: Create shared retry utility (P0-4)
 
 **Files:**
+
 - Create: `src/utils/retry.ts`
 - Create: `tests/unit/retry.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 Create `tests/unit/retry.test.ts`:
+
 ```typescript
 import { describe, it, expect, vi } from 'vitest';
 import { withRetry, isConnectionErrorMessage } from '../../src/utils/retry.js';
@@ -649,6 +683,7 @@ Expected: FAIL with module not found.
 - [ ] **Step 3: Implement retry utility**
 
 Create `src/utils/retry.ts`:
+
 ```typescript
 /**
  * Retry utility with exponential backoff
@@ -723,6 +758,7 @@ git commit -m "feat(util): add retry utility with exponential backoff"
 ## Task 7: Refactor MySQL adapter to use shared retry (P0-4)
 
 **Files:**
+
 - Modify: `src/adapters/mysql.ts:43-62`
 
 - [ ] **Step 1: Replace local withRetry with shared one**
@@ -730,6 +766,7 @@ git commit -m "feat(util): add retry utility with exponential backoff"
 In `src/adapters/mysql.ts`:
 
 Remove the local `isConnectionError` method (lines 45-48):
+
 ```typescript
 private isConnectionError(error: unknown): boolean {
   const msg = String((error as any)?.message || '');
@@ -738,6 +775,7 @@ private isConnectionError(error: unknown): boolean {
 ```
 
 Remove the local `withRetry` method (lines 52-62):
+
 ```typescript
 private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -752,24 +790,31 @@ private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
 ```
 
 Add import at top:
+
 ```typescript
 import { withRetry } from '../utils/retry.js';
 ```
 
 In `executeQuery` (around line 120), change:
+
 ```typescript
 const [rows, fields] = await this.withRetry(() => this.pool!.execute(query, params));
 ```
+
 to:
+
 ```typescript
 const [rows, fields] = await withRetry(() => this.pool!.execute(query, params));
 ```
 
 In `getSchema` (around line 164), change:
+
 ```typescript
 return await this.withRetry(() => this._getSchemaImpl());
 ```
+
 to:
+
 ```typescript
 return await withRetry(() => this._getSchemaImpl());
 ```
@@ -789,11 +834,13 @@ git commit -m "refactor(mysql): use shared retry utility"
 - [ ] **Step 4: Repeat for other adapters (postgres, oracle, dm, sqlserver, mongodb, redis, kingbase, gaussdb, oceanbase, tidb, clickhouse, polardb, vastbase, highgo, goldendb)**
 
 For each adapter:
+
 1. Remove local `isConnectionError` and `withRetry` methods
 2. Add `import { withRetry } from '../utils/retry.js';`
 3. Replace `this.withRetry(...)` with `withRetry(...)`
 
 After each adapter:
+
 ```bash
 git add src/adapters/<name>.ts
 git commit -m "refactor(<name>): use shared retry utility"
@@ -802,6 +849,7 @@ git commit -m "refactor(<name>): use shared retry utility"
 Note: Each adapter's connection error patterns may differ slightly. The shared `isConnectionErrorMessage` covers MySQL/PG/common patterns. If an adapter has unique codes (e.g., Oracle NJS/DPI), update the shared regex or pass custom `isRetryable` to `withRetry`.
 
 For Oracle (uses errorNum, not just message), keep local logic but route through shared utility:
+
 ```typescript
 import { withRetry, isConnectionErrorMessage } from '../utils/retry.js';
 
@@ -836,12 +884,14 @@ git commit -m "refactor: migrate all adapters to shared retry utility"
 ## Task 8: Create sql-detector utility (P0-5)
 
 **Files:**
+
 - Create: `src/utils/sql-detector.ts`
 - Create: `tests/unit/sql-detector.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 Create `tests/unit/sql-detector.test.ts`:
+
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { isScriptLike } from '../../src/utils/sql-detector.js';
@@ -889,6 +939,7 @@ Expected: FAIL with module not found.
 - [ ] **Step 3: Implement detector**
 
 Create `src/utils/sql-detector.ts`:
+
 ```typescript
 /**
  * SQL Script Detector
@@ -953,12 +1004,14 @@ git commit -m "feat(util): add sql-detector for script-like queries"
 ## Task 9: Create sql-parser utility (P0-5)
 
 **Files:**
+
 - Create: `src/utils/sql-parser.ts`
 - Create: `tests/unit/sql-parser.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 Create `tests/unit/sql-parser.test.ts`:
+
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { splitStatements } from '../../src/utils/sql-parser.js';
@@ -1027,6 +1080,7 @@ Expected: FAIL with module not found.
 - [ ] **Step 3: Implement parser**
 
 Create `src/utils/sql-parser.ts`:
+
 ```typescript
 /**
  * SQL Statement Parser
@@ -1206,11 +1260,13 @@ git commit -m "feat(util): add sql-parser for multi-statement scripts"
 ## Task 10: Create BaseAdapter with executeScript default (P0-5)
 
 **Files:**
+
 - Create: `src/adapters/base.ts`
 
 - [ ] **Step 1: Create abstract base class**
 
 Create `src/adapters/base.ts`:
+
 ```typescript
 /**
  * BaseAdapter
@@ -1373,6 +1429,7 @@ git commit -m "feat(adapters): add BaseAdapter with executeScript/executeBatch d
 ## Task 11: Make MySQL adapter extend BaseAdapter and add native executeBatch (P2-2 partial)
 
 **Files:**
+
 - Modify: `src/adapters/mysql.ts:22`
 
 - [ ] **Step 1: Update class declaration**
@@ -1380,15 +1437,19 @@ git commit -m "feat(adapters): add BaseAdapter with executeScript/executeBatch d
 In `src/adapters/mysql.ts`:
 
 Add import:
+
 ```typescript
 import { BaseAdapter, BatchResult, ExecuteScriptOptions, ExecuteBatchOptions } from './base.js';
 ```
 
 Change class declaration (line 22):
+
 ```typescript
 export class MySQLAdapter implements DbAdapter {
 ```
+
 to:
+
 ```typescript
 export class MySQLAdapter extends BaseAdapter {
 ```
@@ -1396,6 +1457,7 @@ export class MySQLAdapter extends BaseAdapter {
 - [ ] **Step 2: Add getDialect method**
 
 Inside `MySQLAdapter` class, add:
+
 ```typescript
 protected getDialect(): import('../utils/adapter-factory.js').DbType {
   return 'mysql';
@@ -1405,6 +1467,7 @@ protected getDialect(): import('../utils/adapter-factory.js').DbType {
 - [ ] **Step 3: Override executeBatch with native MySQL batch**
 
 Add to `MySQLAdapter`:
+
 ```typescript
 async executeBatch(sql: string, paramsList: unknown[][], options: ExecuteBatchOptions = {}): Promise<BatchResult> {
   const maxBatchSize = options.maxBatchSize ?? 1000;
@@ -1456,6 +1519,7 @@ git commit -m "feat(mysql): extend BaseAdapter, add native executeBatch"
 For each: `oracle.ts`, `dm.ts`, `sqlite.ts`:
 
 **Oracle** (uses `executeMany`):
+
 ```typescript
 async executeBatch(sql: string, paramsList: unknown[][], options: ExecuteBatchOptions = {}): Promise<BatchResult> {
   // ... validation as above ...
@@ -1471,6 +1535,7 @@ async executeBatch(sql: string, paramsList: unknown[][], options: ExecuteBatchOp
 ```
 
 **SQLite** (uses `db.transaction`):
+
 ```typescript
 async executeBatch(sql: string, paramsList: unknown[][], options: ExecuteBatchOptions = {}): Promise<BatchResult> {
   // ... validation ...
@@ -1493,6 +1558,7 @@ async executeBatch(sql: string, paramsList: unknown[][], options: ExecuteBatchOp
 ```
 
 After each:
+
 ```bash
 git add src/adapters/<name>.ts
 git commit -m "feat(<name>): extend BaseAdapter, add native executeBatch"
@@ -1512,6 +1578,7 @@ export class PostgreSQLAdapter extends BaseAdapter {
 ```
 
 After each:
+
 ```bash
 git add src/adapters/<name>.ts
 git commit -m "refactor(<name>): extend BaseAdapter for default executeScript/Batch"
@@ -1522,6 +1589,7 @@ git commit -m "refactor(<name>): extend BaseAdapter for default executeScript/Ba
 ## Task 12: Add executeScript/executeBatch to DatabaseService (P0-5/P2-2)
 
 **Files:**
+
 - Modify: `src/core/database-service.ts`
 
 - [ ] **Step 1: Add executeScript method**
@@ -1581,6 +1649,7 @@ async executeBatch(sql: string, paramsList: unknown[][], options?: { useTransact
 - [ ] **Step 2: Add resolvePermissions import**
 
 Add at top of file:
+
 ```typescript
 import { resolvePermissions } from '../utils/safety.js';
 ```
@@ -1588,6 +1657,7 @@ import { resolvePermissions } from '../utils/safety.js';
 - [ ] **Step 3: Modify executeQuery to auto-downgrade to executeScript**
 
 Find existing `executeQuery` (around line 88):
+
 ```typescript
 async executeQuery(query: string, params?: unknown[]): Promise<QueryResult> {
   // Validate query safety
@@ -1601,6 +1671,7 @@ async executeQuery(query: string, params?: unknown[]): Promise<QueryResult> {
 ```
 
 Replace with:
+
 ```typescript
 async executeQuery(query: string, params?: unknown[]): Promise<QueryResult> {
   // Validate query safety
@@ -1649,6 +1720,7 @@ git commit -m "feat(service): add executeScript/executeBatch with auto-downgrade
 ## Task 13: Register execute_script tool conditionally (P0-5)
 
 **Files:**
+
 - Modify: `src/mcp/mcp-server.ts:50-216`
 
 - [ ] **Step 1: Add execute_script tool definition**
@@ -1656,6 +1728,7 @@ git commit -m "feat(service): add executeScript/executeBatch with auto-downgrade
 In `src/mcp/mcp-server.ts`, in the `setupHandlers` method's `ListToolsRequestSchema` handler (around line 52), the tools array is currently hardcoded. Convert it to dynamic based on permissions.
 
 Find:
+
 ```typescript
 this.server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -1670,6 +1743,7 @@ this.server.setRequestHandler(ListToolsRequestSchema, async () => {
 Replace with a helper method that builds tools list based on permissions:
 
 Add a private method to the class:
+
 ```typescript
 private getToolsList(): any[] {
   const permissions = this.config?.permissions || (this.config?.permissionMode === 'custom' ? this.config?.permissions : undefined);
@@ -1730,6 +1804,7 @@ private getToolsList(): any[] {
 ```
 
 Update the handler:
+
 ```typescript
 this.server.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools: this.getToolsList() };
@@ -1791,12 +1866,14 @@ git commit -m "feat(mcp): conditionally register execute_script and execute_batc
 ## Task 14: Create path-guard utility (P0-6)
 
 **Files:**
+
 - Create: `src/utils/path-guard.ts`
 - Create: `tests/unit/path-guard.test.ts`
 
 - [ ] **Step 1: Write failing test**
 
 Create `tests/unit/path-guard.test.ts`:
+
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { resolveAndValidatePath } from '../../src/utils/path-guard.js';
@@ -1849,6 +1926,7 @@ Expected: FAIL with module not found.
 - [ ] **Step 3: Implement path-guard**
 
 Create `src/utils/path-guard.ts`:
+
 ```typescript
 /**
  * Path Guard
@@ -1943,6 +2021,7 @@ git commit -m "feat(util): add path-guard for safe file path resolution"
 ## Task 15: Add file path allowlist config (P0-6)
 
 **Files:**
+
 - Modify: `src/utils/config-loader.ts:41-90`
 - Modify: `src/mcp/mcp-index.ts:23-34`
 
@@ -1951,6 +2030,7 @@ git commit -m "feat(util): add path-guard for safe file path resolution"
 In `src/utils/config-loader.ts`, add to the `loadFromEnv` function (or wherever DB config is built):
 
 Find the `database` config building block (around lines 76-87):
+
 ```typescript
 if (process.env.DB_TYPE) {
   config.database = {
@@ -1961,6 +2041,7 @@ if (process.env.DB_TYPE) {
 ```
 
 Add allowedSqlFilePaths:
+
 ```typescript
 if (process.env.DB_TYPE) {
   config.database = {
@@ -1982,6 +2063,7 @@ if (process.env.DB_TYPE) {
 - [ ] **Step 2: Add CLI flag to mcp-index.ts**
 
 In `src/mcp/mcp-index.ts`, add new option after existing flags (around line 34):
+
 ```typescript
 .option('--allow-sql-file-path <path>', '允许执行 SQL 文件的目录(可重复)。仅当 LLM 传入的文件路径在该目录下时才允许读取。', (value, prev) => {
   return prev ? [...prev, value] : [value];
@@ -1989,6 +2071,7 @@ In `src/mcp/mcp-index.ts`, add new option after existing flags (around line 34):
 ```
 
 In the action handler (around line 35), add to the config building:
+
 ```typescript
 const config: DbConfig = {
   // ... existing fields ...
@@ -2001,6 +2084,7 @@ Note: The `--allow-sql-file-path` uses commander's repeat-value collector (retur
 - [ ] **Step 3: Update DbConfig type to include allowedSqlFilePaths**
 
 In `src/types/adapter.ts`, in the `DbConfig` interface (around line 173), add:
+
 ```typescript
 export interface DbConfig {
   // ... existing fields ...
@@ -2026,6 +2110,7 @@ git commit -m "feat(config): add DB_ALLOWED_FILE_PATHS env and --allow-sql-file-
 ## Task 16: Implement execute_sql_file tool (P0-6/P2-1)
 
 **Files:**
+
 - Modify: `src/core/database-service.ts`
 - Modify: `src/mcp/mcp-server.ts`
 
@@ -2122,6 +2207,7 @@ if (resolvedPerms.includes('script')) {
 ```
 
 In `CallToolRequestSchema` handler, add:
+
 ```typescript
 case 'execute_sql_file': {
   if (!this.databaseService) {
@@ -2140,6 +2226,7 @@ case 'execute_sql_file': {
 - [ ] **Step 3: Add test for execute_sql_file**
 
 Add to `tests/integration/mcp-mode.test.ts`:
+
 ```typescript
 import fs from 'node:fs';
 import os from 'node:os';
@@ -2169,10 +2256,12 @@ git commit -m "feat(mcp): add execute_sql_file tool with path allowlist"
 # Phase 0 Complete Checkpoint
 
 After completing Tasks 1-16, P0 is done. Run:
+
 ```bash
 npm test
 git log --oneline -20
 ```
+
 Verify all P0 fixes are in place. Ready for P1.
 
 ---
@@ -2182,11 +2271,13 @@ Verify all P0 fixes are in place. Ready for P1.
 ## Task 17: Pre-compile regex in safety.ts (P1-2)
 
 **Files:**
+
 - Modify: `src/utils/safety.ts:54-57, 128-132`
 
 - [ ] **Step 1: Write failing test (performance)**
 
 Add to `tests/unit/regex-precompile.test.ts`:
+
 ```typescript
 import { describe, it, expect } from 'vitest';
 import { isWriteOperation } from '../../src/utils/safety.js';
@@ -2213,6 +2304,7 @@ Expected: Probably passes but slow (>500ms).
 In `src/utils/safety.ts`, replace `startsWithKeyword` and `getDangerousKeywords`:
 
 Current (lines 54-57):
+
 ```typescript
 function startsWithKeyword(query: string, keyword: string): boolean {
   const pattern = new RegExp(`^(\\s|--.*|/\\*.*?\\*/)*${keyword}\\b`, 'i');
@@ -2221,6 +2313,7 @@ function startsWithKeyword(query: string, keyword: string): boolean {
 ```
 
 Replace with pre-compiled map:
+
 ```typescript
 const KEYWORD_REGEX_CACHE = new Map<string, RegExp>();
 
@@ -2239,6 +2332,7 @@ function startsWithKeyword(query: string, keyword: string): boolean {
 ```
 
 Also pre-compile blacklist regex in same file:
+
 ```typescript
 const FORBIDDEN_PATTERNS: RegExp[] = [
   /DROP\s+DATABASE\b/i,
@@ -2265,11 +2359,13 @@ git commit -m "perf(safety): pre-compile keyword regexes"
 ## Task 18: Schema cache TTL config (P1-3)
 
 **Files:**
+
 - Modify: `src/core/database-service.ts:46-49, 273-276`
 
 - [ ] **Step 1: Add config option**
 
 In `src/core/database-service.ts`, update DEFAULT_CACHE_CONFIG (line 46-49):
+
 ```typescript
 const DEFAULT_CACHE_CONFIG: SchemaCacheConfig = {
   ttl: 60 * 1000, // 1 minute (reduced from 5)
@@ -2298,6 +2394,7 @@ git commit -m "perf(cache): reduce default schema cache TTL to 1 minute"
 ## Task 19: getEnumValues sampling (P1-4)
 
 **Files:**
+
 - Modify: `src/core/database-service.ts:326-389`
 
 - [ ] **Step 1: Add row count check**
@@ -2305,6 +2402,7 @@ git commit -m "perf(cache): reduce default schema cache TTL to 1 minute"
 In `getEnumValues` method, before the query, check approximate row count:
 
 Modify (around line 326):
+
 ```typescript
 async getEnumValues(
   tableName: string,
@@ -2327,6 +2425,7 @@ async getEnumValues(
 For simplicity, **always use sampling** for now (P1 spec says "大表抽样"):
 
 Modify `buildEnumValuesQuery`:
+
 ```typescript
 private buildEnumValuesQuery(tableName: string, columnName: string, limit: number): string {
   const quotedTable = this.quoteIdentifier(tableName);
@@ -2343,6 +2442,7 @@ private buildEnumValuesQuery(tableName: string, columnName: string, limit: numbe
 Note: This is the existing behavior. The actual sampling (ORDER BY RANDOM() on subset) is a follow-up optimization. For now, we just rely on DISTINCT being relatively fast for indexed columns.
 
 To make this measurable, modify to use sampling when table is likely large:
+
 ```typescript
 private async buildEnumValuesQueryWithSampling(
   tableName: string, 
@@ -2370,6 +2470,7 @@ Expected: Existing tests pass (sampling is additive).
 - [ ] **Step 3: Manual benchmark**
 
 Add temporary benchmark:
+
 ```typescript
 // in a test file
 const start = Date.now();
@@ -2391,11 +2492,13 @@ git commit -m "perf(enum): add sampling strategy for large tables"
 ## Task 20: Unified execution timeout (P1-5)
 
 **Files:**
+
 - Modify: `src/core/database-service.ts`
 
 - [ ] **Step 1: Add timeout config**
 
 In `DatabaseService` class, add field:
+
 ```typescript
 private queryTimeoutMs: number = 30000; // 30 seconds default
 ```
@@ -2403,6 +2506,7 @@ private queryTimeoutMs: number = 30000; // 30 seconds default
 - [ ] **Step 2: Add timeout wrapper**
 
 Add method:
+
 ```typescript
 private async withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
@@ -2420,6 +2524,7 @@ private async withTimeout<T>(promise: Promise<T>, ms: number, operation: string)
 - [ ] **Step 3: Apply to executeQuery**
 
 Modify:
+
 ```typescript
 async executeQuery(query: string, params?: unknown[]): Promise<QueryResult> {
   this.validateQuery(query);
@@ -2458,6 +2563,7 @@ git commit -m "feat(perf): add unified query timeout"
 ## Task 21: Unified slow query log (P1-6)
 
 **Files:**
+
 - Modify: `src/core/database-service.ts`
 
 - [ ] **Step 1: Add threshold config**
@@ -2509,6 +2615,7 @@ git commit -m "feat(perf): add unified slow query logging"
 ## Task 22: SQLite schema N+1 fix (P1-1)
 
 **Files:**
+
 - Modify: `src/adapters/sqlite.ts:119-173`
 
 - [ ] **Step 1: Replace getSchema with batch query**
@@ -2572,6 +2679,7 @@ Note: The actual N+1 reduction requires a different approach for SQLite since PR
 - [ ] **Step 2: Add cache**
 
 Add schema cache:
+
 ```typescript
 private schemaCache: SchemaInfo | null = null;
 
@@ -2603,12 +2711,14 @@ Already implemented in earlier tasks (P0-5, P0-6). Mark as complete.
 ## Task 25: Connection pool config (P1-9)
 
 **Files:**
+
 - Modify: `src/utils/config-loader.ts`
 - Modify: All 17 adapters
 
 - [ ] **Step 1: Add pool config to loader**
 
 In `config-loader.ts`:
+
 ```typescript
 config.database = {
   // ... existing ...
@@ -2623,6 +2733,7 @@ config.database = {
 - [ ] **Step 2: Update each adapter to use poolConfig**
 
 For MySQL (`src/adapters/mysql.ts`):
+
 ```typescript
 constructor(config: { ...; poolConfig?: { max?: number; min?: number; idleTimeoutMs?: number } }) {
   // ...
@@ -2671,6 +2782,7 @@ git commit -m "perf(pool): make connection pool size configurable via env"
 ```bash
 npm test
 ```
+
 Verify all P1 optimizations in place.
 
 ---
@@ -2688,6 +2800,7 @@ Already done. Mark complete.
 ## Task 29: Create template-resolver (P2-3)
 
 **Files:**
+
 - Create: `src/utils/template-resolver.ts`
 - Create: `tests/unit/template-resolver.test.ts`
 
@@ -2757,6 +2870,7 @@ describe('resolveTemplate', () => {
 - [ ] **Step 2: Implement**
 
 Create `src/utils/template-resolver.ts`:
+
 ```typescript
 /**
  * Template Resolver
@@ -2884,6 +2998,7 @@ git commit -m "feat(util): add template-resolver with cross-column refs and modi
 ## Task 30: Create sample-data-generator (P2-3)
 
 **Files:**
+
 - Create: `src/utils/sample-data-generator.ts`
 - Create: `tests/unit/sample-data-generator.test.ts`
 
@@ -2951,6 +3066,7 @@ describe('SampleDataGenerator', () => {
 - [ ] **Step 3: Implement**
 
 Create `src/utils/sample-data-generator.ts`:
+
 ```typescript
 /**
  * Sample Data Generator
@@ -3163,6 +3279,7 @@ git commit -m "feat(util): add sample-data-generator with Chinese locale support
 ## Task 31: Add generateAndInsertSampleData to DatabaseService (P2-3)
 
 **Files:**
+
 - Modify: `src/core/database-service.ts`
 
 - [ ] **Step 1: Add method**
@@ -3271,11 +3388,13 @@ git commit -m "feat(service): add generateAndInsertSampleData"
 ## Task 32: Register generate_sample_data tool (P2-3)
 
 **Files:**
+
 - Modify: `src/mcp/mcp-server.ts`
 
 - [ ] **Step 1: Add tool definition**
 
 In `getToolsList()`:
+
 ```typescript
 if (resolvedPerms.includes('insert') && resolvedPerms.includes('batch')) {
   baseTools.push({
@@ -3379,6 +3498,7 @@ faker 内置中文(姓名/手机号/地址/身份证等)。
 - [ ] **Step 2: Add handler**
 
 In CallToolRequestSchema:
+
 ```typescript
 case 'generate_sample_data': {
   if (!this.databaseService) {
@@ -3425,6 +3545,7 @@ All P0/P1/P2 features complete.
 ## Task 33: Update README and CHANGELOG
 
 **Files:**
+
 - Modify: `README.md`
 - Modify: `README.zh-CN.md`
 - Modify: `CHANGELOG.md`
@@ -3432,6 +3553,7 @@ All P0/P1/P2 features complete.
 - [ ] **Step 1: Add new section to README.md**
 
 Under "Features", add:
+
 - "execute_script: Run multi-statement scripts and PL/SQL blocks (requires `script` permission)"
 - "execute_sql_file: Execute SQL files from allowlisted directories (requires `script` permission and `DB_ALLOWED_FILE_PATHS`)"
 - "execute_batch: Batch DML operations with 60-100x performance improvement (requires `batch` permission)"
@@ -3480,6 +3602,7 @@ git commit -m "docs: update README and CHANGELOG for P0/P1/P2 features"
 ## Task 34: Final integration test
 
 **Files:**
+
 - Create: `tests/integration/end-to-end.test.ts`
 
 - [ ] **Step 1: Write end-to-end test**
@@ -3508,6 +3631,7 @@ git commit -m "test: add end-to-end integration test"
 All 34 tasks complete. Run `npm test` to verify all P0/P1/P2 features work as specified.
 
 **Next steps:**
+
 1. Run `git log --oneline -50` to see all commits
 2. Update version in `package.json` (e.g., to 3.0.0 for major changes)
 3. Build and publish
