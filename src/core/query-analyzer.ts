@@ -31,6 +31,8 @@ export class QueryAnalyzer {
   private history: HistoryStore;
   private explainer: Explainer | null = null;
   private enabled: boolean;
+  /** v2.19: optional callback returning the active profile name (or null). */
+  private profileProvider: (() => string | null) | null = null;
 
   constructor(opts: QueryAnalyzerOptions) {
     this.enabled = opts.enabled;
@@ -39,6 +41,16 @@ export class QueryAnalyzer {
   }
 
   isEnabled(): boolean { return this.enabled; }
+
+  /**
+   * v2.19: register a callback returning the currently active profile name,
+   * or `null` when no profile is active (legacy single-DB mode). Whatever
+   * the callback returns at recordQuery time is persisted as `profile_name`.
+   * Pass `null` to clear.
+   */
+  setProfileProvider(fn: (() => string | null) | null): void {
+    this.profileProvider = fn;
+  }
 
   attachAdapter(adapter: BaseAdapter, dbType: string): void {
     this.explainer = new Explainer(adapter, dbType);
@@ -58,8 +70,13 @@ export class QueryAnalyzer {
 
   async recordQuery(input: QueryHistoryInput): Promise<void> {
     if (!this.enabled) return;
+    // v2.19: inject profile_name from registered provider (if any).
+    // Callers can still pass their own profile_name to override.
+    const profile_name = input.profile_name !== undefined
+      ? input.profile_name
+      : (this.profileProvider ? this.profileProvider() : null);
     try {
-      await this.history.record(input);
+      await this.history.record({ ...input, profile_name: profile_name ?? null });
     } catch (err) {
       console.error('[queryAnalyzer] recordQuery failed:', err);
     }

@@ -65,4 +65,55 @@ describe('QueryAnalyzer', () => {
     expect((await off.getHistory()).length).toBe(0);
     await off.close();
   });
+
+  // v2.19: setProfileProvider injects profile_name into recordQuery
+  it('recordQuery injects profile_name from setProfileProvider', async () => {
+    qa.setProfileProvider(() => 'prod-mysql');
+    await qa.recordQuery({
+      ts: new Date().toISOString(), db: 'mysql', kind: 'select',
+      sql: 'A', params: null, duration_ms: 5, rows: 1, error: null, error_code: null,
+    });
+    const entries = await qa.getHistory({ profileName: 'prod-mysql' });
+    expect(entries.length).toBe(1);
+    // entries may be union type — narrow via type assertion
+    expect((entries[0] as any).profile_name).toBe('prod-mysql');
+  });
+
+  it('recordQuery profile_name=null when provider returns null', async () => {
+    qa.setProfileProvider(() => null);
+    await qa.recordQuery({
+      ts: new Date().toISOString(), db: 'mysql', kind: 'select',
+      sql: 'A', params: null, duration_ms: 5, rows: 1, error: null, error_code: null,
+    });
+    const entries = await qa.getHistory({ profileName: null });
+    expect(entries.length).toBe(1);
+  });
+
+  it('recordQuery without setProfileProvider defaults to null', async () => {
+    // no setProfileProvider call here
+    await qa.recordQuery({
+      ts: new Date().toISOString(), db: 'mysql', kind: 'select',
+      sql: 'A', params: null, duration_ms: 5, rows: 1, error: null, error_code: null,
+    });
+    const entries = await qa.getHistory({ profileName: null });
+    expect(entries.length).toBe(1);
+  });
+
+  it('setProfileProvider(null) clears provider', async () => {
+    qa.setProfileProvider(() => 'first');
+    await qa.recordQuery({
+      ts: new Date().toISOString(), db: 'mysql', kind: 'select',
+      sql: 'A', params: null, duration_ms: 5, rows: 1, error: null, error_code: null,
+    });
+    qa.setProfileProvider(null);
+    await qa.recordQuery({
+      ts: new Date().toISOString(), db: 'mysql', kind: 'select',
+      sql: 'B', params: null, duration_ms: 5, rows: 1, error: null, error_code: null,
+    });
+    const entries = await qa.getHistory({});
+    // first entry should have 'first', second should have null
+    const sqls = (entries as any[]).map((e: any) => ({ sql: e.sql, profile: e.profile_name }));
+    expect(sqls.find((s: any) => s.sql === 'A')?.profile).toBe('first');
+    expect(sqls.find((s: any) => s.sql === 'B')?.profile).toBeNull();
+  });
 });
