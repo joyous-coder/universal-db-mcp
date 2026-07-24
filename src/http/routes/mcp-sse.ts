@@ -125,6 +125,9 @@ export async function setupMcpSseRoutes(fastify: FastifyInstance): Promise<void>
       sseTransports.set(sessionId, transport);
       mcpServers.set(sessionId, mcpServer);
 
+      // v3.2: tell DatabaseMCPServer its current sessionId so ToolRegistry can isolate per-session state
+      mcpServer.setSessionId(sessionId);
+
       // 设置关闭处理
       transport.onclose = async () => {
         console.error(`SSE session ${sessionId} closed`);
@@ -263,6 +266,8 @@ export async function setupMcpSseRoutes(fastify: FastifyInstance): Promise<void>
             console.error(`🔗 MCP session initialized: ${newSessionId}`);
             streamableTransports.set(newSessionId, transport);
             mcpServers.set(newSessionId, mcpServer);
+            // v3.2: tell DatabaseMCPServer its current sessionId so ToolRegistry can isolate per-session state
+            mcpServer.setSessionId(newSessionId);
           },
         });
 
