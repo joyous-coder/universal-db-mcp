@@ -64,4 +64,61 @@ export async function setupQueryExperienceRoutes(fastify: FastifyInstance, qa: Q
     if (!adapter) { reply.code(404); return { success: false, error: { code: 'SESSION_NOT_FOUND', message: `session ${sessionId} not found` } }; }
     return { success: true, data: await qa.executeTemplate(request.params.id, params, adapter) };
   });
+
+  // v3.1: plan-history HTTP endpoints (only registered if PlanHistory is available).
+  const planHistory = (fastify as any).planHistory as
+    | import('../../core/plan-history.js').PlanHistory
+    | undefined;
+  if (planHistory) {
+    fastify.post('/api/query-explain-advice', async (request) => {
+      const { sql, persist } = request.body as { sql: string; persist?: boolean };
+      const baseResult = await qa.explain(sql, []);
+      let planJson = '';
+      try { planJson = JSON.stringify(baseResult.plan ?? []); } catch { planJson = JSON.stringify({ raw: baseResult.raw }); }
+      const { ExplainPlanParser } = await import('../../core/explain-parser.js');
+      const { IndexAdvisor } = await import('../../core/index-advisor.js');
+      const { SqlNormalizer } = await import('../../utils/sql-normalizer.js');
+      const dbType = (baseResult as any).db ?? 'sqlite';
+      const norm = ExplainPlanParser.normalize(planJson, dbType);
+      const advice = IndexAdvisor.analyze(norm);
+      let captured = false;
+      if (persist) {
+        const sqlNorm = SqlNormalizer.normalize(sql);
+        await planHistory.capture({
+          queryHash: sqlNorm.hash,
+          sqlTemplate: sqlNorm.template,
+          sqlOriginal: sql,
+          planJson,
+          dbType,
+          profileName: null,
+          capturedAt: new Date().toISOString(),
+          durationMs: baseResult.duration_ms ?? 0,
+        });
+        captured = true;
+      }
+      return { success: true, data: { explain: baseResult, advice, captured } };
+    });
+
+    fastify.post('/api/query-plan-diff', async (request) => {
+      const { queryHash, entryA, entryB } = request.body as { queryHash: string; entryA?: number; entryB?: number };
+      const all = await planHistory.getByHash(queryHash);
+      if (all.length < 2) return { success: false, error: 'need at least 2 entries' };
+      const a = entryA !== undefined ? all.find(e => e.id === entryA) ?? all[0] : all[0];
+      const b = entryB !== undefined ? all.find(e => e.id === entryB) ?? all[all.length - 1] : all[all.length - 1];
+      const { ExplainPlanParser } = await import('../../core/explain-parser.js');
+      const { PlanDiff } = await import('../../core/plan-diff.js');
+      const planA = ExplainPlanParser.normalize(a.planJson, a.dbType);
+      const planB = ExplainPlanParser.normalize(b.planJson, b.dbType);
+      const diff = PlanDiff.compare(planA, planB);
+      return { success: true, data: { from: { id: a.id, capturedAt: a.capturedAt }, to: { id: b.id, capturedAt: b.capturedAt }, diff } };
+    });
+
+    fastify.get<{ Querystring: { limit?: string; queryHash?: string } }>('/api/query-plans', async (request) => {
+      const q = request.query;
+      const list = q.queryHash
+        ? await planHistory.getByHash(q.queryHash)
+        : await planHistory.list(q.limit ? Number(q.limit) : 50);
+      return { success: true, data: { plans: list } };
+    });
+  }
 }
