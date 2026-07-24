@@ -5,8 +5,9 @@
  */
 
 import type { DbAdapter, DbConfig, QueryResult, SchemaInfo, TableInfo, EnumValuesResult, SampleDataResult } from '../types/adapter.js';
-import { validateQuery, resolvePermissions } from '../utils/safety.js';
+import { validateQuery, resolvePermissions, detectOperationType } from '../utils/safety.js';
 import { isScriptLike } from '../utils/sql-detector.js';
+import { splitStatements } from '../utils/sql-parser.js';
 import { SchemaEnhancer, SchemaEnhancerConfig } from '../utils/schema-enhancer.js';
 import { DataMasker, createDataMasker } from '../utils/data-masking.js';
 
@@ -149,7 +150,22 @@ export class DatabaseService {
       );
     }
 
-    validateQuery(query, this.config);
+    // SECURITY: validate permissions PER STATEMENT, not just once on the whole script.
+    // Without this, a malicious script like `SELECT 1; DROP TABLE victim;` would
+    // bypass DDL permission checks (only the first SELECT is classified).
+    const dialect = (this.adapter as any).getDialect?.() ?? 'mysql';
+    const statements = splitStatements(query, dialect).filter((s: string) => s.trim());
+    for (let i = 0; i < statements.length; i++) {
+      const stmt = statements[i];
+      const detected = detectOperationType(stmt);
+      if (detected && !permissions.includes(detected.type)) {
+        throw new Error(
+          `❌ 语句 #${i + 1} 操作被拒绝: ${detected.keyword} 需要 ${detected.type} 权限。\n` +
+          `当前权限: ${permissions.join(', ')}。\n` +
+          `如果这是您预期的操作,请使用包含该权限的 custom permissions。`
+        );
+      }
+    }
 
     const adapter = this.adapter as any;
     if (typeof adapter.executeScript !== 'function') {

@@ -16,6 +16,10 @@ import { splitStatements } from '../utils/sql-parser.js';
  * - DROP DATABASE / DROP SCHEMA
  * - SHUTDOWN
  * - TRUNCATE without WHERE
+ *
+ * Note: DROP TABLE / DELETE / UPDATE / CREATE are NOT blanket-forbidden here -
+ * per-statement permission checks in DatabaseService.executeScript handle those
+ * via the permission system (script permission alone is not enough).
  */
 const FORBIDDEN_PATTERNS: RegExp[] = [
   /DROP\s+DATABASE\b/i,

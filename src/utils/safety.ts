@@ -88,8 +88,10 @@ export function isWriteOperation(query: string): boolean {
 
 /**
  * 检测查询的操作类型
+ * 检测每条语句的第一个关键字以确定其类型。
+ * 多语句脚本中,所有语句都会被检测。
  */
-function detectOperationType(query: string): { type: SqlOperationPermission; keyword: string } | null {
+export function detectOperationType(query: string): { type: SqlOperationPermission; keyword: string } | null {
   const upperQuery = query.trim().toUpperCase();
   for (const [opType, keywords] of Object.entries(OPERATION_KEYWORDS)) {
     for (const keyword of keywords) {
