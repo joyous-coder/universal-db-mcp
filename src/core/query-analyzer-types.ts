@@ -85,6 +85,8 @@ export interface Template {
   updated_at: string;
   created_by: string;
   use_count: number;
+  /** v2.19: nullable. `null` = global template (v2.17 compat); set to a profile name for local templates. */
+  profile_name?: string | null;
 }
 export interface TemplateInput {
   name: string;
@@ -92,6 +94,8 @@ export interface TemplateInput {
   sql: string;
   parameters: Omit<TemplateParam, 'name'>[];
   tags?: string[];
+  /** v2.19: optional profile binding. Omit/null = global template. */
+  profile_name?: string | null;
 }
 
 export interface QueryAnalyzerOptions {

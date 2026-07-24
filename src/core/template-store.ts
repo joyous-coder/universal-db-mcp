@@ -37,6 +37,14 @@ export class TemplateStore {
         );
         CREATE INDEX IF NOT EXISTS idx_templates_name ON templates(name);
       `);
+      // v2.19: idempotent migration — add profile_name column for cross-profile
+      // template filtering. Older templates.db files from v2.17 auto-get NULL.
+      try {
+        this.conn.exec(`ALTER TABLE templates ADD COLUMN profile_name TEXT`);
+      } catch {
+        // column already exists — ignore
+      }
+      this.conn.exec(`CREATE INDEX IF NOT EXISTS idx_templates_profile ON templates(profile_name)`);
     })();
     return this.initPromise;
   }
@@ -45,8 +53,9 @@ export class TemplateStore {
     await this.init();
     const now = new Date().toISOString();
     const id = nanoid(8);
+    const profileName = input.profile_name ?? null;
     this.conn!.exec(
-      `INSERT INTO templates (id, name, description, sql, parameters_json, tags_json, created_at, updated_at, created_by, use_count) VALUES (${q(id)}, ${q(input.name)}, ${q(input.description)}, ${q(input.sql)}, ${q(JSON.stringify(input.parameters))}, ${q(JSON.stringify(input.tags ?? []))}, ${q(now)}, ${q(now)}, ${q(createdBy)}, 0)`
+      `INSERT INTO templates (id, name, description, sql, parameters_json, tags_json, created_at, updated_at, created_by, use_count, profile_name) VALUES (${q(id)}, ${q(input.name)}, ${q(input.description)}, ${q(input.sql)}, ${q(JSON.stringify(input.parameters))}, ${q(JSON.stringify(input.tags ?? []))}, ${q(now)}, ${q(now)}, ${q(createdBy)}, 0, ${q(profileName)})`
     );
     return {
       id,
@@ -59,14 +68,27 @@ export class TemplateStore {
       updated_at: now,
       created_by: createdBy,
       use_count: 0,
+      profile_name: profileName,
     };
   }
 
-  async list(filter?: { tag?: string }): Promise<Template[]> {
+  async list(filter?: { tag?: string; profileName?: string | null }): Promise<Template[]> {
     await this.init();
-    const rows = filter?.tag
-      ? this.queryAll(`SELECT * FROM templates WHERE tags_json LIKE ${q('%' + filter.tag + '%')}`)
-      : this.queryAll(`SELECT * FROM templates ORDER BY updated_at DESC`);
+    const where: string[] = [];
+    if (filter?.tag) { where.push(`tags_json LIKE ${q('%' + filter.tag + '%')}`); }
+    // v2.19: profileName has three states:
+    //   - omitted    → all templates (backward compat)
+    //   - null       → only global templates (profile_name IS NULL)
+    //   - 'name'     → only that profile's templates
+    if (filter && 'profileName' in filter) {
+      if (filter.profileName === null) {
+        where.push('profile_name IS NULL');
+      } else if (filter.profileName !== undefined) {
+        where.push(`profile_name = ${q(filter.profileName)}`);
+      }
+    }
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const rows = this.queryAll(`SELECT * FROM templates ${whereSql} ORDER BY updated_at DESC`);
     return rows.map(this.rowToTemplate);
   }
 
@@ -112,6 +134,7 @@ export class TemplateStore {
       updated_at: row.updated_at as string,
       created_by: row.created_by as string,
       use_count: row.use_count as number,
+      profile_name: (row.profile_name as string | null) ?? null,
     };
   }
 }
