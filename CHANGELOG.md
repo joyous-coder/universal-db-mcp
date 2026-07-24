@@ -2,6 +2,36 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [2.19.0] - 2026-07-24
+
+### 新增 (Multi-Profile v2)
+- **Profile 加密 (SQLCipher)** — `DB_PROFILE_ENCRYPTION_KEY` env 加密 `profiles.db`（依赖 `better-sqlite3-multiple-ciphers`，`optionalDependencies`）。缺失 dep 抛清晰错误，错误 key 抛清晰错误，**不 silent fall back**
+- **跨 profile 模板** — `save_template` 支持可选 `profile_name`，`list_templates` 支持 `profileName: null` (全局) / `'name'` (本地) / 省略 (全部) 三态过滤
+- **跨 profile 历史** — `get_query_history` 增加 `profileName` + `groupBy: 'profile'` 聚合，返回 `{profileName, count, errors, avg_ms}[]`
+- **`QueryAnalyzer.setProfileProvider(fn)`** — 注入 active profile 到 `recordQuery`，自动给 history 行打 `profile_name` tag
+- **`DatabaseService.setActiveProfileProvider(fn)`** — 转发给 QueryAnalyzer，单点配置
+- **`ProfileManager.setQueryAnalyzer(qa)` + `routeQuery`** — 自动给 `routeQuery` 调用的 query 在 history 填 `profile_name`
+
+### 配置
+- 3 个新 env var: `DB_PROFILE_ENCRYPTION_KEY`（激活）/ `DB_TEMPLATES_DB_KEY`（占位）/ `DB_HISTORY_DB_KEY`（占位）
+- 缺失/空值 → fallback 明文（v2.18 兼容），启动 warn 一次
+
+### 文档
+- 重命名 `docs/multi-db.md` → `docs/multi-profile.md`（覆盖 v2.18+v2.19）
+- 新增 Profile 加密 + 跨 profile 模板/历史章节
+
+### 测试
+- 新增 7 测试文件 (`encrypted-sqlite` / `profile-store-cipher` / `template-store-v2.19` / `history-store-v2.19` / `cross-profile-history` integration + extensions)
+- 总数: 375 测试全过 (v2.18.0: 337)
+
+### 依赖
+- 0 强制新增
+- 1 个 optional dep: `better-sqlite3-multiple-ciphers ^11.8.1`（~5MB，仅 SQLCipher 启用时加载）
+
+### 安全
+- `profiles.db` 走 SQLCipher 后整文件加密（key 来自 env `DB_PROFILE_ENCRYPTION_KEY`）
+- README 仍强提示未加密场景下 `.gitignore` profiles.db
+
 ## [2.18.0] - 2026-07-24
 
 ### 新增 (Multi-DB)
