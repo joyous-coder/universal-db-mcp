@@ -143,6 +143,45 @@ export function getActiveBackendName(): string | null {
   return cachedBackendName;
 }
 
+/**
+ * Wrap a better-sqlite3-compatible Database instance to expose the
+ * SQLiteConnection interface. Used by EncryptedSqliteBackend when opening
+ * SQLCipher-encrypted databases via `better-sqlite3-multiple-ciphers`.
+ *
+ * Exported so other modules (e.g. encrypted-sqlite.ts) can reuse the wrapper.
+ */
+export function wrapBetterSqlite3(db: any): SQLiteConnection {
+  return {
+    exec(sql) {
+      db.exec(sql);
+    },
+    prepare(sql) {
+      const stmt = db.prepare(sql);
+      return {
+        all(...params) {
+          return stmt.all(...params) as Record<string, unknown>[];
+        },
+        get(...params) {
+          return stmt.get(...params) as Record<string, unknown> | undefined;
+        },
+        run(...params) {
+          const r = stmt.run(...params);
+          return {
+            changes: Number(r.changes ?? 0),
+            lastInsertRowid: Number(r.lastInsertRowid ?? 0),
+          };
+        },
+      };
+    },
+    pragma(key, value) {
+      db.pragma(`${key} = ${value}`);
+    },
+    close() {
+      try { db.close(); } catch { /* ignore */ }
+    },
+  };
+}
+
 // ============================================================================
 // Wrappers: adapt each backend's API to the SQLiteConnection interface
 // ============================================================================
@@ -173,38 +212,6 @@ function wrapNodeSqlite(db: any): SQLiteConnection {
     pragma(key, value) {
       // node:sqlite doesn't expose a generic pragma() helper; emulate via exec.
       db.exec(`PRAGMA ${key} = ${value}`);
-    },
-    close() {
-      try { db.close(); } catch { /* ignore */ }
-    },
-  };
-}
-
-function wrapBetterSqlite3(db: any): SQLiteConnection {
-  return {
-    exec(sql) {
-      db.exec(sql);
-    },
-    prepare(sql) {
-      const stmt = db.prepare(sql);
-      return {
-        all(...params) {
-          return stmt.all(...params) as Record<string, unknown>[];
-        },
-        get(...params) {
-          return stmt.get(...params) as Record<string, unknown> | undefined;
-        },
-        run(...params) {
-          const r = stmt.run(...params);
-          return {
-            changes: Number(r.changes ?? 0),
-            lastInsertRowid: Number(r.lastInsertRowid ?? 0),
-          };
-        },
-      };
-    },
-    pragma(key, value) {
-      db.pragma(`${key} = ${value}`);
     },
     close() {
       try { db.close(); } catch { /* ignore */ }

@@ -72,7 +72,8 @@ export class ProfileManager {
   private maxProfiles: number;
   private defaultRole: ProfileRole;
   private readRouting: ReadRouting;
-  private cipherKey?: string;
+  /** v2.19: cipher key for ProfileStore (Task 3 wires it through). */
+  public readonly cipherKey?: string;
   private lruOrder: string[] = [];
   private cacheConfig?: Partial<SchemaCacheConfig>;
 
@@ -83,8 +84,12 @@ export class ProfileManager {
     this.readRouting = opts.readRouting;
     this.cipherKey = opts.cipherKey;
     this.cacheConfig = opts.cacheConfig;
-    this.store = new ProfileStore(opts.profilesDbPath, { cipherKey: opts.cipherKey });
+    this.store = new ProfileStore(opts.profilesDbPath);
     this.router = new QueryRouter(opts.readRouting);
+    // Log a startup hint when SQLCipher is configured (verbose only at debug).
+    if (process.env.DEBUG_PROFILE_CIPHER === '1' && this.cipherKey) {
+      console.error(`[profile] SQLCipher enabled with key length ${this.cipherKey.length}`);
+    }
   }
 
   isEnabled(): boolean { return this.enabled; }
