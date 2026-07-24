@@ -12,7 +12,9 @@ import { authMiddleware, setupErrorHandler } from './middleware/index.js';
 import { setupRoutes } from './routes/index.js';
 import { setupMetricsRoute } from './routes/metrics.js';
 import { setupQueryExperienceRoutes } from './routes/query-experience.js';
+import { setupProfileRoutes } from './routes/profiles.js';
 import { QueryAnalyzer } from '../core/query-analyzer.js';
+import { ProfileManager } from '../core/profile-manager.js';
 
 /**
  * Create and configure HTTP server
@@ -99,6 +101,17 @@ export async function createHttpServer(config: AppConfig) {
   });
   fastify.decorate('queryAnalyzer', queryAnalyzer);
   await setupQueryExperienceRoutes(fastify, queryAnalyzer);
+
+  // v2.18: profile manager + 9 HTTP endpoints
+  const profileManager = new ProfileManager({
+    enabled: config.profileManager?.enabled ?? true,
+    profilesDbPath: config.profileManager?.profilesDbPath ?? `${process.cwd()}/.db-mcp/profiles.db`,
+    maxProfiles: config.profileManager?.maxProfiles ?? 50,
+    defaultRole: config.profileManager?.defaultRole ?? 'primary',
+    readRouting: config.profileManager?.readRouting ?? 'round-robin',
+  });
+  fastify.decorate('profileManager', profileManager);
+  await setupProfileRoutes(fastify, profileManager);
 
   // Setup error handler
   setupErrorHandler(fastify);
