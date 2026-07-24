@@ -181,6 +181,86 @@ export class DatabaseService {
   }
 
   /**
+   * Generate and insert sample data based on table structure + LLM-provided rules.
+   * Requires 'insert' + 'batch' permissions.
+   */
+  async generateAndInsertSampleData(
+    tableName: string,
+    rowCount: number,
+    options?: {
+      seed?: number;
+      rules?: any[];
+      columnOverrides?: Record<string, unknown>;
+      columns?: string[];
+      overwrite?: boolean;
+    }
+  ): Promise<{ insertedRows: number; tableName: string; columns: string[]; executionTime: number }> {
+    const permissions = resolvePermissions(this.config);
+    if (!permissions.includes('insert') || !permissions.includes('batch')) {
+      throw new Error('generate_sample_data 需要 insert + batch 权限');
+    }
+
+    const safeCount = Math.min(Math.max(1, rowCount), 10000);
+
+    // Get table info
+    const tableInfo = await this.getTableInfo(tableName);
+    const columnsToInsert = options?.columns || tableInfo.columns.map(c => c.name);
+
+    // Generate data using SampleDataGenerator
+    const { SampleDataGenerator } = await import('../utils/sample-data-generator.js');
+    const generator = new SampleDataGenerator({ seed: options?.seed });
+    const rowsToInsert: unknown[][] = [];
+
+    for (let i = 0; i < safeCount; i++) {
+      const rowContext: Record<string, unknown> = {};
+      const row: unknown[] = [];
+
+      for (const colName of columnsToInsert) {
+        const col = tableInfo.columns.find(c => c.name === colName);
+        if (!col) continue;
+
+        // Find applicable rule (exact columnName or columnNamePattern)
+        const rule = options?.rules?.find((r: any) => {
+          if (r.match?.columnName === colName) return true;
+          if (r.match?.columnNamePattern && new RegExp(r.match.columnNamePattern).test(colName)) return true;
+          return false;
+        });
+
+        const value = generator.generateValue(col, {
+          overrides: options?.columnOverrides,
+          rule,
+          rowContext,
+        }, i);
+
+        row.push(value);
+        rowContext[colName] = value;
+      }
+      rowsToInsert.push(row);
+    }
+
+    // Overwrite
+    if (options?.overwrite) {
+      const tableIdent = this.quoteIdentifier(tableName);
+      await this.executeQuery(`TRUNCATE TABLE ${tableIdent}`);
+    }
+
+    // Build INSERT SQL
+    const placeholders = columnsToInsert.map(() => '?').join(', ');
+    const columnList = columnsToInsert.map(c => this.quoteIdentifier(c)).join(', ');
+    const sql = `INSERT INTO ${this.quoteIdentifier(tableName)} (${columnList}) VALUES (${placeholders})`;
+
+    const startTime = Date.now();
+    const result = await this.executeBatch(sql, rowsToInsert);
+
+    return {
+      insertedRows: result.totalAffectedRows,
+      tableName,
+      columns: columnsToInsert,
+      executionTime: Date.now() - startTime,
+    };
+  }
+
+  /**
    * Execute SQL from a file path.
    * Requires 'script' permission and file path to be in configured allowlist.
    */

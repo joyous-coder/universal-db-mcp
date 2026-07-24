@@ -268,6 +268,110 @@ export class DatabaseMCPServer {
         });
       }
 
+      // Conditionally register generate_sample_data
+      if (resolvedPerms.includes('insert') && resolvedPerms.includes('batch')) {
+        tools.push({
+          name: 'generate_sample_data',
+          description: `根据表结构自动生成并插入样例数据,适用于开发、测试、Demo 场景。
+
+LLM 应根据用户的自然语言描述生成 inline rules 数组(见 options.rules)。
+
+## 权限要求
+- insert + batch 权限
+
+## 输入参数
+- tableName: 目标表名(必填)
+- rowCount: 生成行数(默认 10,最大 10000)
+- options.seed: 随机种子(传入相同 seed 可复现同样的数据)
+- options.columns: 只生成这些列,其他列用 DEFAULT 或 NULL
+- options.columnOverrides: 临时固定值覆盖(优先级最高)
+- options.rules: 列生成规则数组(LLM 根据用户描述生成)
+- options.overwrite: 是否 TRUNCATE 后插入(危险,需显式)
+
+## 列生成规则 schema
+
+每条规则: { match: { ... }, generate: { ... } }
+
+match 支持:
+- columnName: 精确匹配列名
+- columnNamePattern: 正则匹配列名
+- tableName: 仅对某表生效
+- columnType: 类型匹配
+
+generate 类型:
+- { type: 'fixed', value: any }                    固定值
+- { type: 'range', min, max, decimals? }          数值范围
+- { type: 'pattern', template }                    模板字符串
+- { type: 'faker', method, args? }                  faker 方法(如 'internet.email')
+- { type: 'choice', values }                        从列表随机
+- { type: 'enum' }                                  从 DB enum_values 取
+- { type: 'sequence', start?, step?, format? }     自增序列
+- { type: 'regex', pattern }                        匹配正则的随机串
+- { type: 'null' }                                  总是 NULL
+- { type: 'skip' }                                  不生成,用 DB default
+
+## pattern 占位符
+
+内置: {year} {month} {day} {date} {sequence} {sequence:Nd} {rowIndex} {timestamp} {uuid}
+
+跨列引用(被引用列必须在 schema 中定义在被引用列之前):
+- {column_name}              直接引用
+- {column_name.lower}        小写
+- {column_name.upper}        大写
+- {column_name.first}        首字符
+- {column_name.last}         末字符
+- {column_name.pinyin}       中文转拼音(无声调)
+- {column_name.pinyin.first} 拼音首字母
+- {column_name.N}            前 N 个字符
+
+## 中文数据支持
+
+faker 内置中文(姓名/手机号/地址/身份证等 zh_CN locale)。
+
+业务特定中文(项目名/省份等):用 choice + 中文列表,或 pattern + 跨列引用组合业务术语。
+
+LLM 当领域专家:用户描述模糊时,LLM 应根据表名/列名推断业务领域,生成合理的 choice 列表。
+
+## 示例
+
+用户:"生成 100 条订单,所有订单 tenant 都是 BBZ_PROVINCE_EG,project_code 用 PRJ-{年}-{序号},amount 在 100-10000 之间,status 从 [pending, paid, shipped] 随机"
+
+调用:
+{
+  tableName: "orders",
+  rowCount: 100,
+  options: {
+    seed: 42,
+    rules: [
+      { match: { columnName: "tenant_id" }, generate: { type: "fixed", value: "BBZ_PROVINCE_EG" } },
+      { match: { columnName: "project_code" }, generate: { type: "pattern", template: "PRJ-{year}-{sequence:05d}" } },
+      { match: { columnName: "amount" }, generate: { type: "range", min: 100, max: 10000, decimals: 2 } },
+      { match: { columnName: "status" }, generate: { type: "choice", values: ["pending", "paid", "shipped"] } }
+    ]
+  }
+}
+`,
+          inputSchema: {
+            type: 'object',
+            properties: {
+              tableName: { type: 'string', description: '目标表名' },
+              rowCount: { type: 'number', description: '生成行数(默认 10,最大 10000)', default: 10 },
+              options: {
+                type: 'object',
+                properties: {
+                  seed: { type: 'number', description: '随机种子(可重现)' },
+                  columns: { type: 'array', items: { type: 'string' }, description: '只生成这些列' },
+                  columnOverrides: { type: 'object', description: '固定值覆盖' },
+                  rules: { type: 'array', description: '生成规则数组' },
+                  overwrite: { type: 'boolean', description: 'TRUNCATE 后插入', default: false },
+                },
+              },
+            },
+            required: ['tableName'],
+          },
+        });
+      }
+
       return { tools };
     });
 
@@ -472,6 +576,19 @@ export class DatabaseMCPServer {
             };
             console.error(`📦 批量执行: ${paramsList.length} 行`);
             const result = await this.databaseService.executeBatch(sql, paramsList, { useTransaction, maxBatchSize });
+            return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+          }
+
+          case 'generate_sample_data': {
+            if (!this.databaseService) {
+              throw new Error('数据库未连接');
+            }
+            const { tableName, rowCount, options } = args as any;
+            const result = await this.databaseService.generateAndInsertSampleData(
+              tableName,
+              rowCount ?? 10,
+              options
+            );
             return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
           }
 
