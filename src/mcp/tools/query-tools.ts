@@ -6,7 +6,7 @@
  */
 
 import type { QueryAnalyzer } from '../../core/query-analyzer.js';
-import type { BaseAdapter } from '../../adapters/base.js';
+import type { DbAdapter } from '../../types/adapter.js';
 
 export function buildExplainQueryHandler(qa: QueryAnalyzer) {
   return async (args: { sql: string; params?: unknown[] }) => qa.explain(args.sql, args.params);
@@ -51,7 +51,7 @@ export function buildDeleteTemplateHandler(qa: QueryAnalyzer) {
 }
 
 export function buildExecuteTemplateHandler(qa: QueryAnalyzer) {
-  return async (args: { id: string; params: Record<string, unknown> }, adapter: BaseAdapter) => {
+  return async (args: { id: string; params: Record<string, unknown> }, adapter: DbAdapter) => {
     return qa.executeTemplate(args.id, args.params, adapter);
   };
 }

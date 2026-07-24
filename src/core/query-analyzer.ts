@@ -11,7 +11,7 @@ import { Explainer } from './explainer.js';
 import { lintSql } from '../utils/sql-linter.js';
 import { substituteParams } from '../utils/sql-template.js';
 import type { BaseAdapter } from '../adapters/base.js';
-import type { QueryResult } from '../types/adapter.js';
+import type { DbAdapter, QueryResult } from '../types/adapter.js';
 import type {
   LintResult,
   ExplainResult,
@@ -89,7 +89,7 @@ export class QueryAnalyzer {
     return this.templates.delete(id);
   }
 
-  async executeTemplate(id: string, params: Record<string, unknown>, adapter: BaseAdapter): Promise<QueryResult> {
+  async executeTemplate(id: string, params: Record<string, unknown>, adapter: DbAdapter): Promise<QueryResult> {
     if (!this.enabled) throw new Error('queryAnalyzer disabled');
     const tpl = await this.templates.get(id);
     if (!tpl) throw new Error(`template not found: ${id}`);

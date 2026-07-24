@@ -6,7 +6,7 @@
  *              /api/templates/:id/execute (POST)
  */
 
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import type { QueryAnalyzer } from '../../core/query-analyzer.js';
 
 export async function setupQueryExperienceRoutes(fastify: FastifyInstance, qa: QueryAnalyzer): Promise<void> {
