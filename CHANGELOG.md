@@ -2,6 +2,12 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [2.15.3] - 2026-07-24
+
+### 改进
+- **SQLite multi-backend**: SQLiteAdapter 现在支持 `node:sqlite`(Node 22.5+ 内置,零依赖)和 `better-sqlite3` 双 backend,运行时自动选择。解决了 Node 24 下 better-sqlite3 native binding 缺失的测试问题
+- **vitest config**: SQLite 测试现在能在 Node 24 下跑通(用 `node:sqlite`),不需要 native binding rebuild
+
 ## [2.15.2] - 2026-07-24
 
 ### 修复
