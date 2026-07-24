@@ -7,7 +7,7 @@
  */
 
 import sql from 'mssql';
-import { BaseAdapter } from './base.js';
+import { BaseAdapter, ExecuteScriptOptions, TransactionContext } from './base.js';
 import type {
   QueryResult,
   SchemaInfo,
@@ -18,6 +18,7 @@ import type {
   RelationshipInfo,
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
+import { splitStatements } from '../utils/sql-parser.js';
 
 export class SQLServerAdapter extends BaseAdapter {
   private pool: sql.ConnectionPool | null = null;
@@ -540,6 +541,89 @@ export class SQLServerAdapter extends BaseAdapter {
       default:
         return dataType;
     }
+  }
+
+  /**
+   * P0-3: Override withTransaction to pin all statements to a single physical connection
+   * via mssql's Transaction API. Without this, BEGIN/COMMIT and individual statements
+   * could end up on different pooled connections, breaking "all-or-nothing" semantics.
+   *
+   * mssql's transaction API is callback-based but returns a promise when called
+   * without a callback, so we can use await directly.
+   */
+  async withTransaction<T>(fn: (tx: TransactionContext) => Promise<T>): Promise<T> {
+    if (!this.pool) {
+      throw new Error('数据库未连接');
+    }
+    const transaction = new sql.Transaction(this.pool);
+    await transaction.begin();
+    try {
+      const tx: TransactionContext = {
+        executeQuery: async (query: string, params?: unknown[]) => {
+          const startTime = Date.now();
+          const request = new sql.Request(transaction);
+
+          // 处理参数 - SQL Server 使用 @param0, @param1 语法
+          let processedQuery = query;
+          if (params && params.length > 0) {
+            params.forEach((param, index) => {
+              request.input(`param${index}`, param);
+            });
+            // 替换 ? 占位符为 @param0, @param1, ...
+            let paramIndex = 0;
+            processedQuery = query.replace(/\?/g, () => `@param${paramIndex++}`);
+          }
+
+          const result = await request.query(processedQuery);
+          const executionTime = Date.now() - startTime;
+
+          if (result.recordset && result.recordset.length > 0) {
+            return {
+              rows: result.recordset,
+              executionTime,
+              metadata: { columnCount: Object.keys(result.recordset[0]).length },
+            };
+          }
+          if (result.rowsAffected && result.rowsAffected.length > 0) {
+            const affectedRows = result.rowsAffected.reduce((sum, count) => sum + count, 0);
+            return { rows: [], affectedRows, executionTime };
+          }
+          return { rows: [], executionTime };
+        },
+      };
+      const result = await fn(tx);
+      await transaction.commit();
+      return result;
+    } catch (err) {
+      try { await transaction.rollback(); } catch { /* ignore */ }
+      throw err;
+    }
+  }
+
+  /**
+   * P0-3: Override executeScript to use withTransaction.
+   * All statements run on a single connection so BEGIN/COMMIT are atomic.
+   * Non-transactional mode falls back to the BaseAdapter default.
+   */
+  async executeScript(query: string, options: ExecuteScriptOptions = {}): Promise<QueryResult> {
+    if (options.useTransaction === false) {
+      return super.executeScript(query, { ...options, useTransaction: false });
+    }
+    return this.withTransaction(async (tx) => {
+      const statements = splitStatements(query, this.getDialect()).filter(s => s.trim());
+      const startTime = Date.now();
+      const lastResult = statements.length > 0
+        ? await tx.executeQuery(statements[0])
+        : { rows: [], executionTime: 0 };
+      for (let i = 1; i < statements.length; i++) {
+        await tx.executeQuery(statements[i]);
+      }
+      return {
+        rows: [],
+        executionTime: Date.now() - startTime,
+        metadata: { statementCount: statements.length, lastResult },
+      };
+    });
   }
 
   /**
