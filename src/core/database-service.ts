@@ -5,7 +5,7 @@
  */
 
 import type { DbAdapter, DbConfig, QueryResult, SchemaInfo, TableInfo, EnumValuesResult, SampleDataResult } from '../types/adapter.js';
-import { validateQuery, resolvePermissions, detectOperationType } from '../utils/safety.js';
+import { validateQuery, resolvePermissions, detectOperationType, DANGEROUS_ADMIN_KEYWORDS } from '../utils/safety.js';
 import { isScriptLike } from '../utils/sql-detector.js';
 import { splitStatements } from '../utils/sql-parser.js';
 import { SchemaEnhancer, SchemaEnhancerConfig } from '../utils/schema-enhancer.js';
@@ -155,6 +155,21 @@ export class DatabaseService {
     // bypass DDL permission checks (only the first SELECT is classified).
     const dialect = (this.adapter as any).getDialect?.() ?? 'mysql';
     const statements = splitStatements(query, dialect).filter((s: string) => s.trim());
+
+    // Defense-in-depth: check for dangerous admin keywords (GRANT/REVOKE/etc.)
+    // that detectOperationType doesn't catch but should require ddl permission.
+    for (let i = 0; i < statements.length; i++) {
+      const upperStmt = statements[i].trim().toUpperCase();
+      const firstWord = upperStmt.split(/\s+/)[0];
+      if (DANGEROUS_ADMIN_KEYWORDS.includes(firstWord) && !permissions.includes('ddl')) {
+        throw new Error(
+          `❌ 语句 #${i + 1} 操作被拒绝: ${firstWord} 需要 ddl 权限。\n` +
+          `当前权限: ${permissions.join(', ')}。`
+        );
+      }
+    }
+
+    // Per-statement permission check (handles INSERT/UPDATE/DELETE/DDL)
     for (let i = 0; i < statements.length; i++) {
       const stmt = statements[i];
       const detected = detectOperationType(stmt);

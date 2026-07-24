@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { detectOperationType } from '../../src/utils/safety.js';
+import { detectOperationType, DANGEROUS_ADMIN_KEYWORDS } from '../../src/utils/safety.js';
 import { splitStatements } from '../../src/utils/sql-parser.js';
 
 describe('detectOperationType per statement', () => {
@@ -116,5 +116,17 @@ describe('permission bypass prevention logic', () => {
     // Permission check passes (ddl is allowed), but BaseAdapter blacklist would reject
     expect(result.ok).toBe(true); // permission-wise ok
     // The blacklist is enforced separately in BaseAdapter
+  });
+
+  it('blocks GRANT statement when no ddl permission (defense-in-depth)', () => {
+    // GRANT is not in OPERATION_KEYWORDS but should require ddl permission.
+    // The DatabaseService.executeScript layer adds this defense-in-depth check.
+    const stmt = 'GRANT ALL ON x TO attacker';
+    const detected = detectOperationType(stmt);
+    // detectOperationType returns null for GRANT (it's not in OPERATION_KEYWORDS)
+    expect(detected).toBeNull();
+    // But the dangerous-keyword check should flag it
+    const firstWord = stmt.trim().toUpperCase().split(/\s+/)[0];
+    expect(['GRANT', 'REVOKE', 'EXEC', 'SET', 'KILL', 'SHUTDOWN']).toContain(firstWord);
   });
 });

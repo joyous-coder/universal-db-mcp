@@ -18,6 +18,24 @@ const OPERATION_KEYWORDS: Record<SqlOperationPermission, readonly string[]> = {
 } as const;
 
 /**
+ * Dangerous keywords that are NOT in OPERATION_KEYWORDS but should be
+ * explicitly blocked unless `ddl` permission is granted. These are
+ * administrative operations that could compromise security.
+ *
+ * Defense-in-depth list — `detectOperationType` does NOT match these, so
+ * callers must explicitly check `hasAnyDangerousKeyword` before execution.
+ */
+export const DANGEROUS_ADMIN_KEYWORDS: readonly string[] = [
+  'GRANT', 'REVOKE',     // privilege management
+  'EXEC', 'EXECUTE',     // dynamic SQL execution
+  'SET',                  // session/role config
+  'LOCK', 'UNLOCK',       // explicit locking
+  'KILL',                 // terminate other connections
+  'SHUTDOWN',             // server shutdown (also in BaseAdapter blacklist)
+  'REINDEX', 'VACUUM',    // maintenance ops
+];
+
+/**
  * 预设权限模式
  */
 const PERMISSION_PRESETS: Record<string, readonly PermissionType[]> = {
