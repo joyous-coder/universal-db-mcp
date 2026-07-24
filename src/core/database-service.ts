@@ -10,6 +10,8 @@ import { isScriptLike } from '../utils/sql-detector.js';
 import { splitStatements } from '../utils/sql-parser.js';
 import { SchemaEnhancer, SchemaEnhancerConfig } from '../utils/schema-enhancer.js';
 import { DataMasker, createDataMasker } from '../utils/data-masking.js';
+import { metrics } from '../utils/metrics.js';
+import type { RingBuffer } from '../utils/metrics-ringbuffer.js';
 
 /**
  * Schema 缓存配置
@@ -69,6 +71,9 @@ export class DatabaseService {
   private queryTimeoutMs: number = 30000;
   // P1-6: slow query threshold (default 5s)
   private slowQueryThresholdMs: number = 5000;
+  // v2.16: slow query ring buffer
+  private slowBufferSize: number = 100;
+  private slowQueries: RingBuffer<{ ts: string; db: string; kind: string; seconds: number; sql: string; error: string | null; }>;
 
   // Schema 增强器
   private schemaEnhancer: SchemaEnhancer;
@@ -79,12 +84,18 @@ export class DatabaseService {
   constructor(
     adapter: DbAdapter,
     config: DbConfig,
-    cacheConfig?: Partial<SchemaCacheConfig>,
+    options?: Partial<{
+      slowQueryThresholdMs: number;
+      slowBufferSize: number;
+    }> & Partial<SchemaCacheConfig>,
     enhancerConfig?: Partial<SchemaEnhancerConfig>
   ) {
     this.adapter = adapter;
     this.config = config;
-    this.cacheConfig = { ...DEFAULT_CACHE_CONFIG, ...cacheConfig };
+    this.cacheConfig = { ...DEFAULT_CACHE_CONFIG, ...(options ?? {}) };
+    if (options?.slowQueryThresholdMs !== undefined) this.slowQueryThresholdMs = options.slowQueryThresholdMs;
+    if (options?.slowBufferSize !== undefined) this.slowBufferSize = options.slowBufferSize;
+    this.slowQueries = metrics.ringBuffer('db_slow_queries', this.slowBufferSize);
     this.schemaEnhancer = new SchemaEnhancer(enhancerConfig);
     this.dataMasker = createDataMasker(true);
   }
@@ -119,16 +130,38 @@ export class DatabaseService {
       }
     }
 
-    // Execute query with timeout + slow log (P1-5, P1-6)
+    // Execute query with timeout + slow log (P1-5, P1-6) + metrics (v2.16)
     const start = Date.now();
-    const result = await this.withTimeout(
-      this.adapter.executeQuery(query, params),
-      this.queryTimeoutMs,
-      'executeQuery'
-    );
+    const dbType = this.config.type;
+    const kind = (query.trim().split(/\s+/)[0] ?? 'unknown').toLowerCase();
+    let result: QueryResult;
+    let errorCode: string | null = null;
+    try {
+      result = await this.withTimeout(
+        this.adapter.executeQuery(query, params),
+        this.queryTimeoutMs,
+        'executeQuery'
+      );
+    } catch (err) {
+      errorCode = (err as { code?: string })?.code ?? 'UNKNOWN';
+      metrics.counter('db_query_errors_total', 'Query errors by code').inc({ db: dbType, kind, code: errorCode });
+      throw err;
+    }
     const elapsed = Date.now() - start;
+    metrics.counter('db_query_total', 'Total queries').inc({ db: dbType, kind, status: 'ok' });
+    metrics.histogram('db_query_seconds', 'Query latency (seconds)').observe({ db: dbType, kind }, elapsed / 1000);
     if (elapsed > this.slowQueryThresholdMs) {
       console.error(`[SLOW QUERY] ${elapsed}ms: ${query.substring(0, 200)}`);
+      metrics.counter('db_slow_queries_total', 'Slow queries').inc({ db: dbType, kind });
+      const truncated = query.length > 4000 ? query.slice(0, 4000) + ' /* truncated */' : query;
+      this.slowQueries.push({
+        ts: new Date().toISOString(),
+        db: dbType,
+        kind,
+        seconds: elapsed / 1000,
+        sql: truncated,
+        error: errorCode,
+      });
     }
 
     return result;
@@ -206,7 +239,17 @@ export class DatabaseService {
     if (typeof adapter.executeScript !== 'function') {
       throw new Error('当前数据库适配器不支持 executeScript');
     }
-    return adapter.executeScript(query, options);
+    // v2.16: metrics wrapping
+    const start = Date.now();
+    const dbType = this.config.type;
+    const result = await adapter.executeScript(query, options);
+    const elapsed = Date.now() - start;
+    metrics.counter('db_query_total', 'Total queries').inc({ db: dbType, kind: 'script', status: 'ok' });
+    metrics.histogram('db_query_seconds', 'Query latency (seconds)').observe({ db: dbType, kind: 'script' }, elapsed / 1000);
+    if (elapsed > this.slowQueryThresholdMs) {
+      metrics.counter('db_slow_queries_total', 'Slow queries').inc({ db: dbType, kind: 'script' });
+    }
+    return result;
   }
 
   /**
@@ -228,7 +271,17 @@ export class DatabaseService {
     if (typeof adapter.executeBatch !== 'function') {
       throw new Error('当前数据库适配器不支持 executeBatch');
     }
-    return adapter.executeBatch(sql, paramsList, options);
+    // v2.16: metrics wrapping
+    const start = Date.now();
+    const dbType = this.config.type;
+    const result = await adapter.executeBatch(sql, paramsList, options);
+    const elapsed = Date.now() - start;
+    metrics.counter('db_query_total', 'Total queries').inc({ db: dbType, kind: 'batch', status: 'ok' });
+    metrics.histogram('db_query_seconds', 'Query latency (seconds)').observe({ db: dbType, kind: 'batch' }, elapsed / 1000);
+    if (elapsed > this.slowQueryThresholdMs) {
+      metrics.counter('db_slow_queries_total', 'Slow queries').inc({ db: dbType, kind: 'batch' });
+    }
+    return result;
   }
 
   /**
