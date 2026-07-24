@@ -15,7 +15,7 @@ import { DataMasker, createDataMasker } from '../utils/data-masking.js';
  * Schema 缓存配置
  */
 export interface SchemaCacheConfig {
-  /** 缓存过期时间（毫秒），默认 5 分钟 */
+  /** 缓存过期时间（毫秒），默认 1 分钟 */
   ttl: number;
   /** 是否启用缓存，默认 true */
   enabled: boolean;
@@ -91,6 +91,15 @@ export class DatabaseService {
 
   /**
    * Execute a query with validation
+   *
+   * 重要: query timeout 为"best-effort"。
+   * - 调用方的 Promise 会在达到超时时间后立即 reject,
+   *   这是保证 UI/上层不会无限等待的唯一手段。
+   * - 但是,底层驱动(mysql2 / pg / mssql / oracledb 等)的 SQL 执行
+   *   在原生层是同步或独立任务的,我们无法用可移植的方式真正取消它。
+   * - 因此达到超时后,DB 端的语句**可能仍在执行** ——
+   *   写操作尤其需要注意: BEGIN/COMMIT 仍然会落到连接池中。
+   * - 若某个应用场景需要真正可取消的查询,请使用支持查询取消的专用 API。
    */
   async executeQuery(query: string, params?: unknown[]): Promise<QueryResult> {
     // Validate query safety
@@ -125,6 +134,17 @@ export class DatabaseService {
     return result;
   }
 
+  /**
+   * Wrap a promise with a hard timeout.
+   *
+   * Limitations (see executeQuery doc comment):
+   * - Only the **caller's wait** is bounded; the underlying DB query
+   *   is NOT cancelled when the timer fires. Drivers like mysql2 / pg /
+   *   mssql / oracledb do not expose a portable query cancellation API,
+   *   so we accept the trade-off (bounded wait, possibly-continued DB work).
+   * - The "best-effort" timeout is still useful: without it, a hanging
+   *   connection would stall the MCP request indefinitely.
+   */
   private async withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Promise<T> {
     let timer: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
