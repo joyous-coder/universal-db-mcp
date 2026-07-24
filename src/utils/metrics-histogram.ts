@@ -10,19 +10,21 @@ export interface HistogramSnapshot {
 }
 
 export class Histogram {
-  private series = new Map<string, { count: number; sum: number; counts: number[] }>();
+  private series = new Map<string, { labels: Labels; count: number; sum: number; counts: number[] }>();
 
   constructor(
     public readonly name: string,
     public readonly help: string,
     public readonly buckets: number[] = DEFAULT_BUCKETS,
+    private readonly isEnabled: () => boolean = () => true,
   ) {}
 
   observe(labels: Labels, value: number): void {
+    if (!this.isEnabled()) return;
     const k = Object.keys(labels).sort().map(x => `${x}=${labels[x]}`).join('|');
     let s = this.series.get(k);
     if (!s) {
-      s = { count: 0, sum: 0, counts: new Array(this.buckets.length + 1).fill(0) };
+      s = { labels: { ...labels }, count: 0, sum: 0, counts: new Array(this.buckets.length + 1).fill(0) };
       this.series.set(k, s);
     }
     s.count += 1;

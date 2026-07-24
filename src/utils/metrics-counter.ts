@@ -1,33 +1,45 @@
 export type Labels = Record<string, string>;
 
-function labelKey(labels: Labels): string {
-  // Deterministic key from sorted label entries
-  return Object.keys(labels).sort().map(k => `${k}=${labels[k]}`).join('|');
+interface CounterEntry {
+  labels: Labels;
+  value: number;
 }
 
 export class Counter {
-  private values = new Map<string, number>();
+  private entries = new Map<string, CounterEntry>();
 
   constructor(
     public readonly name: string,
     public readonly help: string,
+    private readonly isEnabled: () => boolean = () => true,
   ) {}
 
   inc(labels: Labels, n = 1): void {
-    const k = labelKey(labels);
-    this.values.set(k, (this.values.get(k) ?? 0) + n);
+    if (!this.isEnabled()) return;
+    const k = this.key(labels);
+    const existing = this.entries.get(k);
+    if (existing) {
+      existing.value += n;
+      this.entries.delete(k);
+      this.entries.set(k, existing);
+    } else {
+      if (this.entries.size >= 1000) {
+        const oldest = this.entries.keys().next().value;
+        if (oldest !== undefined) this.entries.delete(oldest);
+      }
+      this.entries.set(k, { labels: { ...labels }, value: n });
+    }
   }
 
   get(labels: Labels): number {
-    return this.values.get(labelKey(labels)) ?? 0;
+    return this.entries.get(this.key(labels))?.value ?? 0;
   }
 
-  /** Internal: iterate all series for export */
-  *entries(): Iterable<{ labels: Labels; value: number }> {
-    for (const [, v] of this.values) {
-      // We reconstruct labels from key by storing separately; for now,
-      // serialization happens at Registry level. This stub returns value only.
-      yield { labels: {}, value: v };
-    }
+  series(): CounterEntry[] {
+    return Array.from(this.entries.values());
+  }
+
+  private key(labels: Labels): string {
+    return Object.keys(labels).sort().map(k => `${k}=${labels[k]}`).join('|');
   }
 }
