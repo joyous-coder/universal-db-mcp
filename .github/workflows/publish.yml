@@ -29,7 +29,9 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: npm ci
+        # Use `npm install` (not `npm ci`) so platform-specific optional deps
+        # (e.g. esbuild prebuilt binaries) for the CI runner are resolved.
+        run: npm install --no-audit --no-fund
 
       - name: Build project
         run: npm run build
