@@ -128,6 +128,7 @@ export function createAdapter(config: DbConfig): DbAdapter {
         user: config.user,
         password: config.password,
         database: config.database,
+        poolConfig: config.poolConfig,
       });
 
     case 'postgres':
@@ -137,6 +138,7 @@ export function createAdapter(config: DbConfig): DbAdapter {
         user: config.user,
         password: config.password,
         database: config.database,
+        poolConfig: config.poolConfig,
       });
 
     case 'redis':
@@ -155,6 +157,7 @@ export function createAdapter(config: DbConfig): DbAdapter {
         password: config.password,
         database: config.database,
         oracleClientPath: config.oracleClientPath,
+        poolConfig: config.poolConfig,
       });
 
     case 'dm':
@@ -164,6 +167,7 @@ export function createAdapter(config: DbConfig): DbAdapter {
         user: config.user,
         password: config.password,
         database: config.database,
+        poolConfig: config.poolConfig,
       });
 
     case 'sqlserver':
@@ -173,6 +177,7 @@ export function createAdapter(config: DbConfig): DbAdapter {
         user: config.user,
         password: config.password,
         database: config.database,
+        poolConfig: config.poolConfig,
       });
 
     case 'mongodb':
@@ -198,6 +203,7 @@ export function createAdapter(config: DbConfig): DbAdapter {
         user: config.user,
         password: config.password,
         database: config.database,
+        poolConfig: config.poolConfig,
       });
 
     case 'gaussdb':
@@ -207,6 +213,7 @@ export function createAdapter(config: DbConfig): DbAdapter {
         user: config.user,
         password: config.password,
         database: config.database,
+        poolConfig: config.poolConfig,
       });
 
     case 'oceanbase':
@@ -216,6 +223,7 @@ export function createAdapter(config: DbConfig): DbAdapter {
         user: config.user,
         password: config.password,
         database: config.database,
+        poolConfig: config.poolConfig,
       });
 
     case 'tidb':
@@ -225,6 +233,7 @@ export function createAdapter(config: DbConfig): DbAdapter {
         user: config.user,
         password: config.password,
         database: config.database,
+        poolConfig: config.poolConfig,
       });
 
     case 'clickhouse':
@@ -243,6 +252,7 @@ export function createAdapter(config: DbConfig): DbAdapter {
         user: config.user,
         password: config.password,
         database: config.database,
+        poolConfig: config.poolConfig,
       });
 
     case 'vastbase':
@@ -252,6 +262,7 @@ export function createAdapter(config: DbConfig): DbAdapter {
         user: config.user,
         password: config.password,
         database: config.database,
+        poolConfig: config.poolConfig,
       });
 
     case 'highgo':
@@ -261,6 +272,7 @@ export function createAdapter(config: DbConfig): DbAdapter {
         user: config.user,
         password: config.password,
         database: config.database,
+        poolConfig: config.poolConfig,
       });
 
     case 'goldendb':
@@ -270,6 +282,7 @@ export function createAdapter(config: DbConfig): DbAdapter {
         user: config.user,
         password: config.password,
         database: config.database,
+        poolConfig: config.poolConfig,
       });
 
     default:

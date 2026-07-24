@@ -168,6 +168,26 @@ export type PermissionType = 'read' | 'insert' | 'update' | 'delete' | 'ddl' | '
 export type PermissionMode = 'safe' | 'readwrite' | 'full' | 'custom';
 
 /**
+ * 数据库连接池配置
+ *
+ * P1: 通过环境变量 / DbConfig.poolConfig 配置，默认保持原有行为。
+ * 不同数据库驱动的 pool 语义略有差异：
+ * - MySQL 系 (mysql2): max=connectionLimit, min=maxIdle, idleTimeoutMs=idleTimeout
+ * - pg 系 (PostgreSQL/GaussDB/Kingbase/HighGo/Vastbase): max=max, min=min, idleTimeoutMs=idleTimeoutMillis
+ * - Oracle (oracledb): poolMax, poolMin, poolTimeout（秒）
+ * - SQL Server (mssql): pool.max/min/idleTimeoutMillis
+ * - DM (dmdb): 取决于驱动版本，通常使用 connectString
+ */
+export interface PoolConfig {
+  /** 最大连接数（默认 3） */
+  max?: number;
+  /** 最小空闲连接数（默认 1） */
+  min?: number;
+  /** 空闲连接超时（毫秒，默认 60000） */
+  idleTimeoutMs?: number;
+}
+
+/**
  * 数据库连接配置
  */
 export interface DbConfig {
@@ -189,6 +209,8 @@ export interface DbConfig {
   oracleClientPath?: string;
   /** Allowed directories for execute_sql_file tool (relative paths resolved from cwd) */
   allowedSqlFilePaths?: string[];
+  /** P1: 连接池配置（适用于 MySQL/PostgreSQL/Oracle/SQLServer/DM/Kingbase/GaussDB/OceanBase/TiDB/PolarDB/Vastbase/HighGo/GoldenDB） */
+  poolConfig?: PoolConfig;
 }
 
 /**

@@ -31,6 +31,7 @@ export class KingbaseAdapter extends BaseAdapter {
     user?: string;
     password?: string;
     database?: string;
+    poolConfig?: { max?: number; min?: number; idleTimeoutMs?: number };
   };
 
   constructor(config: {
@@ -39,6 +40,7 @@ export class KingbaseAdapter extends BaseAdapter {
     user?: string;
     password?: string;
     database?: string;
+    poolConfig?: { max?: number; min?: number; idleTimeoutMs?: number };
   }) {
     super();
     this.config = config;
@@ -49,14 +51,20 @@ export class KingbaseAdapter extends BaseAdapter {
    */
   async connect(): Promise<void> {
     try {
+      // P1: poolConfig (DB_POOL_SIZE / DB_POOL_MIN / DB_POOL_IDLE_TIMEOUT_MS)
+      const poolMax = this.config.poolConfig?.max ?? 3;
+      const poolMin = this.config.poolConfig?.min ?? 1;
+      const poolIdleMs = this.config.poolConfig?.idleTimeoutMs ?? 60000;
+
       this.pool = new Pool({
         host: this.config.host,
         port: this.config.port,
         user: this.config.user,
         password: this.config.password,
         database: this.config.database,
-        max: 3,
-        idleTimeoutMillis: 60000,
+        max: poolMax,
+        min: poolMin,
+        idleTimeoutMillis: poolIdleMs,
         keepAlive: true,
         keepAliveInitialDelayMillis: 30000,
       });

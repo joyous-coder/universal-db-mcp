@@ -29,6 +29,7 @@ export class OceanBaseAdapter extends BaseAdapter {
     user?: string;
     password?: string;
     database?: string;
+    poolConfig?: { max?: number; min?: number; idleTimeoutMs?: number };
   };
 
   constructor(config: {
@@ -37,6 +38,7 @@ export class OceanBaseAdapter extends BaseAdapter {
     user?: string;
     password?: string;
     database?: string;
+    poolConfig?: { max?: number; min?: number; idleTimeoutMs?: number };
   }) {
     super();
     this.config = config;
@@ -47,6 +49,11 @@ export class OceanBaseAdapter extends BaseAdapter {
    */
   async connect(): Promise<void> {
     try {
+      // P1: poolConfig (DB_POOL_SIZE / DB_POOL_MIN / DB_POOL_IDLE_TIMEOUT_MS)
+      const poolMax = this.config.poolConfig?.max ?? 3;
+      const poolMin = this.config.poolConfig?.min ?? 1;
+      const poolIdleMs = this.config.poolConfig?.idleTimeoutMs ?? 60000;
+
       this.pool = mysql.createPool({
         host: this.config.host,
         port: this.config.port,
@@ -55,9 +62,9 @@ export class OceanBaseAdapter extends BaseAdapter {
         database: this.config.database,
         multipleStatements: false,
         waitForConnections: true,
-        connectionLimit: 3,
-        maxIdle: 1,
-        idleTimeout: 60000,
+        connectionLimit: poolMax,
+        maxIdle: poolMin,
+        idleTimeout: poolIdleMs,
         enableKeepAlive: true,
         keepAliveInitialDelay: 30000,
       });

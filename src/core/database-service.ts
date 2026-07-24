@@ -586,14 +586,45 @@ export class DatabaseService {
 
   /**
    * 构建枚举值查询 SQL（不含计数）
+   *
+   * P1: 使用抽样策略避免对大表做完整的 DISTINCT 扫描。
+   * 先随机抽样 10000 行（按 RANDOM()/RAND() 排序后取 LIMIT），
+   * 再对这些样本做 DISTINCT 并按值排序，最后取所需 limit。
    */
   private buildEnumValuesQuery(tableName: string, columnName: string, limit: number): string {
     const quotedTable = this.quoteIdentifier(tableName);
     const quotedColumn = this.quoteIdentifier(columnName);
 
-    const baseQuery = `SELECT DISTINCT ${quotedColumn} as value FROM ${quotedTable} WHERE ${quotedColumn} IS NOT NULL`;
+    // 抽样大小：固定 10000 行（足以覆盖大多数枚举分布）
+    const sampleSize = 10000;
+    // 抽样随机函数：MySQL 系用 RAND()，其他用 RANDOM()
+    const randFunc = this.useMySQLRandom() ? 'RAND()' : 'RANDOM()';
+
+    const sampleSubquery = `SELECT ${quotedColumn} FROM ${quotedTable} WHERE ${quotedColumn} IS NOT NULL ORDER BY ${randFunc} LIMIT ${sampleSize}`;
+
+    // 外层：基于样本取 DISTINCT 并排序；DISTINCT 在样本中已经去重，但 ORDER BY 需要确定性，
+    // 所以显式排序后再 LIMIT；appendLimit 处理各数据库的 LIMIT/FETCH/TOP 语法差异
+    const baseQuery = `SELECT DISTINCT ${quotedColumn} as value FROM (${sampleSubquery}) ORDER BY ${quotedColumn}`;
 
     return this.appendLimit(baseQuery, limit);
+  }
+
+  /**
+   * 判断当前数据库是否使用 MySQL 风格的 RAND()（而不是 RANDOM()）。
+   * MySQL / TiDB / OceanBase / PolarDB / GoldenDB 兼容 MySQL RAND()。
+   */
+  private useMySQLRandom(): boolean {
+    const dbType = this.config.type;
+    switch (dbType) {
+      case 'mysql':
+      case 'tidb':
+      case 'oceanbase':
+      case 'polardb':
+      case 'goldendb':
+        return true;
+      default:
+        return false;
+    }
   }
 
   /**

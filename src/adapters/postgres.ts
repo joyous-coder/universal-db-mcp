@@ -30,6 +30,7 @@ export class PostgreSQLAdapter extends BaseAdapter {
     user?: string;
     password?: string;
     database?: string;
+    poolConfig?: { max?: number; min?: number; idleTimeoutMs?: number };
   };
 
   constructor(config: {
@@ -38,6 +39,7 @@ export class PostgreSQLAdapter extends BaseAdapter {
     user?: string;
     password?: string;
     database?: string;
+    poolConfig?: { max?: number; min?: number; idleTimeoutMs?: number };
   }) {
     super();
     this.config = config;
@@ -48,6 +50,11 @@ export class PostgreSQLAdapter extends BaseAdapter {
    */
   async connect(): Promise<void> {
     try {
+      // P1: poolConfig (DB_POOL_SIZE / DB_POOL_MIN / DB_POOL_IDLE_TIMEOUT_MS)，未配置时回退到原默认值
+      const poolMax = this.config.poolConfig?.max ?? 3;
+      const poolMin = this.config.poolConfig?.min ?? 1;
+      const poolIdleMs = this.config.poolConfig?.idleTimeoutMs ?? 60000;
+
       this.pool = new Pool({
         host: this.config.host,
         port: this.config.port,
@@ -55,8 +62,9 @@ export class PostgreSQLAdapter extends BaseAdapter {
         password: this.config.password,
         database: this.config.database,
         // 连接池配置
-        max: 3,
-        idleTimeoutMillis: 60000,
+        max: poolMax,
+        min: poolMin,
+        idleTimeoutMillis: poolIdleMs,
         // TCP Keep-Alive：防止连接被服务端或中间件超时关闭
         keepAlive: true,
         keepAliveInitialDelayMillis: 30000,

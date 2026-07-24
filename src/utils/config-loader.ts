@@ -74,6 +74,16 @@ export function loadFromEnv(): Partial<AppConfig> {
 
   // Database configuration (for single-connection mode)
   if (process.env.DB_TYPE) {
+    // P1: Parse pool config from env (DB_POOL_SIZE / DB_POOL_MIN / DB_POOL_IDLE_TIMEOUT_MS)
+    // Only include the field if at least one of the three is provided, so adapters
+    // can fall back to their own defaults when nothing is configured.
+    const poolMax = process.env.DB_POOL_SIZE ? parseInt(process.env.DB_POOL_SIZE, 10) : undefined;
+    const poolMin = process.env.DB_POOL_MIN ? parseInt(process.env.DB_POOL_MIN, 10) : undefined;
+    const poolIdleTimeoutMs = process.env.DB_POOL_IDLE_TIMEOUT_MS
+      ? parseInt(process.env.DB_POOL_IDLE_TIMEOUT_MS, 10)
+      : undefined;
+    const hasAnyPoolEnv = poolMax !== undefined || poolMin !== undefined || poolIdleTimeoutMs !== undefined;
+
     config.database = {
       type: process.env.DB_TYPE as any,
       host: process.env.DB_HOST,
@@ -85,6 +95,13 @@ export function loadFromEnv(): Partial<AppConfig> {
       allowWrite: process.env.DB_ALLOW_WRITE === 'true',
       allowedSqlFilePaths: process.env.DB_ALLOWED_FILE_PATHS
         ? process.env.DB_ALLOWED_FILE_PATHS.split(',').map(p => p.trim()).filter(Boolean)
+        : undefined,
+      poolConfig: hasAnyPoolEnv
+        ? {
+            max: poolMax,
+            min: poolMin,
+            idleTimeoutMs: poolIdleTimeoutMs,
+          }
         : undefined,
     };
   }

@@ -32,6 +32,7 @@ export class OracleAdapter extends BaseAdapter {
     sid?: string;
     connectString?: string;
     oracleClientPath?: string;
+    poolConfig?: { max?: number; min?: number; idleTimeoutMs?: number };
   };
   private static thickModeInitialized = false;
 
@@ -45,6 +46,7 @@ export class OracleAdapter extends BaseAdapter {
     sid?: string;
     connectString?: string;
     oracleClientPath?: string;
+    poolConfig?: { max?: number; min?: number; idleTimeoutMs?: number };
   }) {
     super();
     this.config = config;
@@ -116,13 +118,22 @@ export class OracleAdapter extends BaseAdapter {
   async connect(): Promise<void> {
     try {
       const connectionString = this.buildConnectionString();
+      // P1: poolConfig (DB_POOL_SIZE / DB_POOL_MIN / DB_POOL_IDLE_TIMEOUT_MS)，
+      // poolTimeout 在 oracledb 中单位为秒，需要从毫秒转换
+      const poolMax = this.config.poolConfig?.max ?? 3;
+      const poolMin = this.config.poolConfig?.min ?? 1;
+      const poolTimeoutSec = Math.max(
+        1,
+        Math.round((this.config.poolConfig?.idleTimeoutMs ?? 60000) / 1000)
+      );
+
       this.pool = await oracledb.createPool({
         user: this.config.user,
         password: this.config.password,
         connectString: connectionString,
-        poolMin: 1,
-        poolMax: 3,
-        poolTimeout: 60,
+        poolMin: poolMin,
+        poolMax: poolMax,
+        poolTimeout: poolTimeoutSec,
         poolPingInterval: 30,
       });
       // 测试连接

@@ -55,6 +55,7 @@ export class DMAdapter extends BaseAdapter {
     user?: string;
     password?: string;
     database?: string;
+    poolConfig?: { max?: number; min?: number; idleTimeoutMs?: number };
   };
 
   constructor(config: {
@@ -63,6 +64,7 @@ export class DMAdapter extends BaseAdapter {
     user?: string;
     password?: string;
     database?: string;
+    poolConfig?: { max?: number; min?: number; idleTimeoutMs?: number };
   }) {
     super();
     this.config = config;
@@ -139,9 +141,23 @@ export class DMAdapter extends BaseAdapter {
       const port = this.config.port || 5236; // 达梦默认端口
       const connectString = `dm://${this.config.user}:${this.config.password}@${this.config.host}:${port}?loginEncrypt=false`;
 
+      // P1: poolConfig (DB_POOL_SIZE / DB_POOL_MIN / DB_POOL_IDLE_TIMEOUT_MS)
+      // dmdb 驱动的 poolTimeout 单位为秒（默认 60）
+      const poolMax = this.config.poolConfig?.max ?? 3;
+      const poolMin = this.config.poolConfig?.min ?? 1;
+      const poolTimeoutSec = Math.max(
+        0,
+        Math.round((this.config.poolConfig?.idleTimeoutMs ?? 60000) / 1000)
+      );
+
       // createPool 支持 connectString，getConnection 不支持
       // 所以先用 createPool 创建连接池，再从池中获取连接
-      this.pool = await DM.createPool({ connectString });
+      this.pool = await DM.createPool({
+        connectString,
+        poolMax,
+        poolMin,
+        poolTimeout: poolTimeoutSec,
+      });
       this.connection = await this.pool.getConnection();
       this.connectionConfig = { connectString };
 

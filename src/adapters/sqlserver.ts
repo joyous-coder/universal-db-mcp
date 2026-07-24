@@ -27,6 +27,7 @@ export class SQLServerAdapter extends BaseAdapter {
     user?: string;
     password?: string;
     database?: string;
+    poolConfig?: { max?: number; min?: number; idleTimeoutMs?: number };
   };
 
   constructor(config: {
@@ -35,6 +36,7 @@ export class SQLServerAdapter extends BaseAdapter {
     user?: string;
     password?: string;
     database?: string;
+    poolConfig?: { max?: number; min?: number; idleTimeoutMs?: number };
   }) {
     super();
     this.config = config;
@@ -48,6 +50,12 @@ export class SQLServerAdapter extends BaseAdapter {
       // 检测是否为 Azure SQL Database
       const isAzure = this.config.host.includes('.database.windows.net');
 
+      // P1: poolConfig (DB_POOL_SIZE / DB_POOL_MIN / DB_POOL_IDLE_TIMEOUT_MS)，
+      // 未配置时保持原默认值（max=10, min=0, idleTimeoutMillis=30000）
+      const poolMax = this.config.poolConfig?.max ?? 10;
+      const poolMin = this.config.poolConfig?.min ?? 0;
+      const poolIdleMs = this.config.poolConfig?.idleTimeoutMs ?? 30000;
+
       const poolConfig: sql.config = {
         server: this.config.host,
         port: this.config.port || 1433,
@@ -60,9 +68,9 @@ export class SQLServerAdapter extends BaseAdapter {
           enableArithAbort: true,
         },
         pool: {
-          max: 10,
-          min: 0,
-          idleTimeoutMillis: 30000,
+          max: poolMax,
+          min: poolMin,
+          idleTimeoutMillis: poolIdleMs,
         },
       };
 

@@ -20,7 +20,10 @@
 
 import * as pinyinNs from 'pinyin';
 // pinyin is CJS — `pinyinNs.pinyin` is the function, `pinyinNs.Pinyin` is the class
-const pinyin: (text: string, options?: any) => string[][] = (pinyinNs as any).pinyin;
+const pinyin = (pinyinNs as any).pinyin as ((text: string, options?: any) => string[][]) & {
+  STYLE_NORMAL: number;
+  STYLE_FIRST_LETTER: number;
+};
 
 export interface ResolveContext {
   /** Values from previously-generated columns (for cross-column references) */

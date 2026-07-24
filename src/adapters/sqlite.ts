@@ -24,6 +24,11 @@ export class SQLiteAdapter extends BaseAdapter {
     readonly?: boolean;
   };
 
+  // P1: Schema cache (TTL: 5 minutes) — avoids repeated PRAGMA scans
+  private schemaCache: SchemaInfo | null = null;
+  private schemaCacheTime: number = 0;
+  private static readonly SCHEMA_CACHE_TTL_MS = 5 * 60 * 1000;
+
   constructor(config: {
     filePath: string;
     readonly?: boolean;
@@ -117,10 +122,18 @@ export class SQLiteAdapter extends BaseAdapter {
 
   /**
    * 获取数据库结构信息
+   *
+   * P1: Results are cached for 5 minutes to avoid repeated PRAGMA scans,
+   * which are expensive on large SQLite databases.
    */
   async getSchema(): Promise<SchemaInfo> {
     if (!this.db) {
       throw new Error('数据库未连接');
+    }
+
+    // P1: 返回缓存的 Schema（如果仍然有效）
+    if (this.schemaCache && (Date.now() - this.schemaCacheTime) < SQLiteAdapter.SCHEMA_CACHE_TTL_MS) {
+      return this.schemaCache;
     }
 
     try {
@@ -160,18 +173,35 @@ export class SQLiteAdapter extends BaseAdapter {
         }
       }
 
-      return {
+      const schema: SchemaInfo = {
         databaseType: 'sqlite',
         databaseName,
         tables: tableInfos,
         version,
         relationships: relationships.length > 0 ? relationships : undefined,
       };
+
+      // P1: 缓存成功的 Schema
+      this.schemaCache = schema;
+      this.schemaCacheTime = Date.now();
+
+      return schema;
     } catch (error) {
+      // P1: 出错时清除缓存，避免下次返回过时的数据
+      this.clearSchemaCache();
       throw new Error(
         `获取数据库结构失败: ${error instanceof Error ? error.message : String(error)}`
       );
     }
+  }
+
+  /**
+   * P1: 清除 Schema 缓存
+   * 用于在 schema 发生变化（如 ALTER TABLE）后强制刷新
+   */
+  clearSchemaCache(): void {
+    this.schemaCache = null;
+    this.schemaCacheTime = 0;
   }
 
   /**
