@@ -9,6 +9,7 @@ import { setupHealthRoutes } from './health.js';
 import { setupConnectionRoutes } from './connection.js';
 import { setupQueryRoutes } from './query.js';
 import { setupSchemaRoutes } from './schema.js';
+import { setupSqlFileRoutes } from './sql-file.js';
 import { setupMcpSseRoutes } from './mcp-sse.js';
 
 /**
@@ -32,4 +33,7 @@ export async function setupRoutes(
 
   // Schema routes
   await setupSchemaRoutes(fastify, connectionManager);
+
+  // SQL file execution routes
+  await setupSqlFileRoutes(fastify, connectionManager);
 }

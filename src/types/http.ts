@@ -64,6 +64,18 @@ export interface AppConfig {
 }
 
 /**
+ * SQL file execution request (HTTP)
+ * Mirrors the MCP `execute_sql_file` tool.
+ */
+export interface SqlFileRequest {
+  sessionId: string;
+  /** Absolute path to the .sql file (must be in DB_ALLOWED_FILE_PATHS) */
+  filePath: string;
+  /** Wrap execution in a transaction (default: true) */
+  useTransaction?: boolean;
+}
+
+/**
  * Connect Request
  */
 export interface ConnectRequest {
