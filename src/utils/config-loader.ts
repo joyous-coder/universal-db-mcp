@@ -36,6 +36,15 @@ const DEFAULT_HTTP_CONFIG: HttpConfig = {
 };
 
 /**
+ * Parse a positive integer from env. Returns undefined for invalid/empty/zero/negative.
+ */
+function parsePositiveInt(val: string | undefined): number | undefined {
+  if (!val) return undefined;
+  const n = parseInt(val, 10);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/**
  * Load configuration from environment variables
  */
 export function loadFromEnv(): Partial<AppConfig> {
@@ -105,6 +114,13 @@ export function loadFromEnv(): Partial<AppConfig> {
         : undefined,
     };
   }
+
+  // P0-1: parse query timeout / slow threshold env vars (top-level config,
+  // independent of DB_TYPE so tests and HTTP service-level config work)
+  const queryTimeoutMs = parsePositiveInt(process.env.DB_QUERY_TIMEOUT_MS);
+  const slowQueryThresholdMs = parsePositiveInt(process.env.DB_SLOW_QUERY_THRESHOLD_MS);
+  if (queryTimeoutMs !== undefined) config.queryTimeoutMs = queryTimeoutMs;
+  if (slowQueryThresholdMs !== undefined) config.slowQueryThresholdMs = slowQueryThresholdMs;
 
   return config;
 }

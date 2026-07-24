@@ -57,6 +57,10 @@ export interface AppConfig {
   mode: 'mcp' | 'http';
   database?: DbConfig;
   http?: HttpConfig;
+  /** P0-1: query timeout in ms (overrides default 30000) */
+  queryTimeoutMs?: number;
+  /** P0-1: slow query log threshold in ms (overrides default 5000) */
+  slowQueryThresholdMs?: number;
 }
 
 /**
