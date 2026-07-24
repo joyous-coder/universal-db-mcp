@@ -33,11 +33,32 @@ export class QueryAnalyzer {
   private enabled: boolean;
   /** v2.19: optional callback returning the active profile name (or null). */
   private profileProvider: (() => string | null) | null = null;
+  /** v2.20: rotation old keys (set at construction, consumed by KeyRotator). */
+  private _templatesCipherKeyOld?: string;
+  private _historyCipherKeyOld?: string;
 
   constructor(opts: QueryAnalyzerOptions) {
     this.enabled = opts.enabled;
-    this.templates = new TemplateStore(opts.templatesDbPath);
-    this.history = new HistoryStore(opts.historyDbPath, { ttlDays: opts.historyTtlDays, maxRows: opts.historyMaxRows });
+    this.templates = new TemplateStore(opts.templatesDbPath, {
+      cipherKey: opts.templatesCipherKey,
+    });
+    this.history = new HistoryStore(opts.historyDbPath, {
+      ttlDays: opts.historyTtlDays,
+      maxRows: opts.historyMaxRows,
+      cipherKey: opts.historyCipherKey,
+    });
+    // v2.20: cipherKeyOld is exposed via {{getCipherKeyOld}} accessor pattern
+    // (currently used only by KeyRotator, not by init — see Task 3).
+    this._templatesCipherKeyOld = opts.templatesCipherKeyOld;
+    this._historyCipherKeyOld = opts.historyCipherKeyOld;
+  }
+
+  /** v2.20: rotation metadata accessor (consumed by KeyRotator). */
+  getRotationOldKeys(): { templates?: string; history?: string } {
+    return {
+      templates: this._templatesCipherKeyOld,
+      history: this._historyCipherKeyOld,
+    };
   }
 
   isEnabled(): boolean { return this.enabled; }

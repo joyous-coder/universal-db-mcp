@@ -1,27 +1,52 @@
 /**
- * TemplateStore (v2.17)
+ * TemplateStore (v2.17 + v2.19 + v2.20 cipher)
  *
  * SQLite-backed CRUD for parameterized SQL templates.
- * Uses v2.16 multi-backend SQLite (node:sqlite or better-sqlite3).
+ * Uses v2.16 multi-backend SQLite, transparently switching to SQLCipher
+ * when a non-empty cipherKey is provided (v2.20).
  */
 
 import { nanoid } from 'nanoid';
-import { detectSqliteBackend } from '../adapters/sqlite/types.js';
 import type { SQLiteConnection } from '../adapters/sqlite/types.js';
+import { detectEncryptedBackend } from '../utils/encrypted-sqlite.js';
 import type { Template, TemplateInput, TemplateParam } from './query-analyzer-types.js';
+
+export interface TemplateStoreOptions {
+  /**
+   * v2.20: SQLCipher key for transparent encryption of templates.db.
+   * Undefined/empty → plaintext (v2.17-v2.19 behavior).
+   */
+  cipherKey?: string;
+}
 
 export class TemplateStore {
   private conn: SQLiteConnection | null = null;
   private initPromise: Promise<void> | null = null;
+  private cipherKey?: string;
+  private _encrypted = false;
+  /** v2.20: true after init() once the backend is known to be SQLCipher. */
+  public get encrypted(): boolean { return this._encrypted; }
 
-  constructor(public readonly dbPath: string) {}
+  constructor(public readonly dbPath: string, options?: TemplateStoreOptions) {
+    this.cipherKey = options?.cipherKey;
+  }
 
   private async init(): Promise<void> {
     if (this.conn) return;
     if (this.initPromise) return this.initPromise;
     this.initPromise = (async () => {
-      const backend = await detectSqliteBackend();
-      this.conn = await backend.open(this.dbPath, { readonly: false });
+      // v2.20: pick encrypted or native backend based on cipherKey.
+      const backend = detectEncryptedBackend(this.cipherKey);
+      this._encrypted = backend.name === 'cipher';
+      try {
+        this.conn = await backend.open(this.dbPath, {
+          readonly: false,
+          cipherKey: this.cipherKey,
+        });
+      } catch (err) {
+        this.initPromise = null;
+        throw err;
+      }
       this.conn.exec(`
         CREATE TABLE IF NOT EXISTS templates (
           id TEXT PRIMARY KEY,

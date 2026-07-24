@@ -81,6 +81,8 @@ export interface MetricsConfig {
 /**
  * Query analyzer configuration (v2.17+)
  * Controls Explain Plan, SQL Lint, query history, and parameterized templates.
+ *
+ * v2.20: cipher keys for templates.db / history.db (uses better-sqlite3-multiple-ciphers optional dep).
  */
 export interface QueryAnalyzerConfig {
   enabled: boolean;
@@ -89,6 +91,14 @@ export interface QueryAnalyzerConfig {
   historyTtlDays: number;
   historyMaxRows: number;
   explainTimeoutMs: number;
+  /** v2.20: SQLCipher key for templates.db. Undefined/empty → plaintext. */
+  templatesCipherKey?: string;
+  /** v2.20: SQLCipher key for history.db. Undefined/empty → plaintext. */
+  historyCipherKey?: string;
+  /** v2.20: rotation-old key for templates.db. */
+  templatesCipherKeyOld?: string;
+  /** v2.20: rotation-old key for history.db. */
+  historyCipherKeyOld?: string;
 }
 
 /**
@@ -270,6 +280,11 @@ export interface AuthenticatedRequest {
 /**
  * Profile Manager configuration (v2.18+)
  * Controls multi-database profile management (save / use / route / global schema).
+ *
+ * v2.19: cipherKey for profiles.db (uses better-sqlite3-multiple-ciphers optional dep).
+ * v2.20: templatesDbKey / historyDbKey moved to {@link QueryAnalyzerConfig}
+ *        (their stores belong to QueryAnalyzer, not ProfileManager).
+ * v2.20: cipherKeyOld for rotation (set during one startup cycle after rotation).
  */
 export interface ProfileManagerConfig {
   enabled: boolean;
@@ -279,8 +294,6 @@ export interface ProfileManagerConfig {
   readRouting: 'round-robin' | 'random' | 'least-loaded';
   /** v2.19: SQLCipher key for profiles.db. Undefined/empty → plaintext fallback. */
   cipherKey?: string;
-  /** v2.19 placeholder: SQLCipher key for templates.db (not yet enabled). */
-  templatesDbKey?: string;
-  /** v2.19 placeholder: SQLCipher key for history.db (not yet enabled). */
-  historyDbKey?: string;
+  /** v2.20: rotation-old key. Set when DB_PROFILE_ENCRYPTION_KEY_OLD is provided. */
+  cipherKeyOld?: string;
 }

@@ -55,6 +55,8 @@ export interface ProfileManagerOptions {
   readRouting: ReadRouting;
   /** v2.19: SQLCipher key for profiles.db encryption (optional, falls back to plaintext) */
   cipherKey?: string;
+  /** v2.20: rotation old key (used by KeyRotator on startup). */
+  cipherKeyOld?: string;
   cacheConfig?: Partial<SchemaCacheConfig>;
 }
 

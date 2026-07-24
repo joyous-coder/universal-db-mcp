@@ -143,7 +143,19 @@ export function loadFromEnv(): Partial<AppConfig> {
   const qaTtl = process.env.DB_HISTORY_TTL_DAYS;
   const qaMax = process.env.DB_HISTORY_MAX_ROWS;
   const qaTimeout = process.env.DB_EXPLAIN_TIMEOUT_MS;
-  if (qaEnabled !== undefined || qaTemplates !== undefined || qaHistory !== undefined || qaTtl !== undefined || qaMax !== undefined || qaTimeout !== undefined) {
+  // v2.20: cipher keys for templates.db / history.db (was v2.19 placeholder in profileManager;
+  // moved to queryAnalyzer where the stores belong).
+  const qaTemplatesKey = process.env.DB_TEMPLATES_DB_KEY;
+  const qaHistoryKey = process.env.DB_HISTORY_DB_KEY;
+  // v2.20: rotation old key for the same pair.
+  const qaTemplatesKeyOld = process.env.DB_TEMPLATES_DB_KEY_OLD;
+  const qaHistoryKeyOld = process.env.DB_HISTORY_DB_KEY_OLD;
+  if (
+    qaEnabled !== undefined || qaTemplates !== undefined || qaHistory !== undefined ||
+    qaTtl !== undefined || qaMax !== undefined || qaTimeout !== undefined ||
+    qaTemplatesKey !== undefined || qaHistoryKey !== undefined ||
+    qaTemplatesKeyOld !== undefined || qaHistoryKeyOld !== undefined
+  ) {
     config.queryAnalyzer = {
       enabled: qaEnabled === undefined ? true : /^(true|1|yes)$/i.test(qaEnabled),
       templatesDbPath: qaTemplates || undefined,
@@ -151,6 +163,11 @@ export function loadFromEnv(): Partial<AppConfig> {
       historyTtlDays: parsePositiveInt(qaTtl) ?? 30,
       historyMaxRows: parsePositiveInt(qaMax) ?? 10000,
       explainTimeoutMs: parsePositiveInt(qaTimeout) ?? 10000,
+      // v2.20: empty string → undefined (fallback plaintext)
+      templatesCipherKey: qaTemplatesKey ? qaTemplatesKey : undefined,
+      historyCipherKey: qaHistoryKey ? qaHistoryKey : undefined,
+      templatesCipherKeyOld: qaTemplatesKeyOld ? qaTemplatesKeyOld : undefined,
+      historyCipherKeyOld: qaHistoryKeyOld ? qaHistoryKeyOld : undefined,
     };
   }
 
@@ -160,14 +177,13 @@ export function loadFromEnv(): Partial<AppConfig> {
   const pmMax = process.env.DB_PROFILES_MAX;
   const pmDefaultRole = process.env.DB_DEFAULT_PROFILE_ROLE;
   const pmReadRouting = process.env.DB_READ_ROUTING;
-  // v2.19: cipher keys (profiles.db active; templates/history placeholders)
+  // v2.19: cipher key for profiles.db. v2.20: rotation env (DB_PROFILE_ENCRYPTION_KEY_OLD).
   const pmCipherKey = process.env.DB_PROFILE_ENCRYPTION_KEY;
-  const pmTemplatesKey = process.env.DB_TEMPLATES_DB_KEY;
-  const pmHistoryKey = process.env.DB_HISTORY_DB_KEY;
+  const pmCipherKeyOld = process.env.DB_PROFILE_ENCRYPTION_KEY_OLD;
   if (
     pmEnabled !== undefined || pmProfilesPath !== undefined || pmMax !== undefined ||
     pmDefaultRole !== undefined || pmReadRouting !== undefined ||
-    pmCipherKey !== undefined || pmTemplatesKey !== undefined || pmHistoryKey !== undefined
+    pmCipherKey !== undefined || pmCipherKeyOld !== undefined
   ) {
     config.profileManager = {
       enabled: pmEnabled === undefined ? true : /^(true|1|yes)$/i.test(pmEnabled),
@@ -177,8 +193,8 @@ export function loadFromEnv(): Partial<AppConfig> {
       readRouting: ['round-robin', 'random', 'least-loaded'].includes(pmReadRouting ?? '') ? (pmReadRouting as 'round-robin' | 'random' | 'least-loaded') : 'round-robin',
       // v2.19: empty string → undefined (fallback plaintext)
       cipherKey: pmCipherKey ? pmCipherKey : undefined,
-      templatesDbKey: pmTemplatesKey ? pmTemplatesKey : undefined,
-      historyDbKey: pmHistoryKey ? pmHistoryKey : undefined,
+      // v2.20: rotation — old key still valid alongside new key for one startup cycle
+      cipherKeyOld: pmCipherKeyOld ? pmCipherKeyOld : undefined,
     };
   }
 

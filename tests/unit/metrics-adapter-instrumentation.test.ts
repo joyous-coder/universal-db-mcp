@@ -66,15 +66,24 @@ describe('DatabaseService instrumentation', () => {
     });
     svc.setQueryAnalyzer(qa);
     svc.setActiveProfileProvider(() => 'prod-mysql');
-    await svc.executeQuery('SELECT 1 AS v');
-    // recordQuery is async — give it a moment to flush
-    await new Promise(r => setTimeout(r, 50));
-    const entries = await qa.getHistory({ profileName: 'prod-mysql' });
-    expect(entries.length).toBeGreaterThanOrEqual(1);
-    expect((entries[0] as any).profile_name).toBe('prod-mysql');
-    await qa.close();
-    await adapter.disconnect();
-    [tplPath, histPath].forEach(p => { if (existsSync(p)) unlinkSync(p); });
+    try {
+      await svc.executeQuery('SELECT 1 AS v');
+      // recordQuery is async — give it a moment to flush
+      await new Promise(r => setTimeout(r, 50));
+      const entries = await qa.getHistory({ profileName: 'prod-mysql' });
+      expect(entries.length).toBeGreaterThanOrEqual(1);
+      expect((entries[0] as any).profile_name).toBe('prod-mysql');
+    } finally {
+      try { await qa.close(); } catch { /* ignore */ }
+      try { await adapter.disconnect(); } catch { /* ignore */ }
+      // WAL files may stick briefly on Windows — retry unlink with small delay
+      for (let i = 0; i < 5; i++) {
+        for (const p of [tplPath, histPath, `${tplPath}-wal`, `${tplPath}-shm`, `${histPath}-wal`, `${histPath}-shm`]) {
+          if (existsSync(p)) { try { unlinkSync(p); } catch { /* ignore EBUSY */ } }
+        }
+        await new Promise(r => setTimeout(r, 50));
+      }
+    }
   });
 
   it('setActiveProfileProvider can be cleared with null', () => {
@@ -109,21 +118,47 @@ describe('DatabaseService instrumentation', () => {
     const entries = await qa.getHistory({ profileName: 'late-prop' });
     expect(entries.length).toBeGreaterThanOrEqual(1);
     expect((entries[0] as any).profile_name).toBe('late-prop');
-    await qa.close();
-    await adapter.disconnect();
-    [tplPath, histPath].forEach(p => { if (existsSync(p)) unlinkSync(p); });
+    try {
+      try { await qa.close(); } catch { /* ignore */ }
+      try { await adapter.disconnect(); } catch { /* ignore */ }
+      for (let i = 0; i < 5; i++) {
+        for (const p of [tplPath, histPath, `${tplPath}-wal`, `${tplPath}-shm`, `${histPath}-wal`, `${histPath}-shm`]) {
+          if (existsSync(p)) { try { unlinkSync(p); } catch { /* ignore EBUSY */ } }
+        }
+        await new Promise(r => setTimeout(r, 50));
+      }
+    } catch { /* ignore */ }
   });
 });
 
 describe('DatabaseService queryAnalyzer integration (v2.17)', () => {
-  const ts = Date.now();
-  const tplPath = `.tmp-qa-ds-tpl-${ts}.db`;
-  const histPath = `.tmp-qa-ds-hist-${ts}.db`;
+  const tsBase = Date.now();
+  // Use a per-test suffix to avoid concurrent EBUSY on shared paths.
+  let testCounter = 0;
+  const paths = () => {
+    const i = testCounter++;
+    return {
+      tplPath: `.tmp-qa-ds-tpl-${tsBase}-${i}.db`,
+      histPath: `.tmp-qa-ds-hist-${tsBase}-${i}.db`,
+    };
+  };
+  const cleanupRetrying = async (paths: string[]) => {
+    for (let i = 0; i < 5; i++) {
+      for (const p of paths) {
+        for (const suffix of ['', '-wal', '-shm']) {
+          const fp = p + suffix;
+          if (existsSync(fp)) { try { unlinkSync(fp); } catch { /* ignore EBUSY */ } }
+        }
+      }
+      await new Promise(r => setTimeout(r, 50));
+    }
+  };
 
   it('executeQuery response includes lint result', async () => {
     const adapter = new SQLiteAdapter({ filePath: ':memory:', readonly: false });
     await adapter.connect();
     const svc = new DatabaseService(adapter, { type: 'sqlite', allowWrite: true } as DbConfig);
+    const { tplPath, histPath } = paths();
     const qa = new QueryAnalyzer({
       enabled: true,
       templatesDbPath: tplPath,
@@ -132,19 +167,23 @@ describe('DatabaseService queryAnalyzer integration (v2.17)', () => {
       historyMaxRows: 100,
       explainTimeoutMs: 5000,
     });
-    svc.setQueryAnalyzer(qa);
-    const result = await svc.executeQuery('SELECT * FROM sqlite_master');
-    expect((result as any).lint).toBeDefined();
-    expect((result as any).lint.issues.some((i: any) => i.rule === 'select-star')).toBe(true);
-    await qa.close();
-    await adapter.disconnect();
-    [tplPath, histPath].forEach(p => { if (existsSync(p)) unlinkSync(p); });
+    try {
+      svc.setQueryAnalyzer(qa);
+      const result = await svc.executeQuery('SELECT * FROM sqlite_master');
+      expect((result as any).lint).toBeDefined();
+      expect((result as any).lint.issues.some((i: any) => i.rule === 'select-star')).toBe(true);
+    } finally {
+      try { await qa.close(); } catch { /* ignore */ }
+      try { await adapter.disconnect(); } catch { /* ignore */ }
+      await cleanupRetrying([tplPath, histPath]);
+    }
   });
 
   it('recordQuery is called after executeQuery', async () => {
     const adapter = new SQLiteAdapter({ filePath: ':memory:', readonly: false });
     await adapter.connect();
     const svc = new DatabaseService(adapter, { type: 'sqlite', allowWrite: true } as DbConfig);
+    const { tplPath, histPath } = paths();
     const qa = new QueryAnalyzer({
       enabled: true,
       templatesDbPath: tplPath,
@@ -153,13 +192,16 @@ describe('DatabaseService queryAnalyzer integration (v2.17)', () => {
       historyMaxRows: 100,
       explainTimeoutMs: 5000,
     });
-    svc.setQueryAnalyzer(qa);
-    await svc.executeQuery('SELECT 1 AS v');
-    await new Promise(r => setTimeout(r, 50));
-    const entries = await qa.getHistory({ limit: 10 });
-    expect(entries.length).toBeGreaterThanOrEqual(1);
-    await qa.close();
-    await adapter.disconnect();
-    [tplPath, histPath].forEach(p => { if (existsSync(p)) unlinkSync(p); });
+    try {
+      svc.setQueryAnalyzer(qa);
+      await svc.executeQuery('SELECT 1 AS v');
+      await new Promise(r => setTimeout(r, 50));
+      const entries = await qa.getHistory({ limit: 10 });
+      expect(entries.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      try { await qa.close(); } catch { /* ignore */ }
+      try { await adapter.disconnect(); } catch { /* ignore */ }
+      await cleanupRetrying([tplPath, histPath]);
+    }
   });
 });

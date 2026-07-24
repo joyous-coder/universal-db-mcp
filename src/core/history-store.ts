@@ -1,12 +1,13 @@
 /**
- * HistoryStore (v2.17 + v2.19)
+ * HistoryStore (v2.17 + v2.19 + v2.20 cipher + FTS5)
  *
  * SQLite-backed query history with TTL + LRU eviction.
  * v2.19: adds profile_name column + filter + groupBy='profile' aggregate.
+ * v2.20: SQLCipher encryption support + FTS5 virtual table for full-text search.
  */
 
-import { detectSqliteBackend } from '../adapters/sqlite/types.js';
 import type { SQLiteConnection } from '../adapters/sqlite/types.js';
+import { detectEncryptedBackend } from '../utils/encrypted-sqlite.js';
 import type {
   QueryHistoryEntry,
   QueryHistoryInput,
@@ -17,20 +18,38 @@ import type {
 export interface HistoryStoreOptions {
   ttlDays: number;
   maxRows: number;
+  /** v2.20: SQLCipher key for transparent encryption of history.db. */
+  cipherKey?: string;
 }
 
 export class HistoryStore {
   private conn: SQLiteConnection | null = null;
   private initPromise: Promise<void> | null = null;
+  private cipherKey?: string;
+  private _encrypted = false;
+  /** v2.20: true after init() once the backend is known to be SQLCipher. */
+  public get encrypted(): boolean { return this._encrypted; }
 
-  constructor(public readonly dbPath: string, public readonly options: HistoryStoreOptions) {}
+  constructor(public readonly dbPath: string, public readonly options: HistoryStoreOptions) {
+    this.cipherKey = options.cipherKey;
+  }
 
   private async init(): Promise<void> {
     if (this.conn) return;
     if (this.initPromise) return this.initPromise;
     this.initPromise = (async () => {
-      const backend = await detectSqliteBackend();
-      this.conn = await backend.open(this.dbPath, { readonly: false });
+      // v2.20: pick encrypted or native backend based on cipherKey.
+      const backend = detectEncryptedBackend(this.cipherKey);
+      this._encrypted = backend.name === 'cipher';
+      try {
+        this.conn = await backend.open(this.dbPath, {
+          readonly: false,
+          cipherKey: this.cipherKey,
+        });
+      } catch (err) {
+        this.initPromise = null;
+        throw err;
+      }
       this.conn.exec(`
         CREATE TABLE IF NOT EXISTS query_history (
           id INTEGER PRIMARY KEY AUTOINCREMENT,

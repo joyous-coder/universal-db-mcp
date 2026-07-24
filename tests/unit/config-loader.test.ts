@@ -216,12 +216,14 @@ describe('Configuration Loader', () => {
     });
   });
 
-  describe('profileManager cipher keys (v2.19)', () => {
-    it('mergeConfigs default does not set cipherKey', () => {
+  describe('profileManager cipher keys (v2.19 + v2.20)', () => {
+    it('mergeConfigs default does not set any cipherKey', () => {
       const merged = mergeConfigs({});
       expect(merged.profileManager?.cipherKey).toBeUndefined();
-      expect(merged.profileManager?.templatesDbKey).toBeUndefined();
-      expect(merged.profileManager?.historyDbKey).toBeUndefined();
+      expect(merged.profileManager?.cipherKeyOld).toBeUndefined();
+      // v2.20: tpl/hist cipher keys moved to queryAnalyzer
+      expect(merged.queryAnalyzer?.templatesCipherKey).toBeUndefined();
+      expect(merged.queryAnalyzer?.historyCipherKey).toBeUndefined();
     });
 
     it('reads DB_PROFILE_ENCRYPTION_KEY', () => {
@@ -230,23 +232,32 @@ describe('Configuration Loader', () => {
       expect(cfg.profileManager?.cipherKey).toBe('my-secret-key-32-chars-long!!');
     });
 
-    it('reads DB_TEMPLATES_DB_KEY placeholder', () => {
-      process.env.DB_TEMPLATES_DB_KEY = 'templates-key';
+    it('reads DB_PROFILE_ENCRYPTION_KEY_OLD (v2.20 rotation)', () => {
+      process.env.DB_PROFILE_ENCRYPTION_KEY_OLD = 'old-key';
       const cfg = loadFromEnv();
-      expect(cfg.profileManager?.templatesDbKey).toBe('templates-key');
+      expect(cfg.profileManager?.cipherKeyOld).toBe('old-key');
     });
 
-    it('reads DB_HISTORY_DB_KEY placeholder', () => {
+    it('reads DB_TEMPLATES_DB_KEY (v2.20: in queryAnalyzer, was placeholder in profileManager)', () => {
+      process.env.DB_TEMPLATES_DB_KEY = 'templates-key';
+      const cfg = loadFromEnv();
+      expect(cfg.queryAnalyzer?.templatesCipherKey).toBe('templates-key');
+    });
+
+    it('reads DB_HISTORY_DB_KEY (v2.20: in queryAnalyzer)', () => {
       process.env.DB_HISTORY_DB_KEY = 'history-key';
       const cfg = loadFromEnv();
-      expect(cfg.profileManager?.historyDbKey).toBe('history-key');
+      expect(cfg.queryAnalyzer?.historyCipherKey).toBe('history-key');
     });
 
     it('does not include cipherKey when env var is empty string', () => {
       process.env.DB_PROFILE_ENCRYPTION_KEY = '';
+      process.env.DB_TEMPLATES_DB_KEY = '';
+      process.env.DB_HISTORY_DB_KEY = '';
       const cfg = loadFromEnv();
-      // empty string should be treated as undefined (fallback to plaintext)
       expect(cfg.profileManager?.cipherKey).toBeUndefined();
+      expect(cfg.queryAnalyzer?.templatesCipherKey).toBeUndefined();
+      expect(cfg.queryAnalyzer?.historyCipherKey).toBeUndefined();
     });
   });
 });

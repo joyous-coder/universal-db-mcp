@@ -125,4 +125,12 @@ export interface QueryAnalyzerOptions {
   historyTtlDays: number;
   historyMaxRows: number;
   explainTimeoutMs: number;
+  /** v2.20: SQLCipher key for templates.db. */
+  templatesCipherKey?: string;
+  /** v2.20: SQLCipher key for history.db. */
+  historyCipherKey?: string;
+  /** v2.20: rotation old key for templates.db (used during single-startup rotation cycle). */
+  templatesCipherKeyOld?: string;
+  /** v2.20: rotation old key for history.db. */
+  historyCipherKeyOld?: string;
 }
