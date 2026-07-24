@@ -2,6 +2,61 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.2.0] - 2026-07-25
+
+### 新增 (Tool Lazy-Loading)
+
+- **ToolRegistry** — `src/mcp/tool-registry.ts` 新增；按 group 管理 31 个 route-able MCP tool（stateful core 12-14 个保留在 mcp-server switch 中）
+- **4 lazy group** — `query-experience` (9) / `profiles` (11) / `data-governance` (5) / `index-advisor` (3)；default session 不挂载
+- **2 meta-tool** — `use_tool_group` / `use_tool_schema` 始终在 core
+- **info-lazy** — `generate_sample_data` 拆轻 schema + on-demand 全 schema
+- **Session 隔离** — stdio 固定 `stdio-default`；SSE/Streamable HTTP 用 MCP SDK sessionId
+
+### 新增 MCP tool handler（11 个）
+
+#### data-governance (4)
+- `export_backup` — 导出 profile 为 SQL dump
+- `audit_log` — 查询 SQL 审计日志 (actor/severity/profile)
+- `get_pii_config` — 读 PII 脱敏配置
+- `set_pii_config` — 运行时更新 PII 规则
+
+#### profile lifecycle (5)
+- `get_profile` / `delete_profile` / `enable_profile` / `disable_profile` / `disconnect_profile`
+
+#### profile import/export (2)
+- `export_profiles` — 导出 profile 为 YAML/JSON (默认 redact 密码)
+- `import_profiles` — 导入 profile (merge/replace + dryRun)
+
+### 注册已有但未挂载的 MCP tool（4 个）
+
+- `compare_profile_schemas` (v3.0)
+- `explain_query_with_advice` / `compare_query_plans` / `list_query_plans` (v3.1)
+
+### 配置
+
+- 2 新 env var: `DB_LAZY_LOAD_ENABLED` (默认 **false** = v3.1 行为 opt-in) / `DB_LAZY_DEFAULT_GROUP` (默认空)
+- HTTP REST API 不受影响（保持 v3.1 行为）
+- 升级 v3.1 → v3.2 不需任何 migration
+
+### Token 节省（opt-in 时）
+
+- Default session：~700 tokens（v3.1 是 ~1,750，节省 60%）
+- 全 group 激活：~2,050 tokens（比 v3.1 多 17%，但更结构化）
+
+### 测试
+
+- 新增 4 单元测试文件（tool-registry / config-loader lazy / tool-definitions / mcp-meta-tools；~28 cases）
+- 新增 3 集成测试文件（lazy-load e2e / info-lazy e2e / session-isolation e2e；7 cases）
+- 总数：~520 测试全过（v3.1 baseline 485 + 35 新）
+
+### 依赖
+
+- 0 新增
+
+### 文档
+
+- 新增 `docs/lazy-loading.md`
+
 ## [3.1.0] - 2026-07-24
 
 ### 新增 (Index Advisor v3.1)
