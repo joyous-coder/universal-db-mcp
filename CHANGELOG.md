@@ -2,6 +2,37 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.0.0] - 2026-07-24
+
+### 新增 (Data Governance)
+- **多 profile Schema diff** — `compare_profile_schemas` MCP tool + `GET /api/profiles/:a/compare/:b` HTTP。报告 added/removed/modified tables + column 级变更
+- **SQL dump 备份导出** — `export_backup` MCP tool + `POST /api/profiles/:name/backup` HTTP。MVP 支持 sqlite/mysql/postgresql，其他 adapter 返回 `schema-only` fallback；流式 `LIMIT/OFFSET` 分页拉数据避免大库超内存
+- **SQL audit log** — `history.db` 加 4 列 (`actor` / `client_ip` / `severity` / `audit_metadata_json`) + 3 indexes；`AuditLog` facade + `classifySeverity` heuristic (read/write/ddl)；`DB_AUDIT_MODE_ENABLED=true` 时每条 `executeQuery` 自动埋点
+- **PII 动态脱敏** — `pii.config.json` 启动加载 (table.column.strategy)；5 内置策略 (`mask` / `mask_last4` / `hash` / `redact` / `passthrough`)；SELECT 返回前自动应用，write ops 不受影响
+- **MCP tools**: 5 个 — `compare_profile_schemas` / `export_backup` / `audit_log` / `get_pii_config` / `set_pii_config`
+
+### 配置
+- 3 个新 env var: `DB_AUDIT_MODE_ENABLED` / `DB_AUDIT_RETENTION_DAYS` / `DB_PII_CONFIG_PATH`
+- 全部默认关闭 — 不配置与 v2.20 完全一致
+
+### 文档
+- **新文档** `docs/data-governance.md` — 4 能力 API + pii.config.json schema + 注意事项
+- `docs/deferred-items.md` 更新 — 4 项 v3.0 ✅ 加进 ledger
+
+### 测试
+- 新增 4 测试文件 (`schema-diff` / `backup-writer` / `audit-log` / `pii-masker`)
+- 总数: 450 测试全过 (v2.20.0: 413)
+
+### 依赖
+- 0 强制新增
+- 0 optional 新增
+- SQL dump 用现有 adapter 的 `executeQuery` 接口，不需引入 mysqldump/pg_dump shell 依赖
+
+### 安全
+- `pii.config.json` 启动显式校验 — strategy 必须在 enum 内
+- backup dump 输出不加密；建议写到加密卷或管道过 gpg
+- audit log 记录 actor + IP 用于合规追溯；输出侧仍可用 PiiMasker
+
 ## [2.20.0] - 2026-07-24
 
 ### 新增 (Profile Hardening)

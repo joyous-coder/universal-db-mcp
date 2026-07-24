@@ -1,6 +1,6 @@
 # Deferred Items Ledger
 
-**Last updated:** 2026-07-24 (v2.20 release)
+**Last updated:** 2026-07-24 (v3.0.0 release)
 
 This document is the **single source of truth** for items that have been
 deferred in past versions. It exists to prevent the same item from being
@@ -31,7 +31,11 @@ When a new spec is written, the author should:
 | **Profile YAML / JSON import/export** | ✅ v2.20 | 2026-07-24 | [v2.20 spec](superpowers/specs/2026-07-24-v2.20-profile-hardening-design.md) |
 | **Key rotation** | ✅ v2.20 | 2026-07-24 | [v2.20 spec](superpowers/specs/2026-07-24-v2.20-profile-hardening-design.md) |
 | **History FTS5 全文搜索** | ✅ v2.20 | 2026-07-24 | [v2.20 spec](superpowers/specs/2026-07-24-v2.20-profile-hardening-design.md) |
-| #41 db-connect skill 文档 (v2.16-v2.20 全量) | 🟡 pending | 2026-07-24 | Task #41 (always-deferred) |
+| **Schema diff (multi-profile)** | ✅ v3.0 | 2026-07-24 | [v3.x spec](superpowers/specs/2026-07-24-v3-data-governance-design.md) |
+| **SQL dump backup** | ✅ v3.0 | 2026-07-24 | [v3.x spec](superpowers/specs/2026-07-24-v3-data-governance-design.md) |
+| **SQL audit log** | ✅ v3.0 | 2026-07-24 | [v3.x spec](superpowers/specs/2026-07-24-v3-data-governance-design.md) |
+| **PII dynamic masking** | ✅ v3.0 | 2026-07-24 | [v3.x spec](superpowers/specs/2026-07-24-v3-data-governance-design.md) |
+| #41 db-connect skill 文档 (v2.16-v3.x 全量) | 🟡 pending | 2026-07-24 | Task #41 (always-deferred) |
 | 索引建议 (EXPLAIN + schema 联动) | 🟡 v3.x | 2026-07-24 | bumped from v2.17/19 → v3.x (cross-DB plan parsing) |
 | Query plan diff | 🟡 v3.x | 2026-07-24 | paired with 索引建议; needs EXPLAIN history |
 | OpenTelemetry integration | 🔴 abandoned | 2026-07-24 | YAGNI — Prometheus pull is enough for v2.16+ metrics; OTel adds complexity without onboarding |
