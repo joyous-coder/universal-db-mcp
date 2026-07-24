@@ -7,3 +7,6 @@ dist/
 coverage/
 .vscode/
 .idea/
+# Test scratch files (vitest creates .tmp-*.db / .tmp-*.wal / etc.)
+.tmp-*
+
