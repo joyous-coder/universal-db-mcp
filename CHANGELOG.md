@@ -2,7 +2,7 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
-## [2.15.0] - 2026
+## [2.15.0] - 2026-07-24
 
 ### 新增 (P2)
 - **execute_batch 工具**: 批量执行 DML 操作(类似 JdbcTemplate.batchUpdate),性能提升 60-100x
