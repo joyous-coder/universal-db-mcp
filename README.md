@@ -62,6 +62,7 @@ AI: Let me query that for you...
 - **Multi-Schema Support** - Automatic discovery of all user schemas (PostgreSQL, SQL Server, Oracle, DM, and more)
 - **Data Masking** - Automatic sensitive data protection (phone, email, ID card, bank card, etc.)
 - **Connection Stability** - Connection pooling, TCP Keep-Alive, and automatic reconnection for long-running sessions
+- **Production Observability** - Prometheus `/metrics` endpoint + MCP `get_metrics` tool + slow-query ring buffer, zero new dependencies ([docs](docs/observability.md))
 
 ### Performance Improvements
 

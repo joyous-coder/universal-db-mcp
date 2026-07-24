@@ -132,6 +132,24 @@ LOG_LEVEL=info               # debug, info, warn, error
 LOG_PRETTY=false             # 是否美化输出
 ```
 
+### 可观测性配置（v2.16+）
+
+```bash
+# 全局开关（关闭后所有埋点 no-op，零开销）
+DB_METRICS_ENABLED=true
+
+# /metrics 端点访问控制（空 = 全开；逗号分隔 IP/CIDR）
+DB_METRICS_IP_ALLOWLIST=10.0.0.0/8,192.168.1.5
+
+# 慢查询环形 buffer 容量（0 = 不记录）
+DB_METRICS_SLOW_BUFFER_SIZE=100
+```
+
+- `/metrics` 输出 Prometheus 文本格式（`text/plain; version=0.0.4`），无需 API Key
+- MCP `get_metrics` 工具返回 JSON，无需数据库连接
+- 复用现有 `DB_SLOW_QUERY_THRESHOLD_MS`（慢查询阈值）
+- 完整指标目录见 `docs/observability.md`
+
 ## 配置文件
 
 ### .env 文件示例

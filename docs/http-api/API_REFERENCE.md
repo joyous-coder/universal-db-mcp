@@ -10,7 +10,7 @@ Universal Database MCP Server HTTP API provides RESTful endpoints and MCP protoc
 
 ## Authentication
 
-All endpoints (except `/api/health` and `/api/info`) require API key authentication, including REST API and MCP SSE/Streamable HTTP endpoints.
+All endpoints (except `/api/health`, `/api/info`, and `/metrics`) require API key authentication, including REST API and MCP SSE/Streamable HTTP endpoints.
 
 > **Note**: If `API_KEYS` environment variable is not configured, authentication is skipped (development mode).
 
@@ -255,6 +255,87 @@ curl http://localhost:3000/api/health
   }
 }
 ```
+
+**v2.16+ — Extended fields** (backward compatible):
+
+The response also includes observability fields when metrics are enabled:
+
+| Field | Type | Description |
+|---|---|---|
+| `uptime_seconds` | integer | Same as `uptime`, floored to seconds |
+| `active_db` | string | Currently connected database type (e.g. `mysql`, `postgres`) |
+| `queries_total` | number | Cumulative count of queries executed since process start |
+| `errors_total` | number | Cumulative count of query errors since process start |
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "healthy",
+    "uptime": 3600.5,
+    "timestamp": "2026-01-27T12:00:00.000Z",
+    "uptime_seconds": 3600,
+    "active_db": "mysql",
+    "queries_total": 1234,
+    "errors_total": 5
+  }
+}
+```
+
+#### GET /metrics
+
+Prometheus exposition format endpoint (no authentication required). Available since v2.16.
+
+**Request**:
+```bash
+curl http://localhost:3000/metrics
+```
+
+**Response** (200 OK, `text/plain; version=0.0.4`):
+```
+# HELP db_query_total Total queries
+# TYPE db_query_total counter
+db_query_total{db="mysql",kind="select",status="ok"} 142
+db_query_total{db="mysql",kind="select",status="error"} 3
+
+# HELP db_query_seconds Query latency (seconds)
+# TYPE db_query_seconds histogram
+db_query_seconds_bucket{db="mysql",kind="select",le="0.005"} 80
+db_query_seconds_bucket{db="mysql",kind="select",le="0.01"} 120
+...
+db_query_seconds_count{db="mysql",kind="select"} 142
+db_query_seconds_sum{db="mysql",kind="select"} 1.234
+
+# HELP db_query_errors_total Query errors by code
+# TYPE db_query_errors_total counter
+db_query_errors_total{db="mysql",kind="select",code="TIMEOUT"} 2
+
+# HELP db_slow_queries_total Slow queries
+# TYPE db_slow_queries_total counter
+db_slow_queries_total{db="mysql",kind="select"} 3
+```
+
+**Configuration**:
+
+| Env | Default | Effect |
+|---|---|---|
+| `DB_METRICS_ENABLED` | `true` | Set `false` to disable (zero overhead) |
+| `DB_METRICS_IP_ALLOWLIST` | (empty) | Comma-separated IPs/CIDRs allowed to scrape (empty = open) |
+
+**Response codes**:
+- `200` — Metrics text body (or empty body if disabled)
+- `403` — Client IP not in `DB_METRICS_IP_ALLOWLIST`
+
+**Example scrape config** (`prometheus.yml`):
+```yaml
+scrape_configs:
+  - job_name: 'universal-db-mcp'
+    static_configs:
+      - targets: ['localhost:3000']
+    scrape_interval: 15s
+```
+
+See `docs/observability.md` for the full metrics catalog and Grafana dashboard hints.
 
 #### GET /api/info
 

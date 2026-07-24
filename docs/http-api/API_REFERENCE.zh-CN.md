@@ -10,7 +10,7 @@ Universal Database MCP Server HTTP API 提供 RESTful 端点和 MCP 协议端点
 
 ## 认证
 
-除 `/api/health` 和 `/api/info` 外，所有端点（包括 REST API 和 MCP SSE/Streamable HTTP 端点）都需要 API Key 认证。
+除 `/api/health`、`/api/info` 和 `/metrics` 外，所有端点（包括 REST API 和 MCP SSE/Streamable HTTP 端点）都需要 API Key 认证。
 
 > **注意**: 如果未配置 `API_KEYS` 环境变量，则跳过认证（开发模式）。
 
@@ -255,6 +255,87 @@ curl http://localhost:3000/api/health
   }
 }
 ```
+
+**v2.16+ — 扩展字段**（向后兼容）:
+
+当 metrics 启用时，响应还包含可观测性字段:
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `uptime_seconds` | integer | 同 `uptime`，向下取整到秒 |
+| `active_db` | string | 当前连接的数据库类型（如 `mysql`、`postgres`） |
+| `queries_total` | number | 进程启动以来累计查询数 |
+| `errors_total` | number | 进程启动以来累计查询错误数 |
+
+```json
+{
+  "success": true,
+  "data": {
+    "status": "healthy",
+    "uptime": 3600.5,
+    "timestamp": "2026-01-27T12:00:00.000Z",
+    "uptime_seconds": 3600,
+    "active_db": "mysql",
+    "queries_total": 1234,
+    "errors_total": 5
+  }
+}
+```
+
+#### GET /metrics
+
+Prometheus 文本格式端点（无需认证）。自 v2.16 起可用。
+
+**请求示例**:
+```bash
+curl http://localhost:3000/metrics
+```
+
+**响应** (200 OK, `text/plain; version=0.0.4`):
+```
+# HELP db_query_total Total queries
+# TYPE db_query_total counter
+db_query_total{db="mysql",kind="select",status="ok"} 142
+db_query_total{db="mysql",kind="select",status="error"} 3
+
+# HELP db_query_seconds Query latency (seconds)
+# TYPE db_query_seconds histogram
+db_query_seconds_bucket{db="mysql",kind="select",le="0.005"} 80
+db_query_seconds_bucket{db="mysql",kind="select",le="0.01"} 120
+...
+db_query_seconds_count{db="mysql",kind="select"} 142
+db_query_seconds_sum{db="mysql",kind="select"} 1.234
+
+# HELP db_query_errors_total Query errors by code
+# TYPE db_query_errors_total counter
+db_query_errors_total{db="mysql",kind="select",code="TIMEOUT"} 2
+
+# HELP db_slow_queries_total Slow queries
+# TYPE db_slow_queries_total counter
+db_slow_queries_total{db="mysql",kind="select"} 3
+```
+
+**配置**:
+
+| Env | 默认 | 作用 |
+|---|---|---|
+| `DB_METRICS_ENABLED` | `true` | 设为 `false` 关闭（零开销） |
+| `DB_METRICS_IP_ALLOWLIST` | (空) | 逗号分隔允许抓取的 IP/CIDR（空 = 全开） |
+
+**响应码**:
+- `200` — metrics 文本（或 disabled 时空 body）
+- `403` — 客户端 IP 不在 `DB_METRICS_IP_ALLOWLIST`
+
+**scrape 配置示例**（`prometheus.yml`）:
+```yaml
+scrape_configs:
+  - job_name: 'universal-db-mcp'
+    static_configs:
+      - targets: ['localhost:3000']
+    scrape_interval: 15s
+```
+
+完整指标目录和 Grafana dashboard 提示见 `docs/observability.md`。
 
 #### GET /api/info
 

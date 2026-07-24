@@ -61,6 +61,7 @@ AI: 让我帮你查询一下...
 - **多 Schema 支持** - 自动发现所有用户 Schema（PostgreSQL、SQL Server、Oracle、达梦等）
 - **数据脱敏** - 自动保护敏感数据（手机号、邮箱、身份证、银行卡等）
 - **连接稳定性** - 连接池、TCP Keep-Alive、断线自动重试，保障长时间会话稳定运行
+- **生产可观测性** - Prometheus `/metrics` 端点 + MCP `get_metrics` 工具 + 慢查询环形 buffer，零新依赖（[文档](docs/observability.md)）
 
 ### 性能提升
 
