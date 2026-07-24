@@ -7,7 +7,7 @@
  */
 
 import oracledb from 'oracledb';
-import { BaseAdapter } from './base.js';
+import { BaseAdapter, ExecuteScriptOptions, TransactionContext } from './base.js';
 import type {
   QueryResult,
   SchemaInfo,
@@ -19,6 +19,7 @@ import type {
 } from '../types/adapter.js';
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
 import { withRetry, isConnectionErrorMessage } from '../utils/retry.js';
+import { splitStatements } from '../utils/sql-parser.js';
 
 export class OracleAdapter extends BaseAdapter {
   private pool: oracledb.Pool | null = null;
@@ -647,6 +648,81 @@ export class OracleAdapter extends BaseAdapter {
       default:
         return dataType;
     }
+  }
+
+  /**
+   * P0-3: Override withTransaction to pin all statements to a single physical connection.
+   * Without this, BEGIN/COMMIT and individual statements could end up on different
+   * pooled connections, breaking "all-or-nothing" semantics.
+   */
+  async withTransaction<T>(fn: (tx: TransactionContext) => Promise<T>): Promise<T> {
+    if (!this.pool) {
+      throw new Error('数据库未连接');
+    }
+    const connection = await this.pool.getConnection();
+    try {
+      await connection.execute('BEGIN');
+      const tx: TransactionContext = {
+        executeQuery: async (query: string, params?: unknown[]) => {
+          const startTime = Date.now();
+          let cleanQuery = query.trim();
+          if (cleanQuery.endsWith(';')) cleanQuery = cleanQuery.slice(0, -1).trim();
+          const result = await connection.execute(cleanQuery, params || [], {
+            autoCommit: false,
+            outFormat: oracledb.OUT_FORMAT_OBJECT,
+          });
+          const executionTime = Date.now() - startTime;
+          if (result.rows && result.rows.length > 0) {
+            const rows = result.rows.map((row: any) => {
+              const r: Record<string, unknown> = {};
+              for (const [k, v] of Object.entries(row)) {
+                r[k.toLowerCase()] = v;
+              }
+              return r;
+            });
+            return { rows, executionTime, metadata: { columnCount: result.metaData?.length || 0 } };
+          } else if (result.rowsAffected !== undefined && result.rowsAffected > 0) {
+            return { rows: [], affectedRows: result.rowsAffected, executionTime };
+          } else {
+            return { rows: [], executionTime };
+          }
+        },
+      };
+      const result = await fn(tx);
+      await connection.execute('COMMIT');
+      return result;
+    } catch (err) {
+      try { await connection.execute('ROLLBACK'); } catch { /* ignore */ }
+      throw err;
+    } finally {
+      try { await connection.close(); } catch { /* ignore */ }
+    }
+  }
+
+  /**
+   * P0-3: Override executeScript to use withTransaction.
+   * All statements run on a single connection so BEGIN/COMMIT are atomic.
+   * Non-transactional mode falls back to the BaseAdapter default.
+   */
+  async executeScript(query: string, options: ExecuteScriptOptions = {}): Promise<QueryResult> {
+    if (options.useTransaction === false) {
+      return super.executeScript(query, { ...options, useTransaction: false });
+    }
+    return this.withTransaction(async (tx) => {
+      const statements = splitStatements(query, this.getDialect()).filter(s => s.trim());
+      const startTime = Date.now();
+      const lastResult = statements.length > 0
+        ? await tx.executeQuery(statements[0])
+        : { rows: [], executionTime: 0 };
+      for (let i = 1; i < statements.length; i++) {
+        await tx.executeQuery(statements[i]);
+      }
+      return {
+        rows: [],
+        executionTime: Date.now() - startTime,
+        metadata: { statementCount: statements.length, lastResult },
+      };
+    });
   }
 
   /**
