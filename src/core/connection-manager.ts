@@ -9,6 +9,7 @@ import type { DbAdapter, DbConfig } from '../types/adapter.js';
 import type { Session } from '../types/http.js';
 import { createAdapter } from '../utils/adapter-factory.js';
 import { DatabaseService, SchemaCacheConfig } from './database-service.js';
+import type { ProfileManager } from './profile-manager.js';
 
 /**
  * 扩展的会话接口，包含 DatabaseService 实例
@@ -23,6 +24,17 @@ interface ExtendedSession extends Session {
  */
 export class ConnectionManager {
   private sessions: Map<string, ExtendedSession> = new Map();
+  private profileManager: ProfileManager | null = null;
+
+  /** v2.18: set the ProfileManager (optional). Backward compatible. */
+  setProfileManager(pm: ProfileManager | null): void {
+    this.profileManager = pm;
+  }
+
+  /** v2.18: get the ProfileManager (may be null if not configured). */
+  getProfileManager(): ProfileManager | null {
+    return this.profileManager;
+  }
   private cleanupInterval?: NodeJS.Timeout;
   private sessionTimeout: number;
   private defaultCacheConfig: Partial<SchemaCacheConfig>;
