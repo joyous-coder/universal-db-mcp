@@ -295,8 +295,8 @@ export class DatabaseService {
       await this.executeQuery(`TRUNCATE TABLE ${tableIdent}`);
     }
 
-    // Build INSERT SQL
-    const placeholders = columnsToInsert.map(() => '?').join(', ');
+    // Build INSERT SQL using dialect-correct placeholder syntax (?  vs $1, $2 / @p1, @p2 ...)
+    const placeholders = this.buildPlaceholderString(columnsToInsert.length);
     const columnList = columnsToInsert.map(c => this.quoteIdentifier(c)).join(', ');
     const sql = `INSERT INTO ${this.quoteIdentifier(tableName)} (${columnList}) VALUES (${placeholders})`;
 
@@ -879,5 +879,30 @@ export class DatabaseService {
         // MySQL, PostgreSQL, SQLite, TiDB, ClickHouse 等使用 LIMIT
         return `${query} LIMIT ${limit}`;
     }
+  }
+
+  /**
+   * 生成 INSERT 占位符字符串
+   *
+   * 不同方言的参数占位符语法不同:
+   *   - MySQL / Oracle / SQLite / DM / Kingbase / GaussDB / Vastbase / HighGo /
+   *     ClickHouse / OceanBase / TiDB / PolarDB / GoldenDB: ? (anonymous)
+   *   - PostgreSQL: $1, $2, ...
+   *   - SQL Server: @p1, @p2, ...
+   *
+   * 这里生成的占位符串会被直接拼接到 "( ... )" 中,例如 "(?, ?, ?)" / "($1, $2, $3)"。
+   */
+  private buildPlaceholderString(columnCount: number): string {
+    const dbType = this.config.type;
+
+    if (dbType === 'postgres') {
+      return Array.from({ length: columnCount }, (_, i) => `$${i + 1}`).join(', ');
+    }
+    if (dbType === 'sqlserver') {
+      return Array.from({ length: columnCount }, (_, i) => `@p${i + 1}`).join(', ');
+    }
+    // MySQL / Oracle / SQLite / ClickHouse / DM / Kingbase / GaussDB /
+    // Vastbase / HighGo / OceanBase / TiDB / PolarDB / GoldenDB: ?
+    return Array.from({ length: columnCount }, () => '?').join(', ');
   }
 }
