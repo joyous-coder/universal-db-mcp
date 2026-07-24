@@ -13,8 +13,8 @@ type SqlOperationPermission = Exclude<PermissionType, 'read' | 'script' | 'batch
 const OPERATION_KEYWORDS: Record<SqlOperationPermission, readonly string[]> = {
   insert: ['INSERT', 'REPLACE'],
   update: ['UPDATE'],
-  delete: ['DELETE', 'TRUNCATE'],
-  ddl: ['CREATE', 'ALTER', 'DROP', 'RENAME'],
+  delete: ['DELETE'],
+  ddl: ['CREATE', 'ALTER', 'DROP', 'RENAME', 'TRUNCATE'],
 } as const;
 
 /**
