@@ -2,6 +2,13 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [2.15.2] - 2026-07-24
+
+### 修复
+- **Pooled adapter 事务语义 (Phase 2)**: kingbase/gaussdb/vastbase/highgo (pg 系) 和 oceanbase/tidb/polardb/goldendb (mysql 系) 现在 `executeScript` 也保证 all-or-nothing 事务。覆盖所有 13 个 pool-backed adapter
+- **TRUNCATE keyword 分类**: 移到 ddl bucket(语义上更准确,修复预存测试)
+- **vitest config**: better-sqlite3 native binding 不可用时自动排除 sqlite-adapter.test.ts,避免阻塞测试套件
+
 ## [2.15.1] - 2026-07-24
 
 ### 修复
