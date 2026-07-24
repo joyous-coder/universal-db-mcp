@@ -87,7 +87,7 @@ export class SQLiteAdapter extends BaseAdapter {
     try {
       // 判断是否为查询操作
       const trimmedQuery = query.trim().toUpperCase();
-      if (trimmedQuery.startsWith('SELECT') || trimmedQuery.startsWith('PRAGMA')) {
+      if (trimmedQuery.startsWith('SELECT') || trimmedQuery.startsWith('PRAGMA') || trimmedQuery.startsWith('EXPLAIN')) {
         // SELECT 查询
         const stmt = this.conn.prepare(query);
         const rows = params ? stmt.all(...params) : stmt.all();
