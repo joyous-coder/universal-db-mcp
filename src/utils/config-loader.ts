@@ -150,6 +150,9 @@ export function loadFromEnv(): Partial<AppConfig> {
   // v2.20: rotation old key for the same pair.
   const qaTemplatesKeyOld = process.env.DB_TEMPLATES_DB_KEY_OLD;
   const qaHistoryKeyOld = process.env.DB_HISTORY_DB_KEY_OLD;
+
+  // v3.1: PlanHistory db path
+  const planHistoryPath = process.env.DB_PLAN_HISTORY_DB_PATH;
   if (
     qaEnabled !== undefined || qaTemplates !== undefined || qaHistory !== undefined ||
     qaTtl !== undefined || qaMax !== undefined || qaTimeout !== undefined ||
@@ -196,6 +199,11 @@ export function loadFromEnv(): Partial<AppConfig> {
       // v2.20: rotation — old key still valid alongside new key for one startup cycle
       cipherKeyOld: pmCipherKeyOld ? pmCipherKeyOld : undefined,
     };
+  }
+
+  // v3.1: standalone plan_history.db path
+  if (planHistoryPath) {
+    (config as any).planHistoryPath = planHistoryPath;
   }
 
   return config;

@@ -260,4 +260,12 @@ describe('Configuration Loader', () => {
       expect(cfg.queryAnalyzer?.historyCipherKey).toBeUndefined();
     });
   });
+
+  describe('planHistoryPath (v3.1)', () => {
+    it('reads DB_PLAN_HISTORY_DB_PATH', () => {
+      process.env.DB_PLAN_HISTORY_DB_PATH = '/tmp/plan.db';
+      const cfg = loadFromEnv();
+      expect((cfg as any).planHistoryPath).toBe('/tmp/plan.db');
+    });
+  });
 });
