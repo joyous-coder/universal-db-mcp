@@ -28,6 +28,13 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Rewrite lock file resolved URLs
+        # package-lock.json may pin packages to corp internal mirrors
+        # (e.g. nvwa.jiuqi.com.cn) that the CI runner cannot reach.
+        # Rewrite all `resolved` URLs to the official npm registry before
+        # install — `--registry` flags alone do NOT override locked `resolved`.
+        run: node -e "const fs=require('fs');const p='package-lock.json';let s=fs.readFileSync(p,'utf8');const before=s.length;s=s.replace(/https?:\/\/[^'\"\s]+\//g,'https://registry.npmjs.org/');fs.writeFileSync(p,s);console.log('rewrote',before-s.length,'chars in',p);"
+
       - name: Install dependencies
         # Use `npm install` (not `npm ci`) so platform-specific optional deps
         # (e.g. esbuild prebuilt binaries) for the CI runner are resolved.
