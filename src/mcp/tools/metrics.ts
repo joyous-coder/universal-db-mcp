@@ -15,7 +15,7 @@ export interface GetMetricsConfig {
 
 export const GET_METRICS_TOOL_DESCRIPTION = 'Get server observability metrics. category=summary|slow_queries|all. Returns JSON.';
 
-export type MetricsCategory = 'summary' | 'slow_queries' | 'all';
+export type MetricsCategory = 'summary' | 'slow_queries' | 'all' | 'multi_db';
 
 export interface MetricsResponse {
   counters?: Array<{ name: string; help: string; series: Array<{ labels: Record<string, string>; value: number }> }>;
@@ -25,13 +25,16 @@ export interface MetricsResponse {
   rings?: Array<{ name: string; size: number; capacity: number; items: unknown[] }>;
 }
 
-export function buildGetMetricsHandler(cfg: GetMetricsConfig) {
+export function buildGetMetricsHandler(cfg: GetMetricsConfig, multiDbProvider?: () => unknown) {
   return async (args: { category?: MetricsCategory }): Promise<MetricsResponse> => {
     if (!cfg.enabled) {
       throw new Error('metrics disabled (set DB_METRICS_ENABLED=true)');
     }
-    const snap = metrics.toJSON();
     const cat: MetricsCategory = args?.category ?? 'summary';
+    if (cat === 'multi_db') {
+      return (multiDbProvider ? multiDbProvider() : null) as any;
+    }
+    const snap = metrics.toJSON();
 
     if (cat === 'slow_queries') {
       const ring = snap.rings.find(r => r.name === 'db_slow_queries');

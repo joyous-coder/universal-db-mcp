@@ -639,7 +639,7 @@ LLM 当领域专家:用户描述模糊时,LLM 应根据表名/列名推断业务
             // v2.16: observability — does not require a database connection
             const handler = buildGetMetricsHandler({
               enabled: this.appConfig?.metrics?.enabled ?? true,
-            });
+            }, () => this.profileManager?.getMetricsSnapshot() ?? { enabled: false });
             const result = await handler({ category: (args as any)?.category as MetricsCategory });
             return {
               content: [{
