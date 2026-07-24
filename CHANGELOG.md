@@ -2,6 +2,33 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [2.18.0] - 2026-07-24
+
+### 新增 (Multi-DB)
+- **Profile 管理** — `save_profile` / `list_profiles` MCP tool + `/api/profiles` CRUD 端点，SQLite `profiles.db` 持久化
+- **运行时切换** — `use_profile` MCP tool + `POST /api/profiles/:name/connect`，支持 named profile 切换
+- **连接分组** — `profile.role = primary | replica | analytics`，读 round-robin 走同 role group，写固定 primary
+- **全局视图** — `get_global_schema` MCP tool + `GET /api/global-schema`，并行查所有 enabled profile 的 schema 合并
+- **LRU eviction** — `DB_PROFILES_MAX` 默认 50，超限自动卸载最久未用 live profile
+- **connect_database 兼容** — 保留 v2.14 行为，新加 `profileName` optional 参数
+- **get_metrics 扩展** — 新增 `multi_db` category 返回 profile 状态
+
+### 配置
+- 5 个新 env var: `DB_MULTI_DB_ENABLED` / `DB_PROFILES_DB_PATH` / `DB_PROFILES_MAX` / `DB_DEFAULT_PROFILE_ROLE` / `DB_READ_ROUTING`
+
+### 测试
+- 新增 8 测试文件 (~600 行)
+- 总数: 337 测试全过 (v2.17.0: 305)
+
+### 文档
+- 新增 `docs/multi-db.md`
+
+### 依赖
+- 0 新增（复用 v2.16 multi-backend SQLite）
+
+### 安全
+- `profiles.db` 含明文密码 — 强提示 `.gitignore`，v2.19+ SQLCipher
+
 ## [2.17.0] - 2026-07-24
 
 ### 新增 (Query Experience)
