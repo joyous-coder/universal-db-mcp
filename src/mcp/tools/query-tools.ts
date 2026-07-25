@@ -80,7 +80,7 @@ export function buildExecuteTemplateHandler(qa: QueryAnalyzer) {
     let templateId = args.id;
     if (!templateId && args.name) {
       // Scan all templates via internal store to find by name
-      const all = await (qa as any).templates?.all?.() ?? [];
+      const all: any[] = await (qa as any).templates?.list?.() ?? [];
       const match = all.find((t: any) => t.name === args.name);
       if (match) templateId = match.id;
       if (!templateId) throw new Error(`template not found by name: ${args.name}`);
