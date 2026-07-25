@@ -2,6 +2,38 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.2.6] - 2026-07-25
+
+### 修复 (v3.2.5-patch1, e2e-driven minor fixes)
+
+v3.2.5 发布后回归测试发现 2 个 minor 问题:
+
+#### Minor fixes
+
+- **Bug #25: `generate_sample_data` SQL bind 失败**
+  - **Repro**: `generate_sample_data({tableName:'foo', rowCount:3})` → "Provided value cannot be bound to SQLite parameter 1"
+  - **Root cause**: `id` 列 auto-increment,generator 返回 `undefined`。`node:sqlite` 的 `stmt.run()` 拒绝 bind `undefined` 到 `?` 占位符
+  - **Fix** (`src/core/database-service.ts:388-397`): `value === undefined ? null : value`。SQLite 把 NULL 当作新 auto-increment 值,语义保持
+  - **效果**: fresh `:memory:` 上 generate_sample_data 立即可跑(3 rows inserted)
+  - 涉及 SQL fragment: `value === undefined ? null : value` 避免 undefined bind
+
+- **Minor #1: `execute_template` 只接受 id,用户传 name 报 "template not found"**
+  - **Repro**: `save_template({name:'foo'})` (返回 id: `tICv-WcO`),然后 `execute_template({id:'foo'})` → "template not found"
+  - **Root cause**: tool schema 只接受 `id`(auto-generated short hash),用户倾向于传 name
+  - **Fix** (`src/mcp/tools/query-tools.ts:76-95`): 同时接受 `id` 或 `name`,无 id 用 name 查 templates.list()
+  - **效果**: `execute_template({name:'foo', params:{}})` 正常工作
+
+### 验证
+
+- ✅ `generate_sample_data({tableName:'minor2_test', rowCount:3})` → `insertedRows:3`
+- ✅ `execute_template({name:'verify_minor1', params:{}})` → `{answer:100}`
+- ✅ 533/533 unit tests pass
+- ✅ Bug #7 + #8 已 verify(commit `fedc3f5` 发布前 e2e test)
+
+### 配套文档
+
+- `docs/09-reference/e2e-stdio-report.md` 更新 — Bug #25 标 ✅ FIXED
+
 ## [3.2.5] - 2026-07-25
 
 ### 修复 (v3.2.4-patch1, e2e-driven hotfix)

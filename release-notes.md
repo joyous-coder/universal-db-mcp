@@ -1,56 +1,64 @@
-# v3.2.3 — Patch: e2e-driven 4 bug fixes
+# v3.2.6 — v3.2.5-patch1: minor fixes from e2e regression
 
-> Released 2026-07-25
-> patch release, no breaking changes, fully backwards-compatible with v3.2.1/v3.2.2
+## What's in this release
 
-## 测试驱动开发成果
+Two minor issues found during e2e regression testing of v3.2.5. Both verified working in live Claude Code session before release.
 
-通过 Claude Code 本会话对 stdio MCP server 做端到端测试,捕获 4 个关键 bug 并全部修复:
+## Fixes
 
-## 修复
+### Bug #25 — `generate_sample_data` SQL bind failure
 
-### Bug 1: `PERMISSION_PRESETS.full` 缺 `script` + `batch`
-
-```typescript
-// 旧(只包含 read/write/delete/ddl)
-full: ['read', 'insert', 'update', 'delete', 'ddl']
-
-// 新(包含 multi-statement + batch)
-full: ['read', 'insert', 'update', 'delete', 'ddl', 'script', 'batch']
+**Repro**: On fresh `:memory:` SQLite:
+```js
+execute_query({sql: "CREATE TABLE foo(id INTEGER, name TEXT)"})
+clear_cache()
+generate_sample_data({tableName: "foo", rowCount: 3})
+// ❌ "Provided value cannot be bound to SQLite parameter 1"
 ```
 
-**影响**: `permissionMode:'full'` 下 `execute_script` / `execute_batch` / `generate_sample_data` 全部不可见
-**修复**: 加 `script` + `batch` 到 full preset
-**测试**: `tests/unit/script-permission.test.ts` 已更新断言
+**Root cause**: `id` column is auto-increment, generator returns `undefined` from `matchHeuristic` (line 119: `if (name === 'id' || /_id$/i.test(name)) return undefined;`). `node:sqlite`'s `stmt.run()` rejects binding `undefined` to `?` placeholders.
 
-### Bug 2: `execute_query` 参数名 `query` 不一致
+**Fix** (`src/core/database-service.ts:388-397`):
+```typescript
+const value = generator.generateValue(...);
+row.push(value === undefined ? null : value);  // ← was value
+```
 
-`execute_query` / `execute_script` 用 `query`,`execute_batch` 用 `sql`。AI 和用户自然传 `sql`,触发 `args.query.substring` undefined 异常。
+SQLite treats NULL as new auto-increment, so semantics preserved.
 
-**修复**: 三处 schema + handler 统一为 `sql`(commit `76f70c2`)
+**Verify**: `insertedRows: 3` ✅ on fresh connection.
 
-### Bug 3: MCP server 在 stdin close 时自杀(`153499d`)
+### Minor #1 — `execute_template` accepts name OR id
 
-`src/mcp/mcp-index.ts:73-74` 监听了 `stdin.on('end')` + `stdin.on('close')`,Claude Code 客户端间歇关闭 stdin 读端(server 误以为客户端走了),server 自杀,后续 tool call 返回 `No such tool available`。
+**Repro**: User naturally passes name, gets "template not found":
+```js
+save_template({name: "foo", sql: "SELECT 42 AS answer"})
+// Returns id: "tICv-WcO"
+execute_template({id: "foo", params: {}})  // ❌ "template not found: foo"
+```
 
-**修复**: 移除 stdin end/close handler,只保留 SIGINT/SIGTERM
+**Fix** (`src/mcp/tools/query-tools.ts:76-95`):
+```typescript
+let templateId = args.id;
+if (!templateId && args.name) {
+  const all: any[] = await (qa as any).templates?.list?.() ?? [];
+  const match = all.find((t: any) => t.name === args.name);
+  if (match) templateId = match.id;
+}
+```
 
-## 配套改进
+**Verify**: `execute_template({name: "verify_minor1", params: {}})` → `{answer: 100}` ✅
 
-- **Windows 测试 EBUSY 修复**: `tests/helpers/cleanup.ts` 共享 helper
-- **`publish.yml` CI 加固**: npm test 步骤 + CHANGELOG 版本校验(v3.2.2 已加)
-- **`.mcp.json` 注册**: 项目 scope MCP server,Claude Code 即可发现 tool
-- **e2e 测试架构沉淀**: `tests/e2e/stdio/` + `docs/superpowers/specs/2026-07-25-*-design.md`(后续 release 落实)
+## Coverage
 
-## 验证
+- **All 16 bugs fixed across v3.2.3 → v3.2.6** (Bug #1-#8 + #11-#22 + #25)
+- **0 bugs open**
+- **Sqlite 41/43 tools verified** in lazy=true mode (Bug #8 fix verified — `use_tool_group` returns `alreadyActive:true` immediately)
+- **533/533 unit tests pass**
 
-- `npm test`: **533/533 passed**(66 test files)
-- `npm run build`: exit 0
-- Manual smoke: sqlite +postgres L1 e2e via Claude Code native tool,4 tool 调用验证修复生效
-
-## 升级
+## Upgrade
 
 ```bash
 npm install -g @joyous-coder/universal-db-mcp@latest
-# 或从 v3.2.2 升级无任何 migration 需求
+# Backwards-compatible with v3.2.5
 ```
