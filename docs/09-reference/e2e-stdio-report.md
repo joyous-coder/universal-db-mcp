@@ -12,6 +12,21 @@
 
 ## 详细发现
 
+### postgres (Layer 1 partial) — 2026-07-25 04:15
+
+After Bug #1, #2, #3 fix (commit 76f70c2), 533/533 unit tests pass.
+
+**Container started successfully** (`wsl docker run -d --rm postgres:16-alpine -p 5432:5432`).
+
+**Pass:**
+- `connect_database({type:'postgres', host:'localhost', port:5432, ...})` — ✅
+- `execute_query({sql:'SELECT 1 AS x'})` — ✅ Bug #1 fix verified
+- `execute_query({sql:'SELECT 2 AS y'})` — ✅ (state persists)
+- `execute_query({sql:'SELECT 3 AS z'})` — ✅ (state persists)
+- `get_connection_status` — ✅
+
+**Confirmed:** Bug #4 (MCP server stdin-close crash) was the actual cause of "drop after 4 calls" — fix committed `153499d`.
+
 ### sqlite (Layer 1) — 2026-07-25 04:01
 
 **No docker required** — `connect_database({type:'sqlite', filePath:':memory:'})`
