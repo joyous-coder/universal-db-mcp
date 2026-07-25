@@ -4,11 +4,11 @@
 
 ## [3.2.8] - 2026-07-25
 
-### 修复 (mysql e2e-driven, 4 bugs)
+### 修复 (mysql e2e-driven + execute_sql_file wiring)
 
-v3.2.7 发布后跑 v3.2.8 backlog 中 mysql e2e,发现 4 个 bug 并修复:
+v3.2.7 发布后跑 v3.2.8 backlog 中 mysql e2e + execute_sql_file 全链路验证,共发现 **7 个 bug** 并修复。
 
-#### Fixes
+#### Fixes (batch 1 — mysql e2e)
 
 - **Bug #28: `get_enum_values` 在 MySQL/TiDB/OceanBase/PolarDB/GoldenDB 上 "Every derived table must have its own alias"**
   - **Repro**: 任何 SQL 类型表 + 这些 db,调 `get_enum_values({tableName, columnName})` → 派生表缺别名
@@ -34,15 +34,35 @@ v3.2.7 发布后跑 v3.2.8 backlog 中 mysql e2e,发现 4 个 bug 并修复:
   - **Fix**: MySQL 类型用 backtick 标识符 + Date format 为 `YYYY-MM-DD HH:MM:SS`;其他 db 保持 double-quote
   - **效果**: 生成的 dump 在 MySQL 实例上可直接 replay,`created_at` 正确还原
 
-### v3.2.8 mysql e2e
+#### Fixes (batch 2 — execute_sql_file 全链路)
 
-- ✅ **mysql** (35 ✅ + 3 ❌→✅ 修复后 38/43): 全 43 tool lifecycle 跑通,4 bug 已 verify
+- **Bug #33: `execute_sql_file` 在 mongodb/redis 抛 confusing 解析错**
+  - **Repro**: mongodb/redis profile 上调 `execute_sql_file({filePath})` → 报 `无效的 JSON 查询格式` 等
+  - **Root cause**: base `executeScript` 没有 override NoSQL 类型,默认按 `;` split + 顺序执行 SQL — 对 NoSQL 完全没意义
+  - **Fix** (`src/core/database-service.ts:434-444`): 早返回友好错误"execute_sql_file 不支持 {type}(NoSQL 数据库无 SQL 脚本概念)。请改用 execute_query(mongo: db.collection.operation(args); redis: SET/GET 等命令)"
+
+- **Bug #34: `DB_ALLOWED_FILE_PATHS` env 在 `DB_TYPE=""` 时不生效**
+  - **Repro**: `.mcp.json` 配 `DB_TYPE=""` + `DB_ALLOWED_FILE_PATHS='D:\\tmp,...'` → `execute_sql_file` 仍报"未配置 DB_ALLOWED_FILE_PATHS"
+  - **Root cause** (`src/utils/config-loader.ts:96-115` v3.2.7): `allowedSqlFilePaths` 写在 `if (process.env.DB_TYPE) { ... }` 块内,DB_TYPE 未设时整块跳过
+  - **Fix** (`src/utils/config-loader.ts:117-125`): 把 env parse 提到 `if` 外,无条件 attach
+
+- **Bug #35: `connect_database` 丢弃 server-side env config**
+  - **Repro**: 即使 #34 fix 后,`execute_sql_file` 仍报"未配置 DB_ALLOWED_FILE_PATHS"
+  - **Root cause** (`src/mcp/mcp-server.ts:929`): `connect_database` handler 从 tool args 构造全新 `newConfig` 然后 `this.config = newConfig`,完全没合并 server-side env config
+  - **Fix** (`src/mcp/mcp-server.ts:907-920`): 在 connect_database handler 中 merge `this.appConfig.database` 的 `allowedSqlFilePaths / allowWrite / poolConfig`
+
+### v3.2.8 mysql + execute_sql_file e2e
+
+- ✅ **mysql** (38 ✅ + 5 INFRA): 4 bug 已 live verify
+- ✅ **execute_sql_file 全链路 live verified**: MySQL 3-statement atomic + mongodb/redis 友好错误
+- ✅ **postgres execute_sql_file** design-verified (代码路径同 mysql — `executeScript` override + transaction wrapper)
 - ⏳ oracle / dm / sqlserver / tidb / postgres / clickhouse 推到 v3.2.9
 
 ### 测试
 
 - `npm test` 484/484 (unit) 通过
-- live e2e verify: get_enum_values + save_template + export_backup 已 live 通过
+- live e2e verify: get_enum_values + save_template + export_backup + execute_sql_file(mysql 3-stmt atomic + mongo friendly error)
+- JSON-RPC pipe 驱动 MCP server(无法在 Claude Code MCP session 内调的 tool 也能 verify)
 
 ## [3.2.7] - 2026-07-25
 

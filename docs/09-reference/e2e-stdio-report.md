@@ -41,7 +41,7 @@
 | 3  | get_connection_status | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
 | 4  | execute_query | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
 | 5  | execute_script | ✅ | INFRA | INFRA | INFRA | INFRA | v3.2.9 | v3.2.9 |
-| 6  | execute_sql_file | ✅ | ⚠️ | ⚠️ | INFRA | INFRA | v3.2.9 | v3.2.9 |
+| 6  | execute_sql_file | ✅ | ✅ v3.2.8 (design) | ✅ v3.2.8 (Bug #33+#34+#35) | ✅ v3.2.8 (friendly error) | ✅ v3.2.8 (friendly error) | v3.2.9 | v3.2.9 |
 | 7  | execute_batch | ✅ | INFRA | ✅ v3.2.8 (Bug #30+32) | INFRA | INFRA | v3.2.9 | v3.2.9 |
 | 8  | execute_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
 | 9  | get_metrics | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
@@ -163,6 +163,9 @@
 | **#30** | `generate_sample_data` 在 MySQL 报 "near '?, ?)' SQL syntax"(VALUES(?, ?) + nested array 不支持) | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/adapters/mysql.ts:executeBatch()` (commit `f639ffc`) | 单连接 BEGIN/COMMIT + per-row `conn.execute()` (同时修 #32) |
 | **#31** | `export_backup` MySQL dump 不可执行(ANSI double-quote 标识符 + JS Date ISO 'T'/'Z') | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/core/backup-writer.ts:41,113-128` (commit `f639ffc`) | MySQL types 用 backtick 标识符 + Date format `YYYY-MM-DD HH:MM:SS` |
 | **#32** | `execute_batch` MySQL 同 #30 路径 | 🟡 MAJOR | ✅ FIXED v3.2.8 | 同 #30 | 同 #30 |
+| **#33** | `execute_sql_file` 在 mongodb/redis 抛 confusing parse error | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/core/database-service.ts:434-444` (commit `1698570`) | 早返回友好错误"execute_sql_file 不支持 {type} (NoSQL 数据库无 SQL 脚本概念)" |
+| **#34** | `DB_ALLOWED_FILE_PATHS` env 在 `DB_TYPE=""` 时不生效 | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/utils/config-loader.ts:117-125` (commit `f97c8e7`) | 提到 `if (DB_TYPE)` 块外,无条件 parse 并 attach 到 config.database |
+| **#35** | `connect_database` handler 丢弃 server-side env config (allowedSqlFilePaths / allowWrite / poolConfig) | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/mcp/mcp-server.ts:907-920` (commit `f97c8e7`) | 在 connect_database handler 中 merge `this.appConfig.database` 到 newConfig |
 
 ## Error notes — Bug fix details
 
@@ -268,6 +271,24 @@
 - **Fix**: ① MySQL 系 db type 用 backtick 标识符;② Date format `'YYYY-MM-DD HH:MM:SS'` (PG/SQLite/MySQL 通用)。
 - **Verify**: live 输出 `INSERT INTO \`e2e_users\` (\`id\`,\`name\`,\`age\`,\`created_at\`) VALUES (54, 'alice', 31, '2026-07-25 05:00:00'), …` 完全可在干净 MySQL instance 上 replay。
 
+### Bug #33 — `execute_sql_file` 在 NoSQL 抛 confusing 解析错 (FIXED v3.2.8)
+- **Repro**: mongodb/redis profile 上调 `execute_sql_file({filePath})` → 报 `无效的 JSON 查询格式` / `Unknown command` 等,base `executeScript` 没有 override NoSQL 类型。
+- **Root cause** (`src/core/database-service.ts:executeScript`): `executeScript` base class 默认按 `;` split + 顺序执行 SQL — 对 NoSQL 完全没意义。
+- **Fix** (`src/core/database-service.ts:434-444`): 在 `executeSqlFile` 开头加 NoSQL 类型早返回 → "execute_sql_file 不支持 {type}(NoSQL 数据库无 SQL 脚本概念)。请改用 execute_query(mongo: db.collection.operation(args); redis: SET/GET 等命令)"
+- **Verify**: live mongodb `execute_sql_file` 返友好错误(不再抛 base parse 错)。
+
+### Bug #34 — `DB_ALLOWED_FILE_PATHS` 在 `DB_TYPE=""` 时不生效 (FIXED v3.2.8)
+- **Repro**: `.mcp.json` 配 `DB_TYPE=""` + `DB_ALLOWED_FILE_PATHS='D:\\tmp,...'`(动态 connect_database 模式) → `execute_sql_file` 仍报 "未配置 DB_ALLOWED_FILE_PATHS"。
+- **Root cause** (`src/utils/config-loader.ts:96-115` v3.2.7): `allowedSqlFilePaths` 写在 `if (process.env.DB_TYPE) { ... }` 块内,DB_TYPE 未设时整块被跳过。
+- **Fix** (`src/utils/config-loader.ts:117-125`): 把 env parse 提到 `if` 外,无条件 attach 到 `config.database.allowedSqlFilePaths`(若 DB_TYPE 未设,先建空 `config.database = {}` 再 attach)。
+- **Verify**: DB_TYPE unset 启动后 `config.database.allowedSqlFilePaths` 正确解析为 `['D:\\tmp', 'D:/Links/Tools/universal-db-mcp/tmp-e2e']`。
+
+### Bug #35 — `connect_database` 丢弃 server-side env config (FIXED v3.2.8)
+- **Repro**: 即使 #34 fix 后,`execute_sql_file` 仍报 "未配置 DB_ALLOWED_FILE_PATHS"。
+- **Root cause** (`src/mcp/mcp-server.ts:929`): `connect_database` handler 从 tool args 构造全新 `newConfig` 然后 `this.config = newConfig`,完全没把 server-side env-loaded config 合并进来。
+- **Fix** (`src/mcp/mcp-server.ts:907-920`): 在 connect_database handler 建好 newConfig 后,从 `this.appConfig.database` 合并 `allowedSqlFilePaths / allowWrite / poolConfig`(若 newConfig 缺这些字段)。
+- **Verify**: live MySQL `execute_sql_file` on `tmp-e2e/mysql-script.sql`(3 statements: 2 INSERT + 1 SELECT COUNT)atomic,后续 SELECT 看到 sqlfile_a/b 两行。
+
 ## Env var matrix
 
 | Env var | sqlite | 其他 6 DB | 备注 |
@@ -288,7 +309,8 @@
 - **2026-07-25 D16-D18**: bug fix sweep + report finalization + release v3.2.4
 - **2026-07-25**: 🚢 **v3.2.4 published to npm** via gh → publish workflow ✅ success
 - **2026-07-25 evening**: v3.2.5–v3.2.7 cascade — Bug #7/#25/#26/#27 fixed;redis 35+7 INFRA + 1 ⚠️,mongodb 26+4 INFRA + 2 ⚠️→✅ e2e verified;🚀 **v3.2.7 published**
-- **2026-07-25 night**: v3.2.8 — Bug #28/#29/#30+#31+#32 fixed on mysql 8.0;mysql 38/43 ✅ + 5 INFRA verified;🚀 **v3.2.8 published** (workflow #30158223114)
+- **2026-07-25 night**: v3.2.8 — Bug #28/#29/#30+#31+#32 fixed on mysql 8.0;mysql 38/43 ✅ + 5 INFRA verified
+- **2026-07-25 night**: v3.2.8 batch 2 — Bug #33+#34+#35 (execute_sql_file wiring);live verified mysql 3-statement atomic + mongo friendly error
 
 ## Summary — v3.2.8 latest ✅
 
@@ -303,8 +325,9 @@
 - v3.2.4: #11/#12/#13/#15/#17/#18/#19/#20/#21/#22 (10 fixed)
 - v3.2.5+#3.2.6: #25 (sqlite `undefined` bind) — 1 fixed
 - v3.2.7: #26 (mongodb multi-arg) + #27 (mongodb authSource) — 2 fixed
-- v3.2.8: #28 (get_enum_values alias) + #29 (save_template params) + #30+#32 (mysql execute_batch) + #31 (export_backup mysql) — 5 fixed
-- **Total: 18 bugs fixed, 0 critical open**
+- v3.2.8 batch 1 (mysql e2e): #28 (get_enum_values alias) + #29 (save_template params) + #30+#32 (mysql execute_batch) + #31 (export_backup mysql) — 5 fixed
+- v3.2.8 batch 2 (execute_sql_file verify): #33 (NoSQL UX error) + #34 (DB_ALLOWED_FILE_PATHS gating) + #35 (connect_database drops server-side config) — 3 fixed
+- **Total: 21 bugs fixed, 0 critical open**
 
 **v3.2.9+ backlog** (incomplete coverage):
 - oracle / dm / sqlserver / tidb / postgres / clickhouse — 6 docker DBs e2e (oracle + dm 待企业 docker 镜像可用;postgres/clickhouse 镜像已 pull,5min 即可跑)
