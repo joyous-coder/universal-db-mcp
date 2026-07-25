@@ -784,15 +784,17 @@ export class DatabaseMCPServer {
       const { name, arguments: args } = request.params;
 
       try {
+        // v3.2.4 (Bug #20/#21): meta-tool handling BEFORE lazyLoad check so these work
+        // even when DB_LAZY_LOAD_ENABLED=false.
+        if (name === 'use_tool_group') {
+          return await this.handleUseToolGroup(args as any);
+        }
+        if (name === 'use_tool_schema') {
+          return await this.handleUseToolSchema(args as any);
+        }
         // v3.2.1: meta-tool + registry routing inside try/catch (fix finding #13)
         if (this.lazyLoadEnabled && this.toolRegistry) {
-          if (name === 'use_tool_group') {
-            return await this.handleUseToolGroup(args as any);
-          }
-          if (name === 'use_tool_schema') {
-            return await this.handleUseToolSchema(args as any);
-          }
-          // v3.2: route lazy/info-lazy tools through registry
+          // route lazy/info-lazy tools through registry
           if (this.toolRegistry.isToolActive(this.currentSessionId, name)) {
             // info-lazy validation
             const v = this.toolRegistry.validateArgs(name, args);

@@ -1,4 +1,4 @@
-import { Faker, zh_CN } from '@faker-js/faker';
+import { Faker, zh_CN, en, base } from '@faker-js/faker';
 import type { ColumnInfo } from '../types/adapter.js';
 import { resolveTemplate } from './template-resolver.js';
 
@@ -16,7 +16,7 @@ export class SampleDataGenerator {
   constructor(options?: { seed?: number }) {
     this.rngSeed = options?.seed ?? Date.now();
     try {
-      this.faker = new Faker({ locale: [zh_CN] });
+      this.faker = new Faker({ locale: [zh_CN, en, base] });
       this.faker.seed(this.rngSeed);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
