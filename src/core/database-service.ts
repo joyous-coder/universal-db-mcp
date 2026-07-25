@@ -391,7 +391,10 @@ export class DatabaseService {
           rowContext,
         }, i);
 
-        row.push(value);
+        // v3.2.6 Bug #25 fix: node:sqlite rejects binding `undefined` to ? placeholders.
+        // Auto-increment columns return undefined from generator; convert to null so
+        // INSERT works (sqlite treats null as new auto-increment value).
+        row.push(value === undefined ? null : value);
         rowContext[colName] = value;
       }
       rowsToInsert.push(row);

@@ -74,8 +74,19 @@ export function buildDeleteTemplateHandler(qa: QueryAnalyzer) {
 }
 
 export function buildExecuteTemplateHandler(qa: QueryAnalyzer) {
-  return async (args: { id: string; params: Record<string, unknown> }, adapter: DbAdapter) => {
-    return qa.executeTemplate(args.id, args.params, adapter);
+  return async (args: { id?: string; name?: string; params: Record<string, unknown> }, adapter: DbAdapter) => {
+    // v3.2.6 fix: accept either `id` (short hash) or `name` (user-friendly).
+    // Lookup by name if id not provided.
+    let templateId = args.id;
+    if (!templateId && args.name) {
+      // Scan all templates via internal store to find by name
+      const all = await (qa as any).templates?.all?.() ?? [];
+      const match = all.find((t: any) => t.name === args.name);
+      if (match) templateId = match.id;
+      if (!templateId) throw new Error(`template not found by name: ${args.name}`);
+    }
+    if (!templateId) throw new Error('either id or name is required');
+    return qa.executeTemplate(templateId, args.params, adapter);
   };
 }
 
