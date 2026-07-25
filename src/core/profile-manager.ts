@@ -233,7 +233,7 @@ export class ProfileManager {
     const profile = await this.store.get(name);
     if (!profile) throw new Error(`profile not found: ${name}`);
     if (!profile.enabled) throw new Error(`profile disabled: ${name}`);
-    const adapter = createAdapter(profile.config as any);
+    const adapter = createAdapter({ ...profile.config, type: profile.type } as any);
     await adapter.connect();
     const service = new DatabaseService(adapter, profile.config as any, this.cacheConfig);
     // v2.19: forward QA + active-profile provider to the per-profile

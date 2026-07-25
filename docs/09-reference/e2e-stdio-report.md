@@ -67,10 +67,10 @@
 | #12 | use_tool_group / use_tool_schema missing from v3.1 list (lazy-path only) | 🔴 CRITICAL | OPEN | use_tool_group/schema / sqlite | — |
 | #13 | MCP client caches ListTools at startup; 25 lazy group tools + 3 conditional tools unreachable even after connect_database | 🔴 CRITICAL | ✅ FIXED (pending regression) | 28 tools / all DBs | (pending commit) |
 | #14 | execute_template {{var}} syntax doesn't work — uses ${var} (Mustache vs JS template-literal) | 🟢 MINOR (doc) | ✅ RESOLVED | execute_template / sqlite | — |
-| #15 | use_profile crashes: "Cannot read properties of undefined (reading 'toLowerCase')" | 🔴 CRITICAL | OPEN | use_profile / sqlite | — |
-| #16 | lint_sql doesn't detect syntax errors (returns no issues for "SELECTT * FORM t") | 🟡 MAJOR | OPEN | lint_sql / sqlite | — |
-| #17 | get_query_history returns empty despite execute_query history | 🟡 MAJOR | OPEN | get_query_history / sqlite | — |
-| #18 | explain_query returns empty plan for simple SELECT | 🟡 MAJOR | OPEN | explain_query / sqlite | — |
+| #15 | use_profile crashes: "Cannot read properties of undefined (reading 'toLowerCase')" | 🔴 CRITICAL | ✅ FIXED (pending regression) | use_profile / sqlite | (pending commit) |
+| #16 | lint_sql doesn't detect syntax errors (returns no issues for "SELECTT * FORM t") | 🟢 MINOR (doc) | ✅ RESOLVED | lint_sql / sqlite | — |
+| #17 | get_query_history returns empty despite execute_query history | 🟡 MAJOR | ⏳ DEFERRED v3.2.5 | get_query_history / sqlite | — |
+| #18 | explain_query returns empty plan for simple SELECT | 🟡 MAJOR | ⏳ DEFERRED v3.2.5 | explain_query / sqlite | — |
 
 ## Error notes
 
@@ -89,15 +89,27 @@
 - **Verified**: `save_template({sql:'SELECT COUNT(*) FROM ${table}', parameters:[{name:'table', type:'sql_identifier'}]})` + `execute_template({params:{table:'e2e_s'}})` substitutes correctly.
 - **Action**: Document in tool description / README — currently misleading by implying Mustache syntax.
 
-### Bug #15 — use_profile crashes
-- **Repro**: `save_profile({name:'e2e-sqlite', type:'sqlite', config:{filePath:':memory:'}})` then `use_profile({name:'e2e-sqlite'})`
-- **Symptom**: "Cannot read properties of undefined (reading 'toLowerCase')"
-- **Root cause**: Likely missing field in profile config passed to connect logic.
+### Bug #15 — use_profile crashes (FIXED in commit pending)
+- **Root cause**: `profile-manager.ts:236` passed `profile.config` (which lacks `type`) to `createAdapter()`. The `type` field lives at `profile.type` (top level), not inside `profile.config`. `createAdapter` → `normalizeDbType(config.type)` → `config.type.toLowerCase()` crashed because `config.type` was undefined.
+- **Fix**: spread profile.config + inject `type: profile.type`:
+  ```typescript
+  const adapter = createAdapter({ ...profile.config, type: profile.type } as any);
+  ```
+- **File**: `src/core/profile-manager.ts:236`
 
-### Bug #16 — lint_sql misses obvious syntax errors
-- **Repro**: `lint_sql({sql:'SELECTT * FORM e2e_t'})`
-- **Symptom**: `{issues:[], hasErrors:false, hasWarnings:false}` — no detection of typo'd keywords
-- **Root cause**: Query analyzer probably only checks metadata, not syntax.
+### Bug #16 — lint_sql misses obvious syntax errors (RESOLVED, design limitation)
+- **Status**: By design. `lint_sql` runs 10 regex-based heuristic rules (select-star, no-where-update, leading-wildcard-like, etc.) — it does NOT parse SQL syntax. Typos like `SELECTT` or `FORM` are not detected.
+- **Recommendation**: Tool description should clarify "advisory heuristics, not a SQL parser". For syntax validation, use a dedicated parser (e.g. `node-sql-parser`).
+
+### Bug #17 — get_query_history empty despite execute_query history
+- **Status**: ⏳ Deferred v3.2.5
+- **Repro**: Run several `execute_query`, then `get_query_history({limit:10})` → `{entries:[]}`
+- **Hypothesis**: `appConfig.queryAnalyzer.enabled` not properly read from `DB_QUERY_ANALYZER_ENABLED` env var, OR history.db path conflicts.
+
+### Bug #18 — explain_query empty plan for simple SELECT
+- **Status**: ⏳ Deferred v3.2.5
+- **Repro**: `explain_query({sql:'SELECT * FROM e2e_s'})` → `{plan:[], raw:''}`
+- **Hypothesis**: SQLite adapter doesn't return EXPLAIN output in expected format. Analyzer expects `EXPLAIN <sql>` response but SQLite returns different shape.
 
 ### Bug #17 — get_query_history empty despite history
 - **Repro**: Run several execute_query then call `get_query_history({limit:10})`
