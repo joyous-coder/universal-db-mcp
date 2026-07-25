@@ -226,7 +226,7 @@ export class OracleAdapter extends BaseAdapter {
                 DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
          FROM ALL_TAB_COLUMNS
          WHERE OWNER NOT IN (
-           'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+           'SYS', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
            'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
            'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
            'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
@@ -239,7 +239,7 @@ export class OracleAdapter extends BaseAdapter {
         `SELECT OWNER, TABLE_NAME, COLUMN_NAME, COMMENTS
          FROM ALL_COL_COMMENTS
          WHERE OWNER NOT IN (
-           'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+           'SYS', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
            'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
            'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
            'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
@@ -256,7 +256,7 @@ export class OracleAdapter extends BaseAdapter {
            AND cons.OWNER = cols.OWNER
          WHERE cons.CONSTRAINT_TYPE = 'P'
            AND cons.OWNER NOT IN (
-             'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+             'SYS', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
              'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
              'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
              'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
@@ -272,7 +272,7 @@ export class OracleAdapter extends BaseAdapter {
            ON i.INDEX_NAME = ic.INDEX_NAME
            AND i.OWNER = ic.INDEX_OWNER
          WHERE i.OWNER NOT IN (
-           'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+           'SYS', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
            'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
            'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
            'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
@@ -287,7 +287,7 @@ export class OracleAdapter extends BaseAdapter {
          FROM ALL_TABLES t
          LEFT JOIN ALL_TAB_COMMENTS c ON t.TABLE_NAME = c.TABLE_NAME AND t.OWNER = c.OWNER
          WHERE t.OWNER NOT IN (
-           'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+           'SYS', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
            'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
            'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
            'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'
@@ -315,7 +315,7 @@ export class OracleAdapter extends BaseAdapter {
           JOIN ALL_CONS_COLUMNS rcc ON rc.CONSTRAINT_NAME = rcc.CONSTRAINT_NAME AND rc.OWNER = rcc.OWNER AND cc.POSITION = rcc.POSITION
           WHERE c.CONSTRAINT_TYPE = 'R'
             AND c.OWNER NOT IN (
-              'SYS', 'SYSTEM', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+              'SYS', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
               'OUTLN', 'GSMADMIN_INTERNAL', 'GGSYS', 'XDB', 'WMSYS',
               'MDSYS', 'ORDDATA', 'CTXSYS', 'ORDSYS', 'OLAPSYS',
               'LBACSYS', 'DVSYS', 'AUDSYS', 'OJVMSYS', 'REMOTE_SCHEDULER_AGENT'

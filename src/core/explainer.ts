@@ -13,6 +13,22 @@ export class Explainer {
 
   async explain(sql: string, params?: unknown[]): Promise<ExplainResult> {
     const start = Date.now();
+
+    // v3.2.8 Bug #38 fix: Oracle's `EXPLAIN PLAN FOR <sql>` doesn't return rows
+    // — it populates PLAN_TABLE silently. Need 2-step:
+    //   1. EXPLAIN PLAN FOR <sql>
+    //   2. SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY())
+    if (this.dbType === 'oracle') {
+      const explainSql = `EXPLAIN PLAN FOR ${sql.trim().replace(/;$/, '')}`;
+      await this.adapter.executeQuery(explainSql, params);
+      const displaySql = `SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY())`;
+      const displayResult = await this.adapter.executeQuery(displaySql);
+      const displayRows = (displayResult.rows ?? []) as Array<Record<string, unknown>>;
+      const raw = displayRows.map(r => Object.values(r).join('|')).join('\n');
+      const plan = this.parsePlan(displayRows);
+      return { db: this.dbType, sql, plan, raw, format: 'tabular', duration_ms: Date.now() - start };
+    }
+
     const explainSql = this.buildExplainSql(sql);
     const result = await this.adapter.executeQuery(explainSql, params);
     const rows = (result.rows ?? []) as Array<Record<string, unknown>>;
