@@ -163,9 +163,11 @@ export class MongoDBAdapter implements DbAdapter {
 
 - [ ] 所有测试通过 (`npm test`)
 - [ ] 构建成功 (`npm run build`)
-- [ ] CHANGELOG.md 已更新
+- [ ] CHANGELOG.md **顶部**新增当前版本的 `## [vX.Y.Z] - YYYY-MM-DD` 条目（**强约束**：publish.yml 会校验缺失则发布失败）
 - [ ] README 反映最新功能
 - [ ] 没有未提交的本地修改 (`git status` clean)
+
+> **CI 强制项**（v3.2.1+）：publish.yml 现在会运行 `npm test` 并校验 CHANGELOG.md。失败则 **不会发布**（无 partial / silent release）。完整约束清单见 [`CLAUDE.md`](./CLAUDE.md) § "AI Work Constraints"。
 
 ## 📄 许可证
 

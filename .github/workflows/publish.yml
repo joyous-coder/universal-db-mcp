@@ -46,12 +46,28 @@ jobs:
       - name: Build project
         run: npm run build
 
+      - name: Run tests (must pass before publish)
+        # Enforce: failing tests block the publish. v3.2.1+ requirement.
+        run: npm test
+
       - name: Check package version
         id: version
         run: |
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
           echo "version=$PACKAGE_VERSION" >> $GITHUB_OUTPUT
           echo "📦 Package version: $PACKAGE_VERSION"
+
+      - name: Verify CHANGELOG entry exists for this version
+        # Enforce: every release must have a CHANGELOG entry. v3.2.1+ requirement.
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "🔍 Checking CHANGELOG.md for [${VERSION}] entry..."
+          if ! grep -q "## \[${VERSION}\]" CHANGELOG.md; then
+            echo "❌ CHANGELOG.md is missing an entry for version ${VERSION}"
+            echo "Add a section like '## [${VERSION}] - YYYY-MM-DD' before publishing."
+            exit 1
+          fi
+          echo "✅ CHANGELOG.md contains entry for ${VERSION}"
 
       # Trusted Publishing via OIDC — no NPM_TOKEN secret required.
       # Configure the trusted publisher on npmjs.com first (see docs/superpowers/specs).
@@ -68,4 +84,9 @@ jobs:
         if: failure()
         run: |
           echo "❌ Failed to publish to NPM"
+          echo "Common causes:"
+          echo "  - Tests failing (run 'npm test' locally to reproduce)"
+          echo "  - Build failing (run 'npm run build' locally to reproduce)"
+          echo "  - Missing CHANGELOG entry for this version (add '## [vX.Y.Z] - YYYY-MM-DD' section)"
+          echo "  - Network / registry issues (see lock-file rewrite step)"
           echo "Please check the logs above for details"
