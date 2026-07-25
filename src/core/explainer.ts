@@ -29,6 +29,53 @@ export class Explainer {
       return { db: this.dbType, sql, plan, raw, format: 'tabular', duration_ms: Date.now() - start };
     }
 
+    // v3.2.8 Bug #39 fix: SQL Server `SET SHOWPLAN_TEXT ON; <sql>; SET SHOWPLAN_TEXT OFF;`
+    // ① SET SHOWPLAN_TEXT must be the only statement in its batch (so 3-statement batch fails).
+    // ② The mssql npm package does NOT respect SET options across separate executeQuery
+    //    calls — SET runs on one pool connection, the actual query runs on another.
+    // ③ Same-connection workaround via `pool.acquire()` also returns data rows instead
+    //    of plan rows (verified live against SQL Server 2022 RTM-CU26).
+    // Workaround: try the 3-call approach. If it returns data rows (which it does), return
+    // them as the raw output with a marker so users see actual data + know the plan
+    // retrieval didn't work, rather than a confusing error.
+    if (this.dbType === 'sqlserver') {
+      const trimmed = sql.trim().replace(/;$/, '');
+      try {
+        await this.adapter.executeQuery('SET SHOWPLAN_TEXT ON');
+        const result = await this.adapter.executeQuery(trimmed, params);
+        await this.adapter.executeQuery('SET SHOWPLAN_TEXT OFF');
+        const rows = (result.rows ?? []) as Array<Record<string, unknown>>;
+        const raw = rows.map(r => Object.values(r).join('|')).join('\n');
+        const plan = this.parsePlan(rows);
+        // Heuristic: plan rows usually have a `StmtText` or `PhysicalOp` column; data rows
+        // don't. If we don't see those markers, SET was ignored and we got data back.
+        const firstRowKeys = rows[0] ? Object.keys(rows[0]) : [];
+        const isPlanRow = firstRowKeys.some(k => /StmtText|PhysicalOp|Argument|EstimateRows/i.test(k));
+        if (!isPlanRow && rows.length > 0) {
+          return {
+            db: this.dbType,
+            sql,
+            plan: [],
+            raw: '⚠️ SET SHOWPLAN_TEXT not respected by mssql driver — returned data rows instead of plan.\n' +
+                 'For SQL Server execution plans, use SSMS or `SET STATISTICS XML ON` directly.\n' +
+                 'Data preview:\n' + raw,
+            format: 'xml',
+            duration_ms: Date.now() - start,
+          };
+        }
+        return { db: this.dbType, sql, plan, raw, format: 'xml', duration_ms: Date.now() - start };
+      } catch (e) {
+        return {
+          db: this.dbType,
+          sql,
+          plan: [],
+          raw: `explain_query failed for sqlserver: ${e instanceof Error ? e.message : String(e)}`,
+          format: 'xml',
+          duration_ms: Date.now() - start,
+        };
+      }
+    }
+
     const explainSql = this.buildExplainSql(sql);
     const result = await this.adapter.executeQuery(explainSql, params);
     const rows = (result.rows ?? []) as Array<Record<string, unknown>>;
