@@ -53,9 +53,9 @@
 | 10 | get_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 (Bug #36) | ✅ v3.2.8 (Bug #41) | ✅ v3.2.8 | ✅ v3.2.8 |
 | 11 | get_table_info | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #37) | ✅ v3.2.8 (Bug #42) | ✅ v3.2.8 | ✅ v3.2.8 |
 | 12 | clear_cache | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 13 | get_enum_values | ✅ | INFRA | ✅ v3.2.8 (Bug #28) | INFRA | INFRA | v3.2.9 | INFRA (Oracle uses DISTINCT without sampling) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design, falls back to DISTINCT) | ✅ v3.2.8 (design, same path as mysql) |
+| 13 | get_enum_values | ✅ | INFRA | ✅ v3.2.8 (Bug #28) | INFRA | INFRA | v3.2.9 | INFRA (Oracle uses DISTINCT without sampling) | ✅ v3.2.8 (live) | ✅ v3.2.8 (design, falls back to DISTINCT) | ✅ v3.2.8 (design, same path as mysql) |
 | 14 | get_sample_data | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 15 | generate_sample_data | ✅ | INFRA | ✅ v3.2.8 (Bug #30) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same fix as mysql) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
+| 15 | generate_sample_data | ✅ | INFRA | ✅ v3.2.8 (Bug #30) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same fix as mysql) | ✅ v3.2.8 (live) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
 | 16 | explain_query | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #38) | ⚠️ v3.2.8 (Bug #43 fallback — use DISQL) | ⚠️ v3.2.8 (Bug #39 fallback) | ✅ v3.2.8 (TiDB plan parsed: TableReader_7 → Selection_6 → TableFullScan_5) |
 | 17 | lint_sql | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
 | 18 | get_query_history | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
@@ -75,11 +75,11 @@
 | 32 | disable_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
 | 33 | disconnect_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
 | 34 | compare_profile_schemas | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 35 | export_backup | ✅ | ⚠️ | ✅ v3.2.8 (Bug #31) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same code path as mysql) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
+| 35 | export_backup | ✅ | ⚠️ | ✅ v3.2.8 (Bug #31) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same code path as mysql) | ✅ v3.2.8 (live) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
 | 36 | audit_log | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
 | 37 | get_pii_config | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
 | 38 | set_pii_config | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 39 | explain_query_with_advice | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same path as mysql) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
+| 39 | explain_query_with_advice | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same path as mysql) | ✅ v3.2.8 (live) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
 | 40 | compare_query_plans | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
 | 41 | list_query_plans | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
 | 42 | use_tool_group | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
