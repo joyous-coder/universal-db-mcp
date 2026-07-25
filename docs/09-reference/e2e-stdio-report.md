@@ -41,7 +41,7 @@
 | 3  | get_connection_status | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
 | 4  | execute_query | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
 | 5  | execute_script | ✅ | INFRA | INFRA | INFRA | INFRA | v3.2.9 | v3.2.9 |
-| 6  | execute_sql_file | ✅ | ✅ v3.2.8 (design) | ✅ v3.2.8 (Bug #33+#34+#35) | ✅ v3.2.8 (friendly error) | ✅ v3.2.8 (friendly error) | v3.2.9 | v3.2.9 |
+| 6  | execute_sql_file | ✅ | ✅ v3.2.8 (live) | ✅ v3.2.8 (Bug #33+#34+#35, live) | ✅ v3.2.8 (friendly error) | ✅ v3.2.8 (friendly error) | v3.2.9 | v3.2.9 |
 | 7  | execute_batch | ✅ | INFRA | ✅ v3.2.8 (Bug #30+32) | INFRA | INFRA | v3.2.9 | v3.2.9 |
 | 8  | execute_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
 | 9  | get_metrics | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
@@ -311,6 +311,7 @@
 - **2026-07-25 evening**: v3.2.5–v3.2.7 cascade — Bug #7/#25/#26/#27 fixed;redis 35+7 INFRA + 1 ⚠️,mongodb 26+4 INFRA + 2 ⚠️→✅ e2e verified;🚀 **v3.2.7 published**
 - **2026-07-25 night**: v3.2.8 — Bug #28/#29/#30+#31+#32 fixed on mysql 8.0;mysql 38/43 ✅ + 5 INFRA verified
 - **2026-07-25 night**: v3.2.8 batch 2 — Bug #33+#34+#35 (execute_sql_file wiring);live verified mysql 3-statement atomic + mongo friendly error
+- **2026-07-25 night**: v3.2.8 batch 2 supplement — postgres 3-statement atomic via e2e-b-postgres (test/test/testdb) ✅
 
 ## Summary — v3.2.8 latest ✅
 

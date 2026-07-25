@@ -55,8 +55,8 @@ v3.2.7 发布后跑 v3.2.8 backlog 中 mysql e2e + execute_sql_file 全链路验
 
 - ✅ **mysql** (38 ✅ + 5 INFRA): 4 bug 已 live verify
 - ✅ **execute_sql_file 全链路 live verified**: MySQL 3-statement atomic + mongodb/redis 友好错误
-- ✅ **postgres execute_sql_file** design-verified (代码路径同 mysql — `executeScript` override + transaction wrapper)
-- ⏳ oracle / dm / sqlserver / tidb / postgres / clickhouse 推到 v3.2.9
+- ✅ **postgres execute_sql_file** live verified (3-statement atomic, e2e-b-postgres test/test/testdb)
+- ⏳ oracle / dm / sqlserver / tidb / clickhouse 推到 v3.2.9
 
 ### 测试
 
