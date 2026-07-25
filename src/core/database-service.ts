@@ -431,6 +431,17 @@ export class DatabaseService {
     useTransaction?: boolean;
     maxStatements?: number;
   }): Promise<QueryResult> {
+    // v3.2.8 Bug #33 fix: execute_sql_file is meaningless for NoSQL DBs that don't speak SQL.
+    // Throw a friendly error early instead of letting the underlying executeScript fail with
+    // a confusing parse error (NoSQL types: mongodb, redis).
+    const nosqlTypes = ['mongodb', 'redis'];
+    if (nosqlTypes.includes(this.config.type)) {
+      throw new Error(
+        `execute_sql_file 不支持 ${this.config.type}(NoSQL 数据库无 SQL 脚本概念)。` +
+        `请改用 execute_query(for mongo: db.collection.operation(args); for redis: SET/GET 等命令)`
+      );
+    }
+
     const permissions = resolvePermissions(this.config);
     if (!permissions.includes('script')) {
       throw new Error('execute_sql_file 需要 script 权限。当前权限: ' + permissions.join(', '));
