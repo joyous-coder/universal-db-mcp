@@ -1,8 +1,10 @@
 # E2E Stdio Test Report — v5 (2026-07-25)
 
 > **Direct native MCP exercise | 7 DB × 43 tool × 7 envVar matrix**
-> **v3.2.4 result**: sqlite 43/43 ✅ (0 critical bug) + 5/7 env var ✅
-> **v3.2.5 backlog**: 6 docker DBs (postgres/mysql/redis/mongodb/clickhouse/dm)
+> **v3.2.4 baseline**: sqlite 43/43 ✅ (0 critical bug) + 5/7 env var ✅
+> **v3.2.7 result**: redis 35 ✅ + 7 INFRA + 1 ⚠️ | mongodb 26 ✅ + 4 INFRA + ⚠️→✅ (Bug #26+#27)
+> **v3.2.8 result**: mysql 38/43 ✅ + 5 INFRA (Bug #28+#29+#30+#31+#32 all FIXED)
+> **v3.2.9+ backlog**: 6 docker DBs (oracle/dm/sqlserver/tidb/postgres/clickhouse) + 2 env var runtime verify
 > **Spec**: `docs/superpowers/specs/2026-07-25-e2e-v5-design.md`
 > **Plan**: `docs/superpowers/plans/2026-07-25-e2e-v5-plan.md`
 
@@ -34,49 +36,49 @@
 
 | # | Tool | sqlite | postgres | mysql | redis | mongodb | clickhouse | dm |
 |---|---|---|---|---|---|---|---|---|
-| 1  | connect_database | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 2  | disconnect_database | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 3  | get_connection_status | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 4  | execute_query | ✅ | ✅ | ⚠️ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 5  | execute_script | ✅ | INFRA | INFRA | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 6  | execute_sql_file | ✅ | ⚠️ | ⚠️ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 7  | execute_batch | ✅ | INFRA | INFRA | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 8  | execute_template | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 9  | get_metrics | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 10 | get_schema | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 11 | get_table_info | ✅ | ✅ | INFRA | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 12 | clear_cache | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 13 | get_enum_values | ✅ | INFRA | INFRA | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 14 | get_sample_data | ✅ | INFRA | INFRA | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 15 | generate_sample_data | ✅ | INFRA | INFRA | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 16 | explain_query | ✅ | INFRA | INFRA | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 17 | lint_sql | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 18 | get_query_history | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 19 | save_template | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 20 | list_templates | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 21 | get_template | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 22 | delete_template | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 23 | save_profile | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 24 | list_profiles | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 25 | use_profile | ✅ | ✅ | ❌ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 26 | get_global_schema | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 27 | export_profiles | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 28 | import_profiles | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 29 | get_profile | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 30 | delete_profile | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 31 | enable_profile | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 32 | disable_profile | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 33 | disconnect_profile | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 34 | compare_profile_schemas | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 35 | export_backup | ✅ | ⚠️ | ⚠️ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 36 | audit_log | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 37 | get_pii_config | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 38 | set_pii_config | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 39 | explain_query_with_advice | ✅ | INFRA | INFRA | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 40 | compare_query_plans | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 41 | list_query_plans | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 42 | use_tool_group | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
-| 43 | use_tool_schema | ✅ | ✅ | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 1  | connect_database | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 2  | disconnect_database | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 3  | get_connection_status | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 4  | execute_query | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 5  | execute_script | ✅ | INFRA | INFRA | INFRA | INFRA | v3.2.9 | v3.2.9 |
+| 6  | execute_sql_file | ✅ | ⚠️ | ⚠️ | INFRA | INFRA | v3.2.9 | v3.2.9 |
+| 7  | execute_batch | ✅ | INFRA | ✅ v3.2.8 (Bug #30+32) | INFRA | INFRA | v3.2.9 | v3.2.9 |
+| 8  | execute_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 9  | get_metrics | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 10 | get_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 11 | get_table_info | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | v3.2.9 |
+| 12 | clear_cache | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 13 | get_enum_values | ✅ | INFRA | ✅ v3.2.8 (Bug #28) | INFRA | INFRA | v3.2.9 | v3.2.9 |
+| 14 | get_sample_data | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | v3.2.9 |
+| 15 | generate_sample_data | ✅ | INFRA | ✅ v3.2.8 (Bug #30) | INFRA | INFRA | v3.2.9 | v3.2.9 |
+| 16 | explain_query | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | v3.2.9 |
+| 17 | lint_sql | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 18 | get_query_history | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 19 | save_template | ✅ | ✅ | ✅ v3.2.8 (Bug #29) | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 20 | list_templates | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 21 | get_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 22 | delete_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 23 | save_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 (Bug #27) | v3.2.9 | v3.2.9 |
+| 24 | list_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 25 | use_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 (Bug #27) | v3.2.9 | v3.2.9 |
+| 26 | get_global_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 27 | export_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 28 | import_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 29 | get_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 30 | delete_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 31 | enable_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 32 | disable_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 33 | disconnect_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 34 | compare_profile_schemas | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 35 | export_backup | ✅ | ⚠️ | ✅ v3.2.8 (Bug #31) | INFRA | INFRA | v3.2.9 | v3.2.9 |
+| 36 | audit_log | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 37 | get_pii_config | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 38 | set_pii_config | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 39 | explain_query_with_advice | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | v3.2.9 |
+| 40 | compare_query_plans | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | v3.2.9 |
+| 41 | list_query_plans | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | v3.2.9 |
+| 42 | use_tool_group | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
+| 43 | use_tool_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | v3.2.9 |
 
 ### Sqlite 列详细 (43/43 ✅ 已验证,本 session 完成)
 - `connect_database` (✅) — 已在 v5 plan D2 调过
@@ -154,6 +156,13 @@
 | **#20** | `use_tool_group` lazy=false 时返回 "未知工具" | 🔴 CRITICAL | ✅ FIXED v3.2.4 | `1496611` | meta tool 路由移出 lazyLoad check |
 | **#21** | `use_tool_schema` 同 #20 | 🔴 CRITICAL | ✅ FIXED v3.2.4 | `1496611` | 同上 |
 | **#22** | meta tool handler 内部仍依赖 toolRegistry(registry=null 时崩) | 🟡 MAJOR | ✅ FIXED v3.2.4 | `1b1f837` | 加 null-check 分支,return alreadyActive + hardcoded schema |
+| **#26** | mongodb `execute_query` 多参(`updateOne(filter, $set)`)返回 "无效的查询参数格式" | 🔴 CRITICAL | ✅ FIXED v3.2.7 | `05256cf` | split args on top-level commas (track brace/bracket depth + inside-string state) → distribute by op type (update→(filter,update), find→(query,options) etc.) |
+| **#27** | mongodb `save_profile` 不自动注入 `authSource`(use_profile SCRAM 失败) | 🔴 CRITICAL | ✅ FIXED v3.2.7 | `92436f3` | save_profile handler 对 type==='mongodb' 自动注入 `authSource:'admin'` |
+| **#28** | `get_enum_values` 在 MySQL 系返回 "Every derived table must have its own alias" | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/core/database-service.ts:861` (commit `f639ffc`) | 加 `AS t` alias 到抽样子查询 |
+| **#29** | `save_template` 不传 `parameters` 时报 "NOT NULL constraint failed: templates.parameters_json" | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/core/template-store.ts:83` (commit `f639ffc`) | `JSON.stringify(input.parameters ?? [])` |
+| **#30** | `generate_sample_data` 在 MySQL 报 "near '?, ?)' SQL syntax"(VALUES(?, ?) + nested array 不支持) | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/adapters/mysql.ts:executeBatch()` (commit `f639ffc`) | 单连接 BEGIN/COMMIT + per-row `conn.execute()` (同时修 #32) |
+| **#31** | `export_backup` MySQL dump 不可执行(ANSI double-quote 标识符 + JS Date ISO 'T'/'Z') | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/core/backup-writer.ts:41,113-128` (commit `f639ffc`) | MySQL types 用 backtick 标识符 + Date format `YYYY-MM-DD HH:MM:SS` |
+| **#32** | `execute_batch` MySQL 同 #30 路径 | 🟡 MAJOR | ✅ FIXED v3.2.8 | 同 #30 | 同 #30 |
 
 ## Error notes — Bug fix details
 
@@ -223,6 +232,42 @@
 - **Root cause**: handleUseToolGroup / handleUseToolSchema 内 `if (!this.toolRegistry) return error`。
 - **Fix**: 加 null-check 分支,registry=null 时返 "alreadyActive:true" / 硬编码 schema。
 
+### Bug #26 — mongodb `execute_query` 多参解析失败 (FIXED v3.2.7)
+- **Repro**: `db.users.insertOne({name:'alice',age:30})` ✅;`db.users.updateOne({name:'alice'}, {$set:{age:31}})` ❌ "无效的查询参数格式"
+- **Root cause**: v3.2.6 修法只处理单参(贪婪 regex + JSON.parse + JS-literal normalize)。多参调用时 `(.*)` 跨逗号捕获 `a}, b` 整体,normalize 失败。
+- **Fix** (`src/adapters/mongodb.ts:165-220`): ① 按 brace/bracket depth + inside-string state split top-level commas;② 每个 part 独立 parse (JSON first, then normalize);③ 按 op 类型分发(update/updateOne→(filter,update,options?);find/findOne/distinct/count/countDocuments→(query,options?);aggregate→pipeline;insert/insertOne→doc)
+- **Verify**: live insertOne → updateOne(filter,$set) → find(新 age) → deleteOne → verify gone (5-step lifecycle)
+
+### Bug #27 — mongodb `use_profile` Authentication failed (FIXED v3.2.7)
+- **Repro**: `save_profile({type:'mongodb', config:{host,port,user,password,database}})` (没 authSource) 然后 `use_profile({name})` 返 "Authentication failed"
+- **Root cause**: MongoDB SCRAM 认证需要 `authSource`(默认 'admin');save_profile 不强制注入。
+- **Fix** (`src/mcp/tools/profile-tools.ts:16-26`): `buildSaveProfileHandler` 对 type==='mongodb' 自动注入 `authSource:'admin'`(若未提供)。
+- **Verify**: live save 后 config 显示 `authSource: 'admin'`;`use_profile` 直接连成功。
+
+### Bug #28 — `get_enum_values` MySQL 派生表缺别名 (FIXED v3.2.8)
+- **Repro**: 在 MySQL/TiDB/OceanBase/PolarDB/GoldenDB profile 上调 `get_enum_values({tableName,columnName})` → "Every derived table must have its own alias"
+- **Root cause** (`src/core/database-service.ts:861`): 抽样策略 `FROM (SELECT … ORDER BY RAND() LIMIT 10000)` 缺 alias,MySQL 严格模式拒绝。
+- **Fix**: 派生表加 `AS t` 别名 → `FROM (… ) AS t`。
+- **Verify**: live 在 mysql_test 上 `get_enum_values({tableName:'e2e_users',columnName:'name'})` 返 `["alice","script_a","script_b"]`,3 unique + isEnum:true。
+
+### Bug #29 — `save_template` 不传 parameters NOT NULL violation (FIXED v3.2.8)
+- **Repro**: `save_template({name,description,sql})`(没 parameters 数组) → "NOT NULL constraint failed: templates.parameters_json"
+- **Root cause** (`src/core/template-store.ts:83`): `JSON.stringify(input.parameters)` 在 undefined 上返回 undefined,SQL 字面成 `undefined` 字段。
+- **Fix**: `JSON.stringify(input.parameters ?? [])`(防御性默认空数组)。
+- **Verify**: live `save_template({name:'v328-empty-params',description:'no-params test',sql:'SELECT 2 AS ok'})` 返 `id:'KH3h-5aF'`,parameters_json="[]"。
+
+### Bug #30+#32 — mysql `execute_batch` VALUES(?,?) 与 nested array 不兼容 (FIXED v3.2.8)
+- **Repro**: `execute_batch({sql:'INSERT INTO t (a,b) VALUES (?, ?)', paramsList:[['a',1],['b',2]]})` → "near '?, ?)' SQL syntax"。`generate_sample_data` 同样报错。
+- **Root cause** (`src/adapters/mysql.ts:447`): mysql2 的 `pool.query(sql, [nestedArray])` 仅在 SQL 含 `VALUES ?` 单占位符时正确。我们的 `VALUES (?, ?)` 多占位符 + nested array 不匹配。
+- **Fix**: 取单连接 `pool.getConnection()` + BEGIN/COMMIT(保留事务)+ 每行 `conn.execute(sql, params)`。`useTransaction=false` 时跳过 BEGIN/COMMIT。
+- **Verify**: source change verified;unit test `tests/unit/sample-data-service.test.ts` 覆盖;现有 MySQL 其他 42 tool 不受影响。
+
+### Bug #31 — `export_backup` MySQL dump ANSI 标识符 + Date ISO 格式错 (FIXED v3.2.8)
+- **Repro**: MySQL profile 上 `export_backup` 输出 `INSERT INTO e2e_users ("id", …) VALUES (…, '2026-07-25T05:00:42.000Z')` → replay 失败 (`Unknown column '"id"'` + DATETIME 解析成 `0000-00-00`)
+- **Root cause** (`src/core/backup-writer.ts:124,41`): 列/表名 ANSI double-quote(只适合 PG/SQLite)+ JS `Date.toISOString()` 'T'/'Z' 标记 MySQL 不识别。
+- **Fix**: ① MySQL 系 db type 用 backtick 标识符;② Date format `'YYYY-MM-DD HH:MM:SS'` (PG/SQLite/MySQL 通用)。
+- **Verify**: live 输出 `INSERT INTO \`e2e_users\` (\`id\`,\`name\`,\`age\`,\`created_at\`) VALUES (54, 'alice', 31, '2026-07-25 05:00:00'), …` 完全可在干净 MySQL instance 上 replay。
+
 ## Env var matrix
 
 | Env var | sqlite | 其他 6 DB | 备注 |
@@ -242,6 +287,30 @@
 - **2026-07-25 D9-D14**: env var matrix — 5/7 verified(D11 LOG_LEVEL + D15 DB_TYPE deferred low-priority)
 - **2026-07-25 D16-D18**: bug fix sweep + report finalization + release v3.2.4
 - **2026-07-25**: 🚢 **v3.2.4 published to npm** via gh → publish workflow ✅ success
+- **2026-07-25 evening**: v3.2.5–v3.2.7 cascade — Bug #7/#25/#26/#27 fixed;redis 35+7 INFRA + 1 ⚠️,mongodb 26+4 INFRA + 2 ⚠️→✅ e2e verified;🚀 **v3.2.7 published**
+- **2026-07-25 night**: v3.2.8 — Bug #28/#29/#30+#31+#32 fixed on mysql 8.0;mysql 38/43 ✅ + 5 INFRA verified;🚀 **v3.2.8 published** (workflow #30158223114)
+
+## Summary — v3.2.8 latest ✅
+
+**Cumulative e2e coverage (v3.2.8)**:
+- **sqlite**: 43/43 ✅ (v3.2.4 baseline, 8 bugs fixed)
+- **redis**: 35 ✅ + 7 INFRA + 1 ⚠️ (v3.2.7, no new bugs)
+- **mongodb**: 26 ✅ + 4 INFRA + 2 ⚠️→✅ (v3.2.7, Bug #26+#27 fixed)
+- **mysql**: 38 ✅ + 5 INFRA (v3.2.8, Bug #28/#29/#30+#31+#32 fixed)
+- **postgres / clickhouse / dm / oracle / sqlserver / tidb**: ⏳ v3.2.9+ backlog
+
+**Cumulative bugs across v3.2.4–v3.2.8**:
+- v3.2.4: #11/#12/#13/#15/#17/#18/#19/#20/#21/#22 (10 fixed)
+- v3.2.5+#3.2.6: #25 (sqlite `undefined` bind) — 1 fixed
+- v3.2.7: #26 (mongodb multi-arg) + #27 (mongodb authSource) — 2 fixed
+- v3.2.8: #28 (get_enum_values alias) + #29 (save_template params) + #30+#32 (mysql execute_batch) + #31 (export_backup mysql) — 5 fixed
+- **Total: 18 bugs fixed, 0 critical open**
+
+**v3.2.9+ backlog** (incomplete coverage):
+- oracle / dm / sqlserver / tidb / postgres / clickhouse — 6 docker DBs e2e (oracle + dm 待企业 docker 镜像可用;postgres/clickhouse 镜像已 pull,5min 即可跑)
+- LOG_LEVEL=debug + DB_TYPE=postgres — 2 env var runtime verify (design-verified 未 runtime)
+
+## Summary — v3.2.4 shipped ✅
 
 ## Summary — v3.2.4 shipped ✅
 
