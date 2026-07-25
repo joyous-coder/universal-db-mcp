@@ -19,7 +19,7 @@ describe('buildToolDefinitions', () => {
     expect(t.groups['index-advisor']?.length ?? 0).toBe(0);
   });
 
-  it('returns 31 tool definitions when all deps provided', () => {
+  it('returns 25 lazy tool definitions when all deps provided (stateful tools kept in fallback switch)', () => {
     const t = buildToolDefinitions({
       queryAnalyzer: {} as any,
       profileManager: {} as any,
@@ -27,8 +27,12 @@ describe('buildToolDefinitions', () => {
       config: null,
       planHistory: {} as any,
     });
+    // query-experience 7 (minus execute_template) + profiles 10 (minus use_profile)
+    // + data-governance 5 + index-advisor 3 = 25
     const groupCount = Object.values(t.groups).reduce((a, g) => a + (g?.length ?? 0), 0);
-    expect(t.meta.length + t.infoLazy.length + groupCount).toBe(31);
+    expect(groupCount).toBe(25);
+    expect(t.meta.length).toBe(2);
+    expect(t.infoLazy.length).toBe(1);
   });
 
   it('every lazy tool description contains [group: <name>]', () => {

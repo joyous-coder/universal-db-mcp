@@ -212,7 +212,7 @@ export class DatabaseMCPServer {
       this.toolRegistry = null;
       return;
     }
-    const profileStore = (this.profileManager as any)?.profileStore ?? null;
+    const profileStore = this.profileManager?.getProfileStore() ?? null;
     this.toolRegistry = buildToolRegistry({
       queryAnalyzer: this.queryAnalyzer,
       profileManager: this.profileManager,
@@ -1178,11 +1178,11 @@ export class DatabaseMCPServer {
           }
           case 'enable_profile': {
             if (!this.profileManager) throw new Error('profileManager not configured');
-            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildEnableProfileHandler(this.profileManager, (this.profileManager as any).profileStore)(args as any), null, 2) }] };
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildEnableProfileHandler(this.profileManager, this.profileManager.getProfileStore())(args as any), null, 2) }] };
           }
           case 'disable_profile': {
             if (!this.profileManager) throw new Error('profileManager not configured');
-            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildDisableProfileHandler(this.profileManager, (this.profileManager as any).profileStore)(args as any), null, 2) }] };
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildDisableProfileHandler(this.profileManager, this.profileManager.getProfileStore())(args as any), null, 2) }] };
           }
           case 'disconnect_profile': {
             if (!this.profileManager) throw new Error('profileManager not configured');

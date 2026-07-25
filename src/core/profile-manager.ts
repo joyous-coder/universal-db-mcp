@@ -78,6 +78,14 @@ export class ProfileManager {
   private liveProfiles: Map<string, LiveProfile> = new Map();
   private enabled: boolean;
   private maxProfiles: number;
+
+  /**
+   * v3.2: expose the underlying ProfileStore so MCP/HTTP handlers can call
+   * setEnabled() for enable_profile/disable_profile tools.
+   */
+  getProfileStore(): ProfileStore {
+    return this.store;
+  }
   private defaultRole: ProfileRole;
   private readRouting: ReadRouting;
   /** v2.19: cipher key for ProfileStore (Task 3 wires it through). */
