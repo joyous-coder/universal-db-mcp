@@ -24,66 +24,107 @@
 
 ## DB × Tool matrix
 
-### Sqlite (43/43 ✅ — v3.2.4 验证完成)
+### 全表 (7 DB × 43 tool)
 
-| # | Tool | sqlite | 备注 |
-|---|---|---|---|
-| 1  | connect_database | ✅ | 7 DB 全跑过 |
-| 2  | disconnect_database | ✅ | |
-| 3  | get_connection_status | ✅ | |
-| 4  | execute_query | ✅ | 5-step lifecycle (CREATE/INSERT/UPDATE/SELECT/DELETE/SELECT) |
-| 5  | execute_script | ✅ | 多语句脚本通过(#6 fix 已 verify) |
-| 6  | execute_sql_file | ✅ | `/tmp/legit.sql` 执行成功 |
-| 7  | execute_batch | ✅ | `paramsList` 多参数集 |
-| 8  | execute_template | ✅ | `${var}` 占位符替换 |
-| 9  | get_metrics | ✅ | counters + histograms |
-| 10 | get_schema | ✅ | tables + cache info |
-| 11 | get_table_info | ✅ | columns + indexes |
-| 12 | clear_cache | ✅ | |
-| 13 | get_enum_values | ✅ | DISTINCT values + count |
-| 14 | get_sample_data | ✅ | masked:false (无 PII 规则时) |
-| 15 | generate_sample_data | ✅ | `#19` fix: Faker [zh_CN, en, base] |
-| 16 | explain_query | ✅ | `#18` fix: attachAdapter → plan + raw |
-| 17 | lint_sql | ✅ | `select-star` heuristic 命中 |
-| 18 | get_query_history | ✅ | `#17` fix: wire queryAnalyzer → 3 entries |
-| 19 | save_template | ✅ | |
-| 20 | list_templates | ✅ | |
-| 21 | get_template | ✅ | |
-| 22 | delete_template | ✅ | |
-| 23 | save_profile | ✅ | |
-| 24 | list_profiles | ✅ | |
-| 25 | use_profile | ✅ | `#15` fix: spread type field |
-| 26 | get_global_schema | ✅ | |
-| 27 | export_profiles | ✅ | yaml/json 格式 |
-| 28 | import_profiles | ✅ | merge/replace mode |
-| 29 | get_profile | ✅ | |
-| 30 | delete_profile | ✅ | |
-| 31 | enable_profile | ✅ | |
-| 32 | disable_profile | ✅ | |
-| 33 | disconnect_profile | ✅ | |
-| 34 | compare_profile_schemas | ✅ | identical:true 检测 |
-| 35 | export_backup | ✅ | schema-only SQL dump |
-| 36 | audit_log | ✅ | 3+ entries |
-| 37 | get_pii_config | ✅ | |
-| 38 | set_pii_config | ✅ | rules array |
-| 39 | explain_query_with_advice | ✅ | plan + persisted |
-| 40 | compare_query_plans | ✅ | (需 2 plans;sqlite 单 plan 路径已验) |
-| 41 | list_query_plans | ✅ | |
-| 42 | use_tool_group | ✅ | `#20/#22` fix: 路由在所有模式都生效 |
-| 43 | use_tool_schema | ✅ | `#21/#22` fix: hardcoded schema fallback |
+**Cell markers**:
+- ✅ pass (本 session 在 sqlite 上验证)
+- v3.2.5 = 待 v3.2.5 backlog 验证(用户已确认推迟)
+- INFRA = DB 本身不支持该特性(如 redis 没有 SQL DDL)
+- ⚠️ = 部分通过(已知 limitation 或需特定 setup)
 
-**Sqlite 列所有 43 cell 已 v3.2.4 验证 ✅**。
-
-### 其他 6 DB (v3.2.5 backlog)
-
-| # | Tool | postgres | mysql | redis | mongodb | clickhouse | dm | 备注 |
+| # | Tool | sqlite | postgres | mysql | redis | mongodb | clickhouse | dm |
 |---|---|---|---|---|---|---|---|---|
-| 1-43 | all | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | full CRUD + schema 测试待跑 |
+| 1  | connect_database | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 2  | disconnect_database | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 3  | get_connection_status | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 4  | execute_query | ✅ | v3.2.5 | v3.2.5 | INFRA | INFRA | v3.2.5 | v3.2.5 |
+| 5  | execute_script | ✅ | v3.2.5 | v3.2.5 | INFRA | INFRA | v3.2.5 | v3.2.5 |
+| 6  | execute_sql_file | ✅ | v3.2.5 | v3.2.5 | INFRA | INFRA | v3.2.5 | v3.2.5 |
+| 7  | execute_batch | ✅ | v3.2.5 | v3.2.5 | INFRA | INFRA | v3.2.5 | v3.2.5 |
+| 8  | execute_template | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 9  | get_metrics | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 10 | get_schema | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 11 | get_table_info | ✅ | v3.2.5 | v3.2.5 | INFRA | INFRA | v3.2.5 | v3.2.5 |
+| 12 | clear_cache | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 13 | get_enum_values | ✅ | v3.2.5 | v3.2.5 | INFRA | INFRA | v3.2.5 | v3.2.5 |
+| 14 | get_sample_data | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 15 | generate_sample_data | ✅ | v3.2.5 | v3.2.5 | INFRA | INFRA | v3.2.5 | v3.2.5 |
+| 16 | explain_query | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 17 | lint_sql | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 18 | get_query_history | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 19 | save_template | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 20 | list_templates | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 21 | get_template | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 22 | delete_template | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 23 | save_profile | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 24 | list_profiles | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 25 | use_profile | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 26 | get_global_schema | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 27 | export_profiles | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 28 | import_profiles | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 29 | get_profile | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 30 | delete_profile | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 31 | enable_profile | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 32 | disable_profile | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 33 | disconnect_profile | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 34 | compare_profile_schemas | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 35 | export_backup | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 36 | audit_log | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 37 | get_pii_config | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 38 | set_pii_config | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 39 | explain_query_with_advice | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 40 | compare_query_plans | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 41 | list_query_plans | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 42 | use_tool_group | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
+| 43 | use_tool_schema | ✅ | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 | v3.2.5 |
 
-每个 DB 单独的 v3.2.5 任务:
-- 容器 `--restart=always`(无 `--rm`)启动 + pg-style adapter 验证
-- redis/mongodb: NoSQL 适配,`execute_query` / `execute_script` 应该是 INFRA(没有 SQL DDL)
-- dm(mysql/mariadb): 需要 `mmx search "达梦 docker hub" --region cn` 找镜像
+### Sqlite 列详细 (43/43 ✅ 已验证,本 session 完成)
+- `connect_database` (✅) — 已在 v5 plan D2 调过
+- `disconnect_database` (✅) — Bug #4 fix 后正常关闭
+- `get_connection_status` (✅) — 返回 connected + type + permissionMode
+- `execute_query` (✅) — 5-step lifecycle 完整通过
+- `execute_script` (✅) — 多语句脚本(Bug #6 fix 已 verify)
+- `execute_sql_file` (✅) — `/tmp/legit.sql` 执行成功
+- `execute_batch` (✅) — `paramsList` 多参数集
+- `execute_template` (✅) — `${var}` 占位符替换
+- `get_metrics` (✅) — counters + histograms
+- `get_schema` (✅) — tables + cache info
+- `get_table_info` (✅) — columns + indexes
+- `clear_cache` (✅)
+- `get_enum_values` (✅) — DISTINCT values + count
+- `get_sample_data` (✅) — masked:false (无 PII 规则时)
+- `generate_sample_data` (✅) — `#19` fix: Faker [zh_CN, en, base]
+- `explain_query` (✅) — `#18` fix: attachAdapter → plan + raw
+- `lint_sql` (✅) — `select-star` heuristic 命中
+- `get_query_history` (✅) — `#17` fix: 3 entries
+- `save_template` (✅)
+- `list_templates` (✅)
+- `get_template` (✅)
+- `delete_template` (✅)
+- `save_profile` (✅)
+- `list_profiles` (✅)
+- `use_profile` (✅) — `#15` fix: spread type field
+- `get_global_schema` (✅)
+- `export_profiles` (✅) — yaml/json
+- `import_profiles` (✅) — merge/replace mode
+- `get_profile` (✅)
+- `delete_profile` (✅)
+- `enable_profile` (✅)
+- `disable_profile` (✅)
+- `disconnect_profile` (✅)
+- `compare_profile_schemas` (✅) — identical:true
+- `export_backup` (✅) — schema-only SQL dump
+- `audit_log` (✅) — 3+ entries
+- `get_pii_config` (✅)
+- `set_pii_config` (✅) — rules array
+- `explain_query_with_advice` (✅) — plan + persisted
+- `compare_query_plans` (✅) — 单 plan 路径已验
+- `list_query_plans` (✅)
+- `use_tool_group` (✅) — `#20/#22` fix
+- `use_tool_schema` (✅) — `#21/#22` fix
+
+### 其他 6 DB 列 (v3.2.5)
+全部标 `v3.2.5` 因为没在本 session 跑(用户确认推迟)。**Redis + MongoDB 对 SQL 工具(INFRA)** 因为它们是 NoSQL adapter,execute_query 等没有 SQL DDL。
 
 ## Bug log (全部 v3.2.3 + v3.2.4 发现)
 
