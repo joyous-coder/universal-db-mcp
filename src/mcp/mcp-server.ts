@@ -231,6 +231,21 @@ export class DatabaseMCPServer {
     if (!this.toolRegistry) {
       return { content: [{ type: 'text', text: JSON.stringify({ error: 'registry not initialized' }) }], isError: true };
     }
+    // v3.2.1: validate args.name against enum (fix finding #11)
+    const VALID_GROUPS: ToolGroup[] = ['query-experience', 'profiles', 'data-governance', 'index-advisor'];
+    if (!args || typeof args.name !== 'string' || !VALID_GROUPS.includes(args.name as ToolGroup)) {
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            error: 'invalid group name',
+            provided: args?.name ?? '(undefined)',
+            valid: VALID_GROUPS,
+          }, null, 2),
+        }],
+        isError: true,
+      };
+    }
     const r = this.toolRegistry.activateGroup(this.currentSessionId, args.name as ToolGroup);
     return { content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] };
   }
@@ -283,6 +298,43 @@ export class DatabaseMCPServer {
   }
 
   /**
+   * v3.2.1: list always-on stateful tools (connect, execute_query, etc.) so they appear
+   * in lazy-mode ListToolsResponse. They are routed through the v3.1 fallback switch on call.
+   */
+  private getStatefulToolsForList(): any[] {
+    const perms = this.config ? resolvePermissions(this.config) : ['read'];
+    const tools: any[] = [
+      { name: 'execute_query', description: '执行 SQL 查询或数据库命令。支持 SELECT、JOIN、聚合等查询操作。如果启用了写入模式，也可以执行 INSERT、UPDATE、DELETE 等操作。', inputSchema: { type: 'object', properties: { query: { type: 'string', description: '要执行的 SQL 语句或数据库命令' }, params: { type: 'array', description: '查询参数（可选，用于参数化查询防止 SQL 注入）', items: { type: 'string' } } }, required: ['query'] } },
+      { name: 'get_schema', description: '获取数据库结构信息，包括所有 Schema 中用户可访问的表名、列名、数据类型、主键、索引等元数据。', inputSchema: { type: 'object', properties: { forceRefresh: { type: 'boolean', description: '是否强制刷新缓存（可选，默认 false）' } } } },
+      { name: 'get_table_info', description: '获取指定表的详细信息，包括列定义、索引、预估行数等。', inputSchema: { type: 'object', properties: { tableName: { type: 'string', description: '表名。支持 schema.table_name 格式' }, forceRefresh: { type: 'boolean' } }, required: ['tableName'] } },
+      { name: 'clear_cache', description: '清除 Schema 缓存。', inputSchema: { type: 'object', properties: {} } },
+      { name: 'get_enum_values', description: '获取指定列的所有唯一值。', inputSchema: { type: 'object', properties: { tableName: { type: 'string' }, columnName: { type: 'string' }, limit: { type: 'number' }, includeCount: { type: 'boolean' } }, required: ['tableName', 'columnName'] } },
+      { name: 'get_sample_data', description: '获取表的示例数据（已自动脱敏）。', inputSchema: { type: 'object', properties: { tableName: { type: 'string' }, columns: { type: 'array', items: { type: 'string' } }, limit: { type: 'number' } }, required: ['tableName'] } },
+      { name: 'connect_database', description: '连接到数据库。', inputSchema: { type: 'object', properties: { type: { type: 'string', enum: ['mysql','postgres','redis','oracle','dm','sqlserver','mongodb','sqlite','kingbase','gaussdb','oceanbase','tidb','clickhouse','polardb','vastbase','highgo','goldendb'] }, host: { type: 'string' }, port: { type: 'number' }, user: { type: 'string' }, password: { type: 'string' }, database: { type: 'string' }, filePath: { type: 'string' }, allowWrite: { type: 'boolean' }, permissionMode: { type: 'string', enum: ['safe','readwrite','full'] }, authSource: { type: 'string' }, oracleClientPath: { type: 'string' } }, required: ['type'] } },
+      { name: 'disconnect_database', description: '断开当前数据库连接。', inputSchema: { type: 'object', properties: {} } },
+      { name: 'get_connection_status', description: '获取当前数据库连接状态。', inputSchema: { type: 'object', properties: {} } },
+      // Stateful lazy tools (kept here so they're visible; routed via fallback switch)
+      { name: 'execute_template', description: TOOL_DESCRIPTIONS?.execute_template ?? 'Execute a saved template with params.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, params: { type: 'object' } }, required: ['id'] } },
+      { name: 'get_metrics', description: 'Get server observability metrics. category=summary|slow_queries|all.', inputSchema: { type: 'object', properties: { category: { type: 'string', enum: ['summary','slow_queries','all','multi_db'], default: 'summary' } } } },
+      { name: 'use_profile', description: 'Switch active connection to a saved profile.', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+    ];
+    if (perms.includes('script')) {
+      tools.push({ name: 'execute_script', description: '执行多语句 SQL 脚本或 PL/SQL 块。需要 script 权限。', inputSchema: { type: 'object', properties: { query: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['query'] } });
+      const allowedPaths = (this.config as any)?.allowedSqlFilePaths as string[] | undefined;
+      if (allowedPaths && allowedPaths.length > 0) {
+        tools.push({ name: 'execute_sql_file', description: '执行 .sql 文件。需要 script + DB_ALLOWED_FILE_PATHS。', inputSchema: { type: 'object', properties: { filePath: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['filePath'] } });
+      }
+    }
+    if (perms.includes('batch')) {
+      tools.push({ name: 'execute_batch', description: '批量执行同一条 SQL 的多个参数集。需要 batch 权限。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, paramsList: { type: 'array', items: { type: 'array' } }, useTransaction: { type: 'boolean', default: true }, maxBatchSize: { type: 'number', default: 1000 } }, required: ['sql', 'paramsList'] } });
+    }
+    if (perms.includes('insert') && perms.includes('batch')) {
+      tools.push({ name: 'generate_sample_data', description: '按表结构生成 + 插入样例数据。需要 insert+batch 权限。完整参数用 use_tool_schema 拿。', inputSchema: { type: 'object', properties: { tableName: { type: 'string' }, rowCount: { type: 'number', default: 10 } }, required: ['tableName'] } });
+    }
+    return tools;
+  }
+
+  /**
    * 设置 MCP 协议处理器
    */
   private setupHandlers(): void {
@@ -292,18 +344,12 @@ export class DatabaseMCPServer {
       // from the registry. Otherwise, fall through to v3.1 behavior (all 22+4 conditional tools).
       if (this.lazyLoadEnabled && this.toolRegistry) {
         const active = this.toolRegistry.listActiveTools(this.currentSessionId);
-        const resolvedPerms = this.config ? resolvePermissions(this.config) : ['read'];
         const tools: any[] = active.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
-        // Add conditional execute_script/execute_sql_file/execute_batch to core if permitted
-        if (resolvedPerms.includes('script')) {
-          tools.push({ name: 'execute_script', description: '执行多语句 SQL 脚本或 PL/SQL 块。需要 permissions 包含 "script"。', inputSchema: { type: 'object', properties: { query: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['query'] } });
-          const allowedPaths = (this.config as any)?.allowedSqlFilePaths as string[] | undefined;
-          if (allowedPaths && allowedPaths.length > 0) {
-            tools.push({ name: 'execute_sql_file', description: '执行 .sql 文件。需要 script 权限 + DB_ALLOWED_FILE_PATHS。', inputSchema: { type: 'object', properties: { filePath: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['filePath'] } });
-          }
-        }
-        if (resolvedPerms.includes('batch')) {
-          tools.push({ name: 'execute_batch', description: '批量执行同一条 SQL 的多个参数集。需要 batch 权限。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, paramsList: { type: 'array', items: { type: 'array' } }, useTransaction: { type: 'boolean', default: true }, maxBatchSize: { type: 'number', default: 1000 } }, required: ['sql', 'paramsList'] } });
+        // v3.2.1: append always-on stateful tools so clients can discover connect/execute_query/etc.
+        // (these are routed through the v3.1 fallback switch in CallToolRequest)
+        const statefulTools = this.getStatefulToolsForList();
+        for (const st of statefulTools) {
+          if (!tools.find(t => t.name === st.name)) tools.push(st);
         }
         return { tools };
       }
@@ -695,38 +741,33 @@ export class DatabaseMCPServer {
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
 
-      // v3.2: meta-tool routing (use_tool_group / use_tool_schema) when registry is enabled
-      if (this.lazyLoadEnabled && this.toolRegistry) {
-        if (name === 'use_tool_group') {
-          return await this.handleUseToolGroup(args as any);
-        }
-        if (name === 'use_tool_schema') {
-          return await this.handleUseToolSchema(args as any);
-        }
-        // v3.2: route lazy/info-lazy tools through registry
-        if (this.toolRegistry.isToolActive(this.currentSessionId, name)) {
-          // info-lazy validation
-          const v = this.toolRegistry.validateArgs(name, args);
-          if (!v.ok) {
-            return this.validationErrorResponse(v);
+      try {
+        // v3.2.1: meta-tool + registry routing inside try/catch (fix finding #13)
+        if (this.lazyLoadEnabled && this.toolRegistry) {
+          if (name === 'use_tool_group') {
+            return await this.handleUseToolGroup(args as any);
           }
-          try {
+          if (name === 'use_tool_schema') {
+            return await this.handleUseToolSchema(args as any);
+          }
+          // v3.2: route lazy/info-lazy tools through registry
+          if (this.toolRegistry.isToolActive(this.currentSessionId, name)) {
+            // info-lazy validation
+            const v = this.toolRegistry.validateArgs(name, args);
+            if (!v.ok) {
+              return this.validationErrorResponse(v);
+            }
             const result = await this.toolRegistry.callTool(name, args, this.currentSessionId);
             return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return { content: [{ type: 'text', text: `执行失败: ${msg}` }], isError: true };
           }
+          // Tool not active in current session → lazy error
+          const t = this.toolRegistry.findToolByName(name);
+          if (t && t.group) {
+            return this.lazyToolErrorResponse(name, t.group as ToolGroup);
+          }
+          // Tool not in registry at all — fall through to switch (stateful tools)
         }
-        // Tool not active in current session → lazy error
-        const t = this.toolRegistry.findToolByName(name);
-        if (t && t.group) {
-          return this.lazyToolErrorResponse(name, t.group as ToolGroup);
-        }
-        // Tool not in registry at all — fall through to switch (stateful tools)
-      }
 
-      try {
         // 连接管理类 tool 不需要检查数据库连接
         switch (name) {
           case 'connect_database': {
@@ -1174,7 +1215,9 @@ export class DatabaseMCPServer {
           }
           case 'delete_profile': {
             if (!this.profileManager) throw new Error('profileManager not configured');
-            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildDeleteProfileHandler(this.profileManager)(args as any), null, 2) }] };
+            const r = await (await import('./tools/profile-tools.js')).buildDeleteProfileHandler(this.profileManager)(args as any);
+            if (r.deleted && this.activeProfile === (args as any).name) this.activeProfile = null;
+            return { content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] };
           }
           case 'enable_profile': {
             if (!this.profileManager) throw new Error('profileManager not configured');
@@ -1182,11 +1225,15 @@ export class DatabaseMCPServer {
           }
           case 'disable_profile': {
             if (!this.profileManager) throw new Error('profileManager not configured');
-            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildDisableProfileHandler(this.profileManager, this.profileManager.getProfileStore())(args as any), null, 2) }] };
+            const r = await (await import('./tools/profile-tools.js')).buildDisableProfileHandler(this.profileManager, this.profileManager.getProfileStore())(args as any);
+            if (r.enabled === false && this.activeProfile === (args as any).name) this.activeProfile = null;
+            return { content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] };
           }
           case 'disconnect_profile': {
             if (!this.profileManager) throw new Error('profileManager not configured');
-            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/profile-tools.js')).buildDisconnectProfileHandler(this.profileManager)(args as any), null, 2) }] };
+            const r = await (await import('./tools/profile-tools.js')).buildDisconnectProfileHandler(this.profileManager)(args as any);
+            if (r.disconnected && this.activeProfile === (args as any).name) this.activeProfile = null;
+            return { content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] };
           }
           case 'explain_query_with_advice': {
             if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
