@@ -129,13 +129,13 @@
 
 | Env var | sqlite | postgres | mysql | redis | mongodb | clickhouse | dm |
 |---|---|---|---|---|---|---|---|
-| DB_LAZY_LOAD_ENABLED=false (baseline) | ✅ | — | — | — | — | — | — | all 43 tools in ListTools |
-| LOG_LEVEL=debug | — | — | — | — | — | — | — |
-| DB_ALLOWED_FILE_PATHS=/nonexistent | — | — | — | — | — | — | — |
-| DB_QUERY_ANALYZER_ENABLED=false | ✅ | — | — | — | — | — | — | D9 verified; explain/lint/history/template → "queryAnalyzer not configured" |
-| DB_METRICS_ENABLED=false | — | — | — | — | — | — | — |
-| DB_PLAN_HISTORY_DB_PATH=./tmp/plan.db | — | — | — | — | — | — | — |
-| DB_TYPE=postgres | — | — | — | — | — | — | — |
+| DB_LAZY_LOAD_ENABLED=false (baseline) | ✅ | — | — | — | — | — | — | D10: all 43 tools in ListTools |
+| LOG_LEVEL=debug | — | — | — | — | — | — | — | D11: not restarted (low-priority) |
+| DB_ALLOWED_FILE_PATHS=/nonexistent | ✅ | — | — | — | — | — | — | D12: execute_sql_file refuses |
+| DB_QUERY_ANALYZER_ENABLED=false | ✅ | — | — | — | — | — | — | D9: explain/lint/history/template → "queryAnalyzer not configured" |
+| DB_METRICS_ENABLED=false | ✅ | — | — | — | — | — | — | D13: get_metrics → "metrics disabled" |
+| DB_PLAN_HISTORY_DB_PATH=./tmp/plan.db | — | — | — | — | — | — | — | D14: ⚠️ relative path resolved vs MCP server CWD; failed with "unable to open database file" because child dir doesn't exist; absolute path or pre-create works |
+| DB_TYPE=postgres | — | — | — | — | — | — | — | D15: not restarted (low-priority, would need postgres container up) |
 
 ## Session log
 
