@@ -41,8 +41,11 @@ export const DANGEROUS_ADMIN_KEYWORDS: readonly string[] = [
 const PERMISSION_PRESETS: Record<string, readonly PermissionType[]> = {
   safe: ['read'],
   readwrite: ['read', 'insert', 'update'],
-  full: ['read', 'insert', 'update', 'delete', 'ddl'],
-  // 'script' and 'batch' are NOT in any preset; users opt-in via custom permissions
+  // v3.2.2: full now includes script + batch so execute_script / execute_batch /
+  // generate_sample_data are exposed when user grants full permission. Previously
+  // these tools were silently absent even with permissionMode:'full', forcing
+  // users to set permissions via env var (impossible at runtime).
+  full: ['read', 'insert', 'update', 'delete', 'ddl', 'script', 'batch'],
 } as const;
 
 /**

@@ -15,8 +15,12 @@ describe('resolvePermissions with script/batch', () => {
     expect(resolvePermissions({ type: 'mysql', permissionMode: 'readwrite' })).toEqual(['read', 'insert', 'update']);
   });
 
-  it('full preset does NOT include script or batch (double opt-in required)', () => {
-    expect(resolvePermissions({ type: 'mysql', permissionMode: 'full' })).toEqual(['read', 'insert', 'update', 'delete', 'ddl']);
+  it('full preset now includes script + batch (v3.2.2: was double opt-in, see Bug #2)', () => {
+    // v3.2.2 fix: full should include script + batch so execute_script /
+    // execute_batch / generate_sample_data are exposed by default. Previously
+    // users had to set custom permissions via env var, which was impossible
+    // at runtime via connect_database({permissionMode:'full'}).
+    expect(resolvePermissions({ type: 'mysql', permissionMode: 'full' })).toEqual(['read', 'insert', 'update', 'delete', 'ddl', 'script', 'batch']);
   });
 
   it('custom permissions including script', () => {

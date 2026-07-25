@@ -312,7 +312,7 @@ export class DatabaseMCPServer {
   private getStatefulToolsForList(): any[] {
     const perms = this.config ? resolvePermissions(this.config) : ['read'];
     const tools: any[] = [
-      { name: 'execute_query', description: '执行 SQL 查询或数据库命令。支持 SELECT、JOIN、聚合等查询操作。如果启用了写入模式，也可以执行 INSERT、UPDATE、DELETE 等操作。', inputSchema: { type: 'object', properties: { query: { type: 'string', description: '要执行的 SQL 语句或数据库命令' }, params: { type: 'array', description: '查询参数（可选，用于参数化查询防止 SQL 注入）', items: { type: 'string' } } }, required: ['query'] } },
+      { name: 'execute_query', description: '执行 SQL 查询或数据库命令。支持 SELECT、JOIN、聚合等查询操作。如果启用了写入模式，也可以执行 INSERT、UPDATE、DELETE 等操作。', inputSchema: { type: 'object', properties: { sql: { type: 'string', description: '要执行的 SQL 语句或数据库命令' }, params: { type: 'array', description: '查询参数（可选，用于参数化查询防止 SQL 注入）', items: { type: 'string' } } }, required: ['sql'] } },
       { name: 'get_schema', description: '获取数据库结构信息，包括所有 Schema 中用户可访问的表名、列名、数据类型、主键、索引等元数据。', inputSchema: { type: 'object', properties: { forceRefresh: { type: 'boolean', description: '是否强制刷新缓存（可选，默认 false）' } } } },
       { name: 'get_table_info', description: '获取指定表的详细信息，包括列定义、索引、预估行数等。', inputSchema: { type: 'object', properties: { tableName: { type: 'string', description: '表名。支持 schema.table_name 格式' }, forceRefresh: { type: 'boolean' } }, required: ['tableName'] } },
       { name: 'clear_cache', description: '清除 Schema 缓存。', inputSchema: { type: 'object', properties: {} } },
@@ -327,7 +327,7 @@ export class DatabaseMCPServer {
       { name: 'use_profile', description: 'Switch active connection to a saved profile.', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
     ];
     if (perms.includes('script')) {
-      tools.push({ name: 'execute_script', description: '执行多语句 SQL 脚本或 PL/SQL 块。需要 script 权限。', inputSchema: { type: 'object', properties: { query: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['query'] } });
+      tools.push({ name: 'execute_script', description: '执行多语句 SQL 脚本或 PL/SQL 块。需要 script 权限。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['sql'] } });
       const allowedPaths = (this.config as any)?.allowedSqlFilePaths as string[] | undefined;
       if (allowedPaths && allowedPaths.length > 0) {
         tools.push({ name: 'execute_sql_file', description: '执行 .sql 文件。需要 script + DB_ALLOWED_FILE_PATHS。', inputSchema: { type: 'object', properties: { filePath: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['filePath'] } });
@@ -371,7 +371,7 @@ export class DatabaseMCPServer {
             inputSchema: {
               type: 'object',
               properties: {
-                query: {
+                sql: {
                   type: 'string',
                   description: '要执行的 SQL 语句或数据库命令',
                 },
@@ -627,11 +627,11 @@ export class DatabaseMCPServer {
           inputSchema: {
             type: 'object',
             properties: {
-              query: { type: 'string', description: '完整脚本内容' },
+              sql: { type: 'string', description: '完整脚本内容' },
               useTransaction: { type: 'boolean', description: '是否在事务中执行(默认 true)', default: true },
               maxStatements: { type: 'number', description: '最大语句数(默认 1000)', default: 1000 },
             },
-            required: ['query'],
+            required: ['sql'],
           },
         });
 
@@ -1018,11 +1018,11 @@ export class DatabaseMCPServer {
 
         switch (name) {
           case 'execute_script': {
-            const { query, useTransaction, maxStatements } = args as {
-              query: string; useTransaction?: boolean; maxStatements?: number;
+            const { sql, useTransaction, maxStatements } = args as {
+              sql: string; useTransaction?: boolean; maxStatements?: number;
             };
-            console.error(`📜 执行脚本 (${query.length} chars)...`);
-            const result = await this.databaseService.executeScript(query, { useTransaction, maxStatements });
+            console.error(`📜 执行脚本 (${sql.length} chars)...`);
+            const result = await this.databaseService.executeScript(sql, { useTransaction, maxStatements });
             return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
           }
 
@@ -1058,11 +1058,11 @@ export class DatabaseMCPServer {
           }
 
           case 'execute_query': {
-            const { query, params } = args as { query: string; params?: unknown[] };
+            const { sql, params } = args as { sql: string; params?: unknown[] };
 
-            console.error(`📊 执行查询: ${query.substring(0, 100)}...`);
+            console.error(`📊 执行查询: ${sql.substring(0, 100)}...`);
 
-            const result = await this.databaseService.executeQuery(query, params);
+            const result = await this.databaseService.executeQuery(sql, params);
 
             return {
               content: [
