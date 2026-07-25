@@ -230,8 +230,30 @@ export class DatabaseMCPServer {
    * v3.2: handle use_tool_group meta-tool.
    */
   private async handleUseToolGroup(args: { name: string }) {
+    // v3.2.4 Bug #22: when DB_LAZY_LOAD_ENABLED=false, toolRegistry is null
+    // but all 43 tools are already in ListTools. Return "alreadyActive" no-op
+    // instead of error so client UX is consistent.
     if (!this.toolRegistry) {
-      return { content: [{ type: 'text', text: JSON.stringify({ error: 'registry not initialized' }) }], isError: true };
+      const VALID_GROUPS = ['query-experience', 'profiles', 'data-governance', 'index-advisor'];
+      if (!args || typeof args.name !== 'string' || !VALID_GROUPS.includes(args.name)) {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              error: 'invalid group name',
+              provided: args?.name ?? '(undefined)',
+              valid: VALID_GROUPS,
+            }, null, 2),
+          }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text', text: JSON.stringify({
+        alreadyActive: true,
+        activeGroups: VALID_GROUPS,
+        newlyAvailable: [],
+        note: 'DB_LAZY_LOAD_ENABLED=false: all tools already visible, activation is no-op',
+      }, null, 2) }] };
     }
     // v3.2.1: validate args.name against enum (fix finding #11)
     const VALID_GROUPS: ToolGroup[] = ['query-experience', 'profiles', 'data-governance', 'index-advisor'];
@@ -262,8 +284,47 @@ export class DatabaseMCPServer {
    * v3.2: handle use_tool_schema meta-tool.
    */
   private async handleUseToolSchema(args: { name: string }) {
+    // v3.2.4 Bug #22: when DB_LAZY_LOAD_ENABLED=false, toolRegistry is null.
+    // Return the schema from a hardcoded list (single infoLazy tool currently).
     if (!this.toolRegistry) {
-      return { content: [{ type: 'text', text: JSON.stringify({ error: 'registry not initialized' }) }], isError: true };
+      const VALID = ['generate_sample_data'];
+      if (!args || typeof args.name !== 'string' || !VALID.includes(args.name)) {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              error: 'invalid tool name for use_tool_schema',
+              provided: args?.name ?? '(undefined)',
+              valid: VALID,
+              note: 'use_tool_schema only loads schemas for info-lazy tools. Call use_tool_group instead for lazy group tools.',
+            }, null, 2),
+          }],
+          isError: true,
+        };
+      }
+      // Return hardcoded schema for generate_sample_data (matches the infoLazy definition)
+      return { content: [{ type: 'text', text: JSON.stringify({
+        name: 'generate_sample_data',
+        schema: {
+          type: 'object',
+          properties: {
+            tableName: { type: 'string', description: '目标表名' },
+            rowCount: { type: 'number', description: '生成行数(默认 10)', default: 10 },
+            options: {
+              type: 'object',
+              properties: {
+                seed: { type: 'number' },
+                columns: { type: 'array', items: { type: 'string' } },
+                columnOverrides: { type: 'object' },
+                rules: { type: 'array' },
+                overwrite: { type: 'boolean', default: false },
+              },
+            },
+          },
+          required: ['tableName'],
+        },
+        note: 'DB_LAZY_LOAD_ENABLED=false: schema returned from hardcoded map (registry unavailable)',
+      }, null, 2) }] };
     }
     const schema = this.toolRegistry.getFullSchema(args.name);
     if (!schema) {

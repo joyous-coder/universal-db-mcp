@@ -72,8 +72,9 @@
 | #17 | get_query_history returns empty despite execute_query history | 🟡 MAJOR | ✅ FIXED | get_query_history / sqlite | eb534fa |
 | #18 | explain_query returns empty plan for simple SELECT | 🟡 MAJOR | ✅ FIXED | explain_query / sqlite | eb534fa |
 | #19 | generate_sample_data fails: faker locale "lorem.word" missing for zh_CN | 🟡 MAJOR | ✅ FIXED (pending regression) | generate_sample_data / sqlite | (pending commit) |
-| #20 | use_tool_group returns "未知工具" when DB_LAZY_LOAD_ENABLED=false | 🔴 CRITICAL | ✅ FIXED (pending regression) | use_tool_group / sqlite | (pending commit) |
-| #21 | use_tool_schema same as Bug #20 | 🔴 CRITICAL | ✅ FIXED (pending regression) | use_tool_schema / sqlite | (pending commit) |
+| #20 | use_tool_group returns "未知工具" when DB_LAZY_LOAD_ENABLED=false | 🔴 CRITICAL | ✅ FIXED | use_tool_group / sqlite | 1496611 |
+| #21 | use_tool_schema same as Bug #20 | 🔴 CRITICAL | ✅ FIXED | use_tool_schema / sqlite | 1496611 |
+| #22 | use_tool_group/use_tool_schema still return "registry not initialized" when lazy=false | 🟡 MAJOR | ✅ FIXED (pending regression) | use_tool_group / sqlite | (pending commit) |
 
 ## Error notes
 
