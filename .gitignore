@@ -19,3 +19,4 @@ templates.db
 history.db
 .e2e-plan-history.db
 
+tmp-e2e/

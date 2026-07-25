@@ -102,9 +102,6 @@ export function loadFromEnv(): Partial<AppConfig> {
       database: process.env.DB_DATABASE,
       filePath: process.env.DB_FILE_PATH,
       allowWrite: process.env.DB_ALLOW_WRITE === 'true',
-      allowedSqlFilePaths: process.env.DB_ALLOWED_FILE_PATHS
-        ? process.env.DB_ALLOWED_FILE_PATHS.split(',').map(p => p.trim()).filter(Boolean)
-        : undefined,
       poolConfig: hasAnyPoolEnv
         ? {
             max: poolMax,
@@ -113,6 +110,18 @@ export function loadFromEnv(): Partial<AppConfig> {
           }
         : undefined,
     };
+  }
+
+  // v3.2.8 Bug #34 fix: parse DB_ALLOWED_FILE_PATHS even when DB_TYPE is unset
+  // (dynamic connect_database mode). Previously the env var was gated inside the
+  // DB_TYPE branch, so users with DB_TYPE="" (e.g. .mcp.json default) couldn't
+  // use execute_sql_file even though DB_ALLOWED_FILE_PATHS was set.
+  if (process.env.DB_ALLOWED_FILE_PATHS) {
+    if (!config.database) {
+      config.database = {} as any;
+    }
+    (config.database as any).allowedSqlFilePaths =
+      process.env.DB_ALLOWED_FILE_PATHS.split(',').map(p => p.trim()).filter(Boolean);
   }
 
   // P0-1: parse query timeout / slow threshold env vars (top-level config,

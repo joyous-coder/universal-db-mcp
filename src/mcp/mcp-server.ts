@@ -904,6 +904,22 @@ export class DatabaseMCPServer {
               newConfig.oracleClientPath = oracleClientPath;
             }
 
+            // v3.2.8 Bug #35 fix: carry over server-side env-loaded config (e.g. allowedSqlFilePaths
+            // from DB_ALLOWED_FILE_PATHS) into the runtime newConfig. Without this, tools/call
+            // for execute_sql_file fails because DatabaseService sees no allowedSqlFilePaths.
+            if (this.appConfig?.database) {
+              const serverDbCfg = this.appConfig.database as any;
+              if (serverDbCfg.allowedSqlFilePaths && !(newConfig as any).allowedSqlFilePaths) {
+                (newConfig as any).allowedSqlFilePaths = serverDbCfg.allowedSqlFilePaths;
+              }
+              if (serverDbCfg.allowWrite !== undefined && newConfig.allowWrite === undefined) {
+                newConfig.allowWrite = serverDbCfg.allowWrite;
+              }
+              if (serverDbCfg.poolConfig && !newConfig.poolConfig) {
+                newConfig.poolConfig = serverDbCfg.poolConfig;
+              }
+            }
+
             // 断开旧连接(总是清空状态,即使 disconnect 抛错)
             if (this.adapter) {
               console.error('🔄 断开旧数据库连接...');
