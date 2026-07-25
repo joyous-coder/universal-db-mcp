@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "universal-db-mcp": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["D:/Links/Tools/universal-db-mcp/dist/index.js"],
+      "env": {
+        "MODE": "mcp",
+        "LOG_LEVEL": "warn",
+        "DB_TYPE": "",
+        "DB_HOST": "localhost"
+      }
+    }
+  }
+}
