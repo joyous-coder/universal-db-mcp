@@ -2,6 +2,39 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.2.7] - 2026-07-25
+
+### 修复 (mongodb e2e-driven, redis/mongo coverage)
+
+v3.2.6 发布后跑 v3.2.7 backlog redis + mongodb e2e,发现 2 个 critical bug 并立刻修复:
+
+#### Critical fixes
+
+- **Bug #26: mongodb `execute_query` 多参调用解析失败**
+  - **Repro**: `db.users.updateOne({name: 'x'}, {$set: {age: 1}})` → "无效的查询参数格式"
+  - **Root cause**:
+    - 单参(`insertOne({...})`)可解析: regex 贪婪 `(.*)` 捕获 args, JSON.parse 失败时 normalize JS-object 字面量 (quote keys + replace single-quote) 成功
+    - 多参(regex 跨逗号捕获 `a}, b` 整体,normalize 失败)
+  - **Fix** (`src/adapters/mongodb.ts:165-220`): split args 按 brace/bracket depth + string state,然后对每个 part 独立 parse + normalize,按 op 类型分发(update→(filter,update),find→(query,options) 等)
+  - **效果**: 5-step lifecycle 完整通过: insertOne → updateOne(filter,$set) → find(新 age) → deleteOne → verify gone
+
+- **Bug #27: mongodb `use_profile` 返回 "Authentication failed"**
+  - **Repro**: `save_profile({type:'mongodb', config:{...}})`(无 authSource)然后 `use_profile` 失败
+  - **Root cause**: MongoDB SCRAM 认证需要 `authSource`(默认 'admin'),save_profile 不强制注入
+  - **Fix** (`src/mcp/tools/profile-tools.ts:16-26`): `buildSaveProfileHandler` 中,若 `type==='mongodb'` 且 config.authSource 缺失,自动注入 `authSource:'admin'` 后再 save
+  - **效果**: use_profile 能直接连接,不需要 user 手动指定
+
+### v3.2.7 e2e 覆盖
+
+- ✅ **redis** (35 ✅ + 7 INFRA + 1 ⚠️): 完整覆盖 NoSQL adapter + execute_query(SET/GET/KEYS) 路径
+- ✅ **mongodb** (26 ✅ + 4 INFRA + 2 ⚠️): 完整覆盖 NoSQL adapter + db.collection.method() 路径
+- ⏳ postgres / mysql / clickhouse / dm 推到 v3.2.8 backlog(本次 session context 已饱和)
+
+### 测试
+
+- `npm test` 533/533 通过
+- live e2e verify: insertOne / updateOne / find / deleteOne 全通过
+
 ## [3.2.6] - 2026-07-25
 
 ### 修复 (v3.2.5-patch1, e2e-driven minor fixes)

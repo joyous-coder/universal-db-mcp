@@ -1,64 +1,75 @@
-# v3.2.6 — v3.2.5-patch1: minor fixes from e2e regression
+# v3.2.7 — MongoDB e2e-driven 2 critical bug fixes
 
 ## What's in this release
 
-Two minor issues found during e2e regression testing of v3.2.5. Both verified working in live Claude Code session before release.
+Continuation of v3.2.7 backlog — Redis + MongoDB e2e testing found 2 critical bugs. Both verified working in live Claude Code session.
 
 ## Fixes
 
-### Bug #25 — `generate_sample_data` SQL bind failure
+### Bug #26 — MongoDB `execute_query` multi-arg parse failure
 
-**Repro**: On fresh `:memory:` SQLite:
+**Repro**:
 ```js
-execute_query({sql: "CREATE TABLE foo(id INTEGER, name TEXT)"})
-clear_cache()
-generate_sample_data({tableName: "foo", rowCount: 3})
-// ❌ "Provided value cannot be bound to SQLite parameter 1"
+execute_query({sql: 'db.users.insertOne({name: "alice", age: 30})'})  // ✅ works
+execute_query({sql: 'db.users.updateOne({name: "alice"}, {$set: {age: 31}})'})
+// ❌ "无效的查询参数格式"
 ```
 
-**Root cause**: `id` column is auto-increment, generator returns `undefined` from `matchHeuristic` (line 119: `if (name === 'id' || /_id$/i.test(name)) return undefined;`). `node:sqlite`'s `stmt.run()` rejects binding `undefined` to `?` placeholders.
+**Root cause**: Initial v3.2.6 fix handled single-arg correctly (regex + JSON.parse + JS-literal normalize). But multi-arg calls like `updateOne(filter, update)` failed because:
+- Greedy regex `(.*)` captured across commas: `a}, b` as one chunk
+- JSON.parse failed on non-JSON content
+- Normalize couldn't fix because there were multiple top-level literals
 
-**Fix** (`src/core/database-service.ts:388-397`):
-```typescript
-const value = generator.generateValue(...);
-row.push(value === undefined ? null : value);  // ← was value
-```
+**Fix** (`src/adapters/mongodb.ts:165-220`):
+- Split args on top-level commas (tracking brace/bracket depth + inside-string state)
+- Parse each part independently (JSON first, then JS-literal normalize)
+- Distribute multi-args by operation type:
+  - `update/updateOne/updateMany` → (filter, update, options?)
+  - `find/findOne/distinct/count/countDocuments` → (query, options?)
+  - `aggregate` → pipeline
+  - `insert/insertOne` → doc
+- Better error message with JSON example
 
-SQLite treats NULL as new auto-increment, so semantics preserved.
-
-**Verify**: `insertedRows: 3` ✅ on fresh connection.
-
-### Minor #1 — `execute_template` accepts name OR id
-
-**Repro**: User naturally passes name, gets "template not found":
+**Verify** (live Claude Code session): 5-step lifecycle:
 ```js
-save_template({name: "foo", sql: "SELECT 42 AS answer"})
-// Returns id: "tICv-WcO"
-execute_template({id: "foo", params: {}})  // ❌ "template not found: foo"
+insertOne({name:'verify26v2', age:30})   → insertedId returned
+updateOne({name:'verify26v2'}, {$set:{age:31}})  → matchedCount:1, modifiedCount:1
+find({name:'verify26v2'})   → age:31 verified
+deleteOne({name:'verify26v2'})  → deletedCount:1
 ```
 
-**Fix** (`src/mcp/tools/query-tools.ts:76-95`):
-```typescript
-let templateId = args.id;
-if (!templateId && args.name) {
-  const all: any[] = await (qa as any).templates?.list?.() ?? [];
-  const match = all.find((t: any) => t.name === args.name);
-  if (match) templateId = match.id;
-}
+### Bug #27 — MongoDB `use_profile` authentication failed
+
+**Repro**:
+```js
+save_profile({name:'m', type:'mongodb', config:{host, port, user, password, database}})
+// saved without authSource
+use_profile({name:'m'})  // ❌ "Authentication failed"
 ```
 
-**Verify**: `execute_template({name: "verify_minor1", params: {}})` → `{answer: 100}` ✅
+**Root cause**: MongoDB SCRAM auth requires `authSource` (default 'admin' for MONGO_INITDB_ROOT_USERNAME user). Save handler didn't inject default.
 
-## Coverage
+**Fix** (`src/mcp/tools/profile-tools.ts:16-26`): `buildSaveProfileHandler` now auto-injects `authSource: 'admin'` for mongodb config when missing.
 
-- **All 16 bugs fixed across v3.2.3 → v3.2.6** (Bug #1-#8 + #11-#22 + #25)
-- **0 bugs open**
-- **Sqlite 41/43 tools verified** in lazy=true mode (Bug #8 fix verified — `use_tool_group` returns `alreadyActive:true` immediately)
-- **533/533 unit tests pass**
+**Verify**: Saved profile shows `"authSource": "admin"` in config; `use_profile` connects successfully.
+
+## Coverage Update
+
+| DB | Status |
+|---|---|
+| sqlite | 43/43 ✅ (v3.2.4) |
+| redis | 35 ✅ + 7 INFRA + 1 ⚠️ (v3.2.7) |
+| mongodb | 26 ✅ + 4 INFRA + ⚠️→✅ (Bug #26 fixed) (v3.2.7) |
+| postgres / mysql / clickhouse / dm | Backlog v3.2.8 |
+
+## Tests
+
+- `npm test`: 533/533 ✅
+- Live e2e: Bug #26 + #27 verified in current Claude Code session
 
 ## Upgrade
 
 ```bash
 npm install -g @joyous-coder/universal-db-mcp@latest
-# Backwards-compatible with v3.2.5
+# Backwards-compatible with v3.2.6
 ```
