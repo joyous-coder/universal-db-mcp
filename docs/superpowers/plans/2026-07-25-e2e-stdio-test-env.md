@@ -114,6 +114,13 @@ The full original T1-T12 below (lines 49+) is preserved for archival, but **curr
 **每个 tool 调用记录**:
 - dbKey, toolName, status (pass/fail/infra/error), duration, args (截断), response excerpt, AI cognition notes
 
+**覆盖策略 — 三层**:
+- **Layer 1 (每 DB 必测,17 DBs × ~5 calls)**: connect / disconnect / execute_query(建表+插数据+查询) / get_schema / get_table_info — 验证每个 adapter 工作
+- **Layer 2 (postgres × 45 calls)**: 跑全所有 tool — 验证 tool dispatch / lazy loading / profile lifecycle / plan history / audit / export / meta tools
+- **Layer 3 (6 代表 DBs × 10 calls)**: postgres / mysql / mongodb / sqlite / **dm / oracle** — 验证 DB 行为差异(包括国产库 + Oracle,enterprise adapter 路径)
+
+总调用 ~190 calls,~30-60 min,~ $0.50-1 token 成本(详对比 vs 全跑 765 calls 见对话记录)
+
 **17 DB 顺序**(从小到大):
 1. sqlite (本机,no docker) — 跳过 docker run,用 `:memory:`
 2. postgres — `postgres:16-alpine` ~80MB
