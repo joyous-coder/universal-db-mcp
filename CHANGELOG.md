@@ -2,6 +2,45 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.2.1] - 2026-07-25
+
+### 修复（基于 v3.2 code review）
+
+修复 v3.2.0 引入的 15 个 bug，分 4 个 commit group：
+
+**Group 1: core wiring（commit be046a7）**
+- 新增 `DatabaseMCPServer.configureFromAppConfig(appConfig)` 方法，从 mcp-index.ts 和 mcp-sse.ts entrypoint 调用，统一装配 QueryAnalyzer / ProfileManager / PlanHistory
+- 新增 `setPlanHistory(ph)` setter
+- `defaultActiveGroups` 现在读取 `appConfig.lazyLoad.defaultActiveGroups`（之前硬编码 `[]`）
+- `setLazyLoadEnabled` 现在自动从 `DB_LAZY_LOAD_ENABLED=true` 触发
+- 修复 `setQueryAnalyzer` / `setProfileManager` / `setAppConfig` 在生产代码中从未被调用的根本 bug（影响 v2.16-v3.1 所有 setter）
+
+**Group 2: handler bugs（commit ccd5f44）**
+- `tool()` helper 现在接受 `group` 参数（之前硬编码 `group: null`），所有 25 lazy-group tool() 调用现在正确传递 group 名
+- 3 个 stateful tool（`execute_template` / `get_metrics` / `use_profile`）从 registry 移到 v3.1 fallback switch（registry 的 handler 没有访问 adapter/appConfig/activeProfile mutation 的能力）
+- `ProfileManager.getProfileStore()` 新增 public getter，移除所有 `(pm as any).profileStore` cast
+- `generate_sample_data` 的 execution 保留在 v3.1 fallback switch（stateful）；info-lazy schema 保留供 `use_tool_schema` 使用
+
+**Group 3: state/routing（commit db38492）**
+- `use_tool_group` 增加 enum validation（之前接受任意 string）
+- `disable_profile` / `delete_profile` / `disconnect_profile` 现在在删除 active profile 时清空 `this.activeProfile`
+- meta-tool routing + registry dispatch 现在包在 outer try/catch 里
+- lazy-mode ListTools 现在包含 always-on stateful tools（connect_database / execute_query / get_schema / etc.）和 3 个 stateful lazy tools
+
+**Group 4: lifecycle（commit b3cc66a）**
+- Server capability `tools.listChanged=true`
+- `use_tool_group` 激活后调 `server.sendToolListChanged()` 通知 client
+- Streamable HTTPServerTransport `onclose` 设置为 `cleanupSession()`，释放 DB 连接和 registry state
+
+### 测试
+
+- v3.2.0 baseline 478 unit tests + 35 integration tests 全过
+- v3.2.1 净改动：6 files，+390 / -50 行
+
+### 文档
+
+- 无新增（CHANGELOG + 本 release notes）
+
 ## [3.2.0] - 2026-07-25
 
 ### 新增 (Tool Lazy-Loading)
