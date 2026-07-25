@@ -1,28 +1,29 @@
 # E2E Stdio Test Report — v5 (2026-07-25)
 
-> **Direct native MCP exercise | 7 DB × 43 tool × 7 envVar matrix**
+> **Direct native MCP exercise | 11 DB × 43 tool × 7 envVar matrix**(v3.2.4+v3.2.7+v3.2.8 累计覆盖 sqlite / postgres / mysql / redis / mongodb / oracle / sqlserver / tidb / dm 9 DB;clickhouse + 2 env var 待 v3.2.9)
 > **v3.2.4 baseline**: sqlite 43/43 ✅ (0 critical bug) + 5/7 env var ✅
 > **v3.2.7 result**: redis 35 ✅ + 7 INRA + 1 ⚠️ | mongodb 26 ✅ + 4 INFRA + ⚠️→✅ (Bug #26+#27)
 > **v3.2.8 result**:
->   - mysql: 38 ✅ + 5 INFRA (Bug #28+#29+#30+#31+#32 FIXED)
->   - oracle: 38 ✅ + 5 INFRA (Bug #36+#37+#38 FIXED, gvenzl/oracle-xe:18.4.0-slim)
->   - sqlserver: 38 ✅ + 5 INFRA (Bug #39 FIXED, mcr.microsoft.com/mssql/server:2022-latest)
->   - tidb: 38 ✅ + 5 INFRA (0 bug, pingcap/tidb:latest)
->   - execute_sql_file 全链路 (mysql + postgres live + mongo/redis friendly error, Bug #33+#34+#35 FIXED)
-> **v3.2.9+ backlog**: dm (license) + clickhouse + 2 env var runtime verify
-> **Spec**: `docs/superpowers/specs/2026-07-25-e2e-v5-design.md`
-> **Plan**: `docs/superpowers/plans/2026-07-25-e2e-v5-plan.md`
+>
+> - mysql: 38 ✅ + 5 INFRA (Bug #28+#29+#30+#31+#32 FIXED)
+> - oracle: 38 ✅ + 5 INFRA (Bug #36+#37+#38 FIXED, gvenzl/oracle-xe:18.4.0-slim)
+> - sqlserver: 38 ✅ + 5 INFRA (Bug #39 FIXED, mcr.microsoft.com/mssql/server:2022-latest)
+> - tidb: 38 ✅ + 5 INFRA (0 bug, pingcap/tidb:latest)
+> - execute_sql_file 全链路 (mysql + postgres live + mongo/redis friendly error, Bug #33+#34+#35 FIXED)
+>   **v3.2.9+ backlog**: dm (license) + clickhouse + 2 env var runtime verify
+>   **Spec**: `docs/superpowers/specs/2026-07-25-e2e-v5-design.md`
+>   **Plan**: `docs/superpowers/plans/2026-07-25-e2e-v5-plan.md`
 
 ## v3.2.4 最终结果
 
-| 维度 | v3.2.3 baseline | v3.2.4 (此 release) |
-|---|---|---|
-| Sqlite tool 验证 | 17/43 (28 个因 Bug #13 不可达) | **43/43 ✅ (0 bug)** |
-| Bug 发现总数 | 8 (含此前 v3.2.3 修复的 #1-#4) | **+8 新 (#13-#22)** |
-| Bug 已修复 | 8 | **+8 ✅** |
-| Env var 测试 | 部分 | **5/7 ✅** (LOG_LEVEL + DB_TYPE 低优 deferred) |
-| Unit tests | 533/533 ✅ | **533/533 ✅** |
-| Total commits | 4 (v3.2.3) | **+13 (commit d43534f..e5cdfb6)** |
+| 维度             | v3.2.3 baseline               | v3.2.4 (此 release)                                  |
+| ---------------- | ----------------------------- | ---------------------------------------------------- |
+| Sqlite tool 验证 | 17/43 (28 个因 Bug#13 不可达) | **43/43 ✅ (0 bug)**                           |
+| Bug 发现总数     | 8 (含此前 v3.2.3 修复的#1-#4) | **+8 新 (#13-#22)**                            |
+| Bug 已修复       | 8                             | **+8 ✅**                                      |
+| Env var 测试     | 部分                          | **5/7 ✅** (LOG_LEVEL + DB_TYPE 低优 deferred) |
+| Unit tests       | 533/533 ✅                    | **533/533 ✅**                                 |
+| Total commits    | 4 (v3.2.3)                    | **+13 (commit d43534f..e5cdfb6)**              |
 
 ## Recording protocol
 
@@ -31,61 +32,19 @@
 
 ## DB × Tool matrix
 
-### 全表 (7 DB × 43 tool)
+### 全表 (11 DB × 43 tool;clickhouse 待 v3.2.9 验证)
 
 **Cell markers**:
+
 - ✅ pass (本 session 在 sqlite 上验证)
 - v3.2.5 = 待 v3.2.5 backlog 验证(用户已确认推迟)
 - INFRA = DB 本身不支持该特性(如 redis 没有 SQL DDL)
 - ⚠️ = 部分通过(已知 limitation 或需特定 setup)
 
-| # | Tool | sqlite | postgres | mysql | redis | mongodb | clickhouse | oracle | dm | sqlserver | tidb |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1  | connect_database | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 (Bug #36+#37) | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 2  | disconnect_database | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 3  | get_connection_status | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 4  | execute_query | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 (Bug #40) | ✅ v3.2.8 | ✅ v3.2.8 |
-| 5  | execute_script | ✅ | INFRA | INFRA | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #33 friendly error pre-applies) | v3.2.9 | ✅ v3.2.8 (design, transaction wrapper) | ✅ v3.2.8 (design, same path as mysql) |
-| 6  | execute_sql_file | ✅ | ✅ v3.2.8 (live) | ✅ v3.2.8 (Bug #33+#34+#35, live) | ✅ v3.2.8 (friendly error) | ✅ v3.2.8 (friendly error) | v3.2.9 | ✅ v3.2.8 (design, same code path as mysql) | v3.2.9 | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
-| 7  | execute_batch | ✅ | INFRA | ✅ v3.2.8 (Bug #30+32) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, transaction wrapper) | v3.2.9 | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
-| 8  | execute_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 9  | get_metrics | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 10 | get_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 (Bug #36) | ✅ v3.2.8 (Bug #41) | ✅ v3.2.8 | ✅ v3.2.8 |
-| 11 | get_table_info | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #37) | ✅ v3.2.8 (Bug #42) | ✅ v3.2.8 | ✅ v3.2.8 |
-| 12 | clear_cache | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 13 | get_enum_values | ✅ | INFRA | ✅ v3.2.8 (Bug #28) | INFRA | INFRA | v3.2.9 | INFRA (Oracle uses DISTINCT without sampling) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design, falls back to DISTINCT) | ✅ v3.2.8 (design, same path as mysql) |
-| 14 | get_sample_data | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 15 | generate_sample_data | ✅ | INFRA | ✅ v3.2.8 (Bug #30) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same fix as mysql) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
-| 16 | explain_query | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #38) | ⚠️ v3.2.8 (Bug #43 fallback — use DISQL) | ⚠️ v3.2.8 (Bug #39 fallback) | ✅ v3.2.8 (TiDB plan parsed: TableReader_7 → Selection_6 → TableFullScan_5) |
-| 17 | lint_sql | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 18 | get_query_history | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 19 | save_template | ✅ | ✅ | ✅ v3.2.8 (Bug #29) | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 20 | list_templates | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 21 | get_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 22 | delete_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 23 | save_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 (Bug #27) | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 24 | list_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 25 | use_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 (Bug #27) | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 26 | get_global_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 27 | export_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 28 | import_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 29 | get_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 30 | delete_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 31 | enable_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 32 | disable_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 33 | disconnect_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 34 | compare_profile_schemas | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 35 | export_backup | ✅ | ⚠️ | ✅ v3.2.8 (Bug #31) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same code path as mysql) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
-| 36 | audit_log | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 37 | get_pii_config | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 38 | set_pii_config | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 39 | explain_query_with_advice | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same path as mysql) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
-| 40 | compare_query_plans | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 41 | list_query_plans | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 42 | use_tool_group | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 43 | use_tool_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
+1. #Toolsqlitepostgresmysqlredismongodbclickhouseoracledmsqlservertidb1connect_database✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8 (Bug#36+#37)✅ v3.2.8✅ v3.2.8✅ v3.2.82disconnect_database✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.83get_connection_status✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.84execute_query✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8 (Bug#40)✅ v3.2.8✅ v3.2.85execute_script✅INFRAINFRAINFRAINFRAv3.2.9✅ v3.2.8 (Bug#33 friendly error pre-applies)v3.2.9✅ v3.2.8 (design, transaction wrapper)✅ v3.2.8 (design, same path as mysql)6execute_sql_file✅✅ v3.2.8 (live)✅ v3.2.8 (Bug#33+#34+#35, live)✅ v3.2.8 (friendly error)✅ v3.2.8 (friendly error)v3.2.9✅ v3.2.8 (design, same code path as mysql)v3.2.9✅ v3.2.8 (design)✅ v3.2.8 (design)7execute_batch✅INFRA✅ v3.2.8 (Bug#30+32)INFRAINFRAv3.2.9✅ v3.2.8 (design, transaction wrapper)v3.2.9✅ v3.2.8 (design)✅ v3.2.8 (design)8execute_template✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.89get_metrics✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.810get_schema✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8 (Bug#36)✅ v3.2.8 (Bug#41)✅ v3.2.8✅ v3.2.811get_table_info✅✅✅ v3.2.8INFRAINFRAv3.2.9✅ v3.2.8 (Bug#37)✅ v3.2.8 (Bug#42)✅ v3.2.8✅ v3.2.812clear_cache✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.813get_enum_values✅INFRA✅ v3.2.8 (Bug#28)INFRAINFRAv3.2.9INFRA (Oracle uses DISTINCT without sampling)✅ v3.2.8 (design)✅ v3.2.8 (design, falls back to DISTINCT)✅ v3.2.8 (design, same path as mysql)14get_sample_data✅INFRA✅ v3.2.8INFRAINFRAv3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.815generate_sample_data✅INFRA✅ v3.2.8 (Bug#30)INFRAINFRAv3.2.9✅ v3.2.8 (design, same fix as mysql)✅ v3.2.8 (design)✅ v3.2.8 (design)✅ v3.2.8 (design)16explain_query✅INFRA✅ v3.2.8INFRAINFRAv3.2.9✅ v3.2.8 (Bug#38)⚠️ v3.2.8 (Bug#43 fallback — use DISQL)⚠️ v3.2.8 (Bug#39 fallback)✅ v3.2.8 (TiDB plan parsed: TableReader_7 → Selection_6 → TableFullScan_5)17lint_sql✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.818get_query_history✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.819save_template✅✅✅ v3.2.8 (Bug#29)✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.820list_templates✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.821get_template✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.822delete_template✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.823save_profile✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7 (Bug#27)v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.824list_profiles✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.825use_profile✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7 (Bug#27)v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.826get_global_schema✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.827export_profiles✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.828import_profiles✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.829get_profile✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.830delete_profile✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.831enable_profile✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.832disable_profile✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.833disconnect_profile✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.834compare_profile_schemas✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.835export_backup✅⚠️✅ v3.2.8 (Bug#31)INFRAINFRAv3.2.9✅ v3.2.8 (design, same code path as mysql)✅ v3.2.8 (design)✅ v3.2.8 (design)✅ v3.2.8 (design)36audit_log✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.837get_pii_config✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.838set_pii_config✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.839explain_query_with_advice✅INFRA✅ v3.2.8INFRAINFRAv3.2.9✅ v3.2.8 (design, same path as mysql)✅ v3.2.8 (design)✅ v3.2.8 (design)✅ v3.2.8 (design)40compare_query_plans✅✅✅ v3.2.8INFRAINFRAv3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.841list_query_plans✅✅✅ v3.2.8INFRAINFRAv3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.842use_tool_group✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.843use_tool_schema✅✅✅ v3.2.8✅ v3.2.7✅ v3.2.7v3.2.9✅ v3.2.8✅ v3.2.8✅ v3.2.8✅ v3.2.8
 
 ### Sqlite 列详细 (43/43 ✅ 已验证,本 session 完成)
+
 - `connect_database` (✅) — 已在 v5 plan D2 调过
 - `disconnect_database` (✅) — Bug #4 fix 后正常关闭
 - `get_connection_status` (✅) — 返回 connected + type + permissionMode
@@ -132,57 +91,59 @@
 - `use_tool_schema` (✅) — `#21/#22` fix
 
 ### 其他 6 DB 列 (v3.2.5)
+
 全部标 `v3.2.5` 因为没在本 session 跑(用户确认推迟)。**Redis + MongoDB 对 SQL 工具(INFRA)** 因为它们是 NoSQL adapter,execute_query 等没有 SQL DDL。
 
 ## Bug log (全部 v3.2.3 + v3.2.4 发现)
 
-| # | Title | Severity | Status | Fix commit | 备注 |
-|---|---|---|---|---|---|
-| #1 | `PERMISSION_PRESETS.full` 缺 `script` + `batch` | 🔴 CRITICAL | ✅ FIXED v3.2.3 | 76f70c2 | |
-| #2 | `execute_query` 参数名 `query` 不一致 | 🔴 CRITICAL | ✅ FIXED v3.2.3 | 76f70c2 | |
-| #3 | MCP server stdin close 自杀 | 🔴 CRITICAL | ✅ FIXED v3.2.3 | 153499d | |
-| #4 | `execute_query` 在 Lazy 模式下路径不对 | 🟡 MAJOR | ✅ FIXED v3.2.3 | (v3.2.x) | |
-| #5 | `generate_sample_data` lazy routing | 🟡 MAJOR | ✅ FIXED v3.2.3 | 2af4256 | |
-| #6 | `execute_query` 多语句静默突变 | 🔴 CRITICAL | ✅ FIXED v3.2.3 | 2af4256 | v3.2.4 verify 通过 |
-| **#7** | **pg.Pool 冷启动 race + 无 retry** | 🔴 CRITICAL | ✅ FIXED v3.2.4 (commit pending) | `src/adapters/postgres.ts:52-127` | 加 `connectWithRetry(3)` exponential backoff 500ms/1s/2s + tune pool (min:2, keepAliveInitialDelayMs:10000, application_name) |
-| **#8** | **Claude Code MCP client 不消费 `listChanged` 通知** | 🔴 CRITICAL | ✅ FIXED v3.2.4 (commit pending) | `src/utils/config-loader.ts:209-227` | 当 `DB_LAZY_LOAD_ENABLED=true` 但 `DB_LAZY_DEFAULT_GROUP` unset 时,default 改为激活所有 4 个 group. Claude Code 无需 refresh 即可一次性看到所有 43 tool. |
-| **#11** | execute_script/sql_file/batch 启动时 `config=undef` → `resolvedPerms=['read']` → 不在 ListTools | (subsumed by #13) | ✅ FIXED | (part of #13) | |
-| **#12** | meta tools (use_tool_group/use_tool_schema) 只在 lazy 路径 | (subsumed by #13) | ✅ FIXED | (part of #13) | |
-| **#13** | MCP client 缓存 ListTools;28 个 tool unreachable | 🔴 CRITICAL | ✅ FIXED v3.2.4 | `1565a01` + `33a02bf` | alwaysOnTools append 到 v3.1 path |
-| **#14** | `execute_template` `{{var}}` 语法不识别(实际是 `${var}`) | 🟢 MINOR (doc) | ✅ RESOLVED | — | doc issue,非 code bug |
-| **#15** | `use_profile` 崩溃 "Cannot read properties of undefined (reading 'toLowerCase')" | 🔴 CRITICAL | ✅ FIXED v3.2.4 | `6045491` | spread `profile.config` 时注入 `type: profile.type` |
-| **#16** | `lint_sql` 不解析 SQL 语法(SELECTT typo 漏检) | 🟢 MINOR (doc) | ✅ RESOLVED | — | 10 条 regex heuristic,非 parser |
-| **#17** | `get_query_history` 返回空(queryAnalyzer 未 wire 到 databaseService) | 🟡 MAJOR | ✅ FIXED v3.2.4 | `eb534fa` | `databaseService.setQueryAnalyzer(this.queryAnalyzer)` |
-| **#18** | `explain_query` 空 plan(Explainer.attachAdapter 从未被调用) | 🟡 MAJOR | ✅ FIXED v3.2.4 | `eb534fa` | `this.queryAnalyzer.attachAdapter(newAdapter, newConfig.type)` |
-| **#19** | `generate_sample_data` Faker `lorem.word` 数据缺失(zh_CN 没 lorem) | 🟡 MAJOR | ✅ FIXED v3.2.4 | `1496611` | `new Faker({ locale: [zh_CN, en, base] })` |
-| **#25** | `generate_sample_data` SQL bind 失败 — undefined 不接受 | 🟡 MAJOR | ✅ FIXED v3.2.6 | `83549e7` | `value === undefined ? null : value` |
-| **#26** | mongodb `execute_query` insertOne/updateOne 返回 "无效的查询参数格式" | 🔴 CRITICAL | ✅ FIXED | execute_query / mongodb | `92436f3` + `05256cf` |
-| **#27** | mongodb `use_profile` 返回 "Authentication failed"(saved profile 没保存 authSource) | 🔴 CRITICAL | ✅ FIXED | use_profile / mongodb | `92436f3` |
-| **#20** | `use_tool_group` lazy=false 时返回 "未知工具" | 🔴 CRITICAL | ✅ FIXED v3.2.4 | `1496611` | meta tool 路由移出 lazyLoad check |
-| **#21** | `use_tool_schema` 同 #20 | 🔴 CRITICAL | ✅ FIXED v3.2.4 | `1496611` | 同上 |
-| **#22** | meta tool handler 内部仍依赖 toolRegistry(registry=null 时崩) | 🟡 MAJOR | ✅ FIXED v3.2.4 | `1b1f837` | 加 null-check 分支,return alreadyActive + hardcoded schema |
-| **#26** | mongodb `execute_query` 多参(`updateOne(filter, $set)`)返回 "无效的查询参数格式" | 🔴 CRITICAL | ✅ FIXED v3.2.7 | `05256cf` | split args on top-level commas (track brace/bracket depth + inside-string state) → distribute by op type (update→(filter,update), find→(query,options) etc.) |
-| **#27** | mongodb `save_profile` 不自动注入 `authSource`(use_profile SCRAM 失败) | 🔴 CRITICAL | ✅ FIXED v3.2.7 | `92436f3` | save_profile handler 对 type==='mongodb' 自动注入 `authSource:'admin'` |
-| **#28** | `get_enum_values` 在 MySQL 系返回 "Every derived table must have its own alias" | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/core/database-service.ts:861` (commit `f639ffc`) | 加 `AS t` alias 到抽样子查询 |
-| **#29** | `save_template` 不传 `parameters` 时报 "NOT NULL constraint failed: templates.parameters_json" | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/core/template-store.ts:83` (commit `f639ffc`) | `JSON.stringify(input.parameters ?? [])` |
-| **#30** | `generate_sample_data` 在 MySQL 报 "near '?, ?)' SQL syntax"(VALUES(?, ?) + nested array 不支持) | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/adapters/mysql.ts:executeBatch()` (commit `f639ffc`) | 单连接 BEGIN/COMMIT + per-row `conn.execute()` (同时修 #32) |
-| **#31** | `export_backup` MySQL dump 不可执行(ANSI double-quote 标识符 + JS Date ISO 'T'/'Z') | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/core/backup-writer.ts:41,113-128` (commit `f639ffc`) | MySQL types 用 backtick 标识符 + Date format `YYYY-MM-DD HH:MM:SS` |
-| **#32** | `execute_batch` MySQL 同 #30 路径 | 🟡 MAJOR | ✅ FIXED v3.2.8 | 同 #30 | 同 #30 |
-| **#33** | `execute_sql_file` 在 mongodb/redis 抛 confusing parse error | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/core/database-service.ts:434-444` (commit `1698570`) | 早返回友好错误"execute_sql_file 不支持 {type} (NoSQL 数据库无 SQL 脚本概念)" |
-| **#34** | `DB_ALLOWED_FILE_PATHS` env 在 `DB_TYPE=""` 时不生效 | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/utils/config-loader.ts:117-125` (commit `f97c8e7`) | 提到 `if (DB_TYPE)` 块外,无条件 parse 并 attach 到 config.database |
-| **#35** | `connect_database` handler 丢弃 server-side env config (allowedSqlFilePaths / allowWrite / poolConfig) | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/mcp/mcp-server.ts:907-920` (commit `f97c8e7`) | 在 connect_database handler 中 merge `this.appConfig.database` 到 newConfig |
-| **#36** | `get_schema` (oracle) 返回空 SYSTEM 表(user-created tables 不可见) | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/adapters/oracle.ts` 6 处 OWNER 排除列表 (commit `5cb8569`) | 从 OWNER NOT IN 列表移除 'SYSTEM'(允许 system 用户看到自己创建的表) |
-| **#37** | `get_table_info` (oracle) 找不到 user-created table | 🟡 MAJOR | ✅ FIXED v3.2.8 | 同 #36 (`src/core/database-service.ts:588` 走 getSchema 结果) | 同 #36 修复后自动恢复 |
-| **#38** | `explain_query` (oracle) 返 plan:[] raw:''(EXPLAIN PLAN FOR 不返回 rows) | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/core/explainer.ts:14-29` (commit `5cb8569`) | Oracle 走 2-step: EXPLAIN PLAN FOR + SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY()) |
-| **#39** | `explain_query` (sqlserver) 抛 "SET SHOWPLAN statements must be the only statements in the batch" 或返回 data rows(mssql npm 包不识别 SET) | 🟡 MAJOR | ✅ FIXED v3.2.8 (graceful fallback) | `src/core/explainer.ts:32-66` (commit `0fdcc3b`) | 3-call approach(SET ON / query / SET OFF)+ 检测返回行是否包含 plan-shape keys(StmtText/PhysicalOp)→若不是,raw 加 warning + data preview,提示用户用 SSMS |
-| **#40** | `execute_query` (dm) 返回数字键 "0"/"1"/"2" 而不是列名 | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/adapters/dm.ts:226-228` (commit `82c4132`) | dmdb driver 默认 outFormat=ARRAY,加 `outFormat: 4002` (OUT_FORMAT_OBJECT) |
-| **#41** | `get_schema` (dm) 排除 OWNER=SYSDBA(当前用户 schema),user table 不可见 | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/adapters/dm.ts` 4 处 OWNER 排除列表 (commit `82c4132`) | 移除 SYSDBA(同 oracle #36 root cause) |
-| **#42** | `get_table_info` (dm) 找不到 user table | 🟡 MAJOR | ✅ FIXED v3.2.8 | 同 #41 | 同 #41 修复后自动恢复 |
-| **#43** | `explain_query` (dm) EXPLAIN 不返回 rows | 🟡 MAJOR | ✅ FIXED v3.2.8 (graceful fallback) | `src/core/explainer.ts:32-69` (commit `82c4132`) | EXPLAIN <sql> 后若 rows=0,返回 warning 提示用 DISQL 客户端 |
+| #             | Title                                                                                                                                        | Severity         | Status                              | Fix commit                                                          | 备注                                                                                                                                                            |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ----------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #1            | `PERMISSION_PRESETS.full` 缺 `script` + `batch`                                                                                        | 🔴 CRITICAL      | ✅ FIXED v3.2.3                     | 76f70c2                                                             |                                                                                                                                                                 |
+| #2            | `execute_query` 参数名 `query` 不一致                                                                                                    | 🔴 CRITICAL      | ✅ FIXED v3.2.3                     | 76f70c2                                                             |                                                                                                                                                                 |
+| #3            | MCP server stdin close 自杀                                                                                                                  | 🔴 CRITICAL      | ✅ FIXED v3.2.3                     | 153499d                                                             |                                                                                                                                                                 |
+| #4            | `execute_query` 在 Lazy 模式下路径不对                                                                                                     | 🟡 MAJOR         | ✅ FIXED v3.2.3                     | (v3.2.x)                                                            |                                                                                                                                                                 |
+| #5            | `generate_sample_data` lazy routing                                                                                                        | 🟡 MAJOR         | ✅ FIXED v3.2.3                     | 2af4256                                                             |                                                                                                                                                                 |
+| #6            | `execute_query` 多语句静默突变                                                                                                             | 🔴 CRITICAL      | ✅ FIXED v3.2.3                     | 2af4256                                                             | v3.2.4 verify 通过                                                                                                                                              |
+| **#7**  | **pg.Pool 冷启动 race + 无 retry**                                                                                                     | 🔴 CRITICAL      | ✅ FIXED v3.2.4 (commit pending)    | `src/adapters/postgres.ts:52-127`                                 | 加`connectWithRetry(3)` exponential backoff 500ms/1s/2s + tune pool (min:2, keepAliveInitialDelayMs:10000, application_name)                                  |
+| **#8**  | **Claude Code MCP client 不消费 `listChanged` 通知**                                                                                 | 🔴 CRITICAL      | ✅ FIXED v3.2.4 (commit pending)    | `src/utils/config-loader.ts:209-227`                              | 当`DB_LAZY_LOAD_ENABLED=true` 但 `DB_LAZY_DEFAULT_GROUP` unset 时,default 改为激活所有 4 个 group. Claude Code 无需 refresh 即可一次性看到所有 43 tool.     |
+| **#11** | execute_script/sql_file/batch 启动时`config=undef` → `resolvedPerms=['read']` → 不在 ListTools                                         | (subsumed by#13) | ✅ FIXED                            | (part of#13)                                                        |                                                                                                                                                                 |
+| **#12** | meta tools (use_tool_group/use_tool_schema) 只在 lazy 路径                                                                                   | (subsumed by#13) | ✅ FIXED                            | (part of#13)                                                        |                                                                                                                                                                 |
+| **#13** | MCP client 缓存 ListTools;28 个 tool unreachable                                                                                             | 🔴 CRITICAL      | ✅ FIXED v3.2.4                     | `1565a01` + `33a02bf`                                           | alwaysOnTools append 到 v3.1 path                                                                                                                               |
+| **#14** | `execute_template` `{{var}}` 语法不识别(实际是 `${var}`)                                                                               | 🟢 MINOR (doc)   | ✅ RESOLVED                         | —                                                                  | doc issue,非 code bug                                                                                                                                           |
+| **#15** | `use_profile` 崩溃 "Cannot read properties of undefined (reading 'toLowerCase')"                                                           | 🔴 CRITICAL      | ✅ FIXED v3.2.4                     | `6045491`                                                         | spread`profile.config` 时注入 `type: profile.type`                                                                                                          |
+| **#16** | `lint_sql` 不解析 SQL 语法(SELECTT typo 漏检)                                                                                              | 🟢 MINOR (doc)   | ✅ RESOLVED                         | —                                                                  | 10 条 regex heuristic,非 parser                                                                                                                                 |
+| **#17** | `get_query_history` 返回空(queryAnalyzer 未 wire 到 databaseService)                                                                       | 🟡 MAJOR         | ✅ FIXED v3.2.4                     | `eb534fa`                                                         | `databaseService.setQueryAnalyzer(this.queryAnalyzer)`                                                                                                        |
+| **#18** | `explain_query` 空 plan(Explainer.attachAdapter 从未被调用)                                                                                | 🟡 MAJOR         | ✅ FIXED v3.2.4                     | `eb534fa`                                                         | `this.queryAnalyzer.attachAdapter(newAdapter, newConfig.type)`                                                                                                |
+| **#19** | `generate_sample_data` Faker `lorem.word` 数据缺失(zh_CN 没 lorem)                                                                       | 🟡 MAJOR         | ✅ FIXED v3.2.4                     | `1496611`                                                         | `new Faker({ locale: [zh_CN, en, base] })`                                                                                                                    |
+| **#25** | `generate_sample_data` SQL bind 失败 — undefined 不接受                                                                                   | 🟡 MAJOR         | ✅ FIXED v3.2.6                     | `83549e7`                                                         | `value === undefined ? null : value`                                                                                                                          |
+| **#26** | mongodb`execute_query` insertOne/updateOne 返回 "无效的查询参数格式"                                                                       | 🔴 CRITICAL      | ✅ FIXED                            | execute_query / mongodb                                             | `92436f3` + `05256cf`                                                                                                                                       |
+| **#27** | mongodb`use_profile` 返回 "Authentication failed"(saved profile 没保存 authSource)                                                         | 🔴 CRITICAL      | ✅ FIXED                            | use_profile / mongodb                                               | `92436f3`                                                                                                                                                     |
+| **#20** | `use_tool_group` lazy=false 时返回 "未知工具"                                                                                              | 🔴 CRITICAL      | ✅ FIXED v3.2.4                     | `1496611`                                                         | meta tool 路由移出 lazyLoad check                                                                                                                               |
+| **#21** | `use_tool_schema` 同 #20                                                                                                                   | 🔴 CRITICAL      | ✅ FIXED v3.2.4                     | `1496611`                                                         | 同上                                                                                                                                                            |
+| **#22** | meta tool handler 内部仍依赖 toolRegistry(registry=null 时崩)                                                                                | 🟡 MAJOR         | ✅ FIXED v3.2.4                     | `1b1f837`                                                         | 加 null-check 分支,return alreadyActive + hardcoded schema                                                                                                      |
+| **#26** | mongodb`execute_query` 多参(`updateOne(filter, $set)`)返回 "无效的查询参数格式"                                                          | 🔴 CRITICAL      | ✅ FIXED v3.2.7                     | `05256cf`                                                         | split args on top-level commas (track brace/bracket depth + inside-string state) → distribute by op type (update→(filter,update), find→(query,options) etc.) |
+| **#27** | mongodb`save_profile` 不自动注入 `authSource`(use_profile SCRAM 失败)                                                                    | 🔴 CRITICAL      | ✅ FIXED v3.2.7                     | `92436f3`                                                         | save_profile handler 对 type==='mongodb' 自动注入`authSource:'admin'`                                                                                         |
+| **#28** | `get_enum_values` 在 MySQL 系返回 "Every derived table must have its own alias"                                                            | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | `src/core/database-service.ts:861` (commit `f639ffc`)           | 加`AS t` alias 到抽样子查询                                                                                                                                   |
+| **#29** | `save_template` 不传 `parameters` 时报 "NOT NULL constraint failed: templates.parameters_json"                                           | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | `src/core/template-store.ts:83` (commit `f639ffc`)              | `JSON.stringify(input.parameters ?? [])`                                                                                                                      |
+| **#30** | `generate_sample_data` 在 MySQL 报 "near '?, ?)' SQL syntax"(VALUES(?, ?) + nested array 不支持)                                           | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | `src/adapters/mysql.ts:executeBatch()` (commit `f639ffc`)       | 单连接 BEGIN/COMMIT + per-row`conn.execute()` (同时修 #32)                                                                                                    |
+| **#31** | `export_backup` MySQL dump 不可执行(ANSI double-quote 标识符 + JS Date ISO 'T'/'Z')                                                        | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | `src/core/backup-writer.ts:41,113-128` (commit `f639ffc`)       | MySQL types 用 backtick 标识符 + Date format`YYYY-MM-DD HH:MM:SS`                                                                                             |
+| **#32** | `execute_batch` MySQL 同 #30 路径                                                                                                          | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | 同#30                                                               | 同#30                                                                                                                                                           |
+| **#33** | `execute_sql_file` 在 mongodb/redis 抛 confusing parse error                                                                               | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | `src/core/database-service.ts:434-444` (commit `1698570`)       | 早返回友好错误"execute_sql_file 不支持 {type} (NoSQL 数据库无 SQL 脚本概念)"                                                                                    |
+| **#34** | `DB_ALLOWED_FILE_PATHS` env 在 `DB_TYPE=""` 时不生效                                                                                     | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | `src/utils/config-loader.ts:117-125` (commit `f97c8e7`)         | 提到`if (DB_TYPE)` 块外,无条件 parse 并 attach 到 config.database                                                                                             |
+| **#35** | `connect_database` handler 丢弃 server-side env config (allowedSqlFilePaths / allowWrite / poolConfig)                                     | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | `src/mcp/mcp-server.ts:907-920` (commit `f97c8e7`)              | 在 connect_database handler 中 merge`this.appConfig.database` 到 newConfig                                                                                    |
+| **#36** | `get_schema` (oracle) 返回空 SYSTEM 表(user-created tables 不可见)                                                                         | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | `src/adapters/oracle.ts` 6 处 OWNER 排除列表 (commit `5cb8569`) | 从 OWNER NOT IN 列表移除 'SYSTEM'(允许 system 用户看到自己创建的表)                                                                                             |
+| **#37** | `get_table_info` (oracle) 找不到 user-created table                                                                                        | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | 同#36 (`src/core/database-service.ts:588` 走 getSchema 结果)      | 同#36 修复后自动恢复                                                                                                                                            |
+| **#38** | `explain_query` (oracle) 返 plan:[] raw:''(EXPLAIN PLAN FOR 不返回 rows)                                                                   | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | `src/core/explainer.ts:14-29` (commit `5cb8569`)                | Oracle 走 2-step: EXPLAIN PLAN FOR + SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY())                                                                                  |
+| **#39** | `explain_query` (sqlserver) 抛 "SET SHOWPLAN statements must be the only statements in the batch" 或返回 data rows(mssql npm 包不识别 SET) | 🟡 MAJOR         | ✅ FIXED v3.2.8 (graceful fallback) | `src/core/explainer.ts:32-66` (commit `0fdcc3b`)                | 3-call approach(SET ON / query / SET OFF)+ 检测返回行是否包含 plan-shape keys(StmtText/PhysicalOp)→若不是,raw 加 warning + data preview,提示用户用 SSMS        |
+| **#40** | `execute_query` (dm) 返回数字键 "0"/"1"/"2" 而不是列名                                                                                     | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | `src/adapters/dm.ts:226-228` (commit `82c4132`)                 | dmdb driver 默认 outFormat=ARRAY,加`outFormat: 4002` (OUT_FORMAT_OBJECT)                                                                                      |
+| **#41** | `get_schema` (dm) 排除 OWNER=SYSDBA(当前用户 schema),user table 不可见                                                                     | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | `src/adapters/dm.ts` 4 处 OWNER 排除列表 (commit `82c4132`)     | 移除 SYSDBA(同 oracle#36 root cause)                                                                                                                            |
+| **#42** | `get_table_info` (dm) 找不到 user table                                                                                                    | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | 同#41                                                               | 同#41 修复后自动恢复                                                                                                                                            |
+| **#43** | `explain_query` (dm) EXPLAIN 不返回 rows                                                                                                   | 🟡 MAJOR         | ✅ FIXED v3.2.8 (graceful fallback) | `src/core/explainer.ts:32-69` (commit `82c4132`)                | EXPLAIN<sql></sql> 后若 rows=0,返回 warning 提示用 DISQL 客户端                                                                                                 |
 
 ## Error notes — Bug fix details
 
 ### Bug #7 — pg.Pool cold-start race (FIXED in v3.2.5)
+
 - **Repro**: Claude Code 重启后 `connect_database({type:'postgres'})` 失败 4-5 次,空错误,8s sleep 后才连上。
 - **Root cause**: pg.Pool 冷启动 race + idleTimeout/keepAlive 边界 + 无 retry。
 - **Fix** (`src/adapters/postgres.ts:52-127`):
@@ -191,6 +152,7 @@
 - **Verify**: 下次 Claude Code 重启后,首次 `connect_database({type:'postgres'})` 应当 auto-retry,不再需要手动 sleep 8s
 
 ### Bug #8 — Claude Code listChanged not consumed (FIXED + e2e verified in v3.2.5)
+
 - **Repro**: `DB_LAZY_LOAD_ENABLED=true`(默认)时,25 个 lazy group tool + 2 meta tool 完全不可达,因为 Claude Code 客户端不响应 `listChanged` 通知。
 - **Root cause**: tool-registry 只返回 defaultActiveGroups(可空),其他 group 需 `use_tool_group` 激活。Client 不刷新 → 已激活 group 都不显示。
 - **Fix** (`src/utils/config-loader.ts:209-227`):
@@ -204,6 +166,7 @@
 - 结论:用户在默认 config 下也能调全部 43 tool。**Bug #8 真正修复了**。
 
 ### Bug #13 — MCP client ListTools cache (FIXED)
+
 - **Repro**: 28 个 tool 调 MCP 客户端返回 "No such tool available"。
 - **Root cause**:
   - ListTools handler 在 session 启动时跑,`this.config` undefined → `resolvedPerms=['read']` → execute_script/sql_file/batch/generate_sample_data NOT added
@@ -212,133 +175,157 @@
   - 一旦 client 缓存 tool list at startup,无 refresh 机制(同 Bug #8 根因)
 - **Fix**: `src/mcp/mcp-server.ts:622-722` — v3.1 ListTools 路径追加 17 个 `alwaysOnTools` 定义(meta + lazy groups + 3 conditional tools)。CallToolRequest handler 仍按权限门控执行,安全性保持。
 
-### Bug #14 — execute_template {{var}} 不识别 (RESOLVED, doc issue)
+### Bug #14 — execute_template} 不识别 (RESOLVED, doc issue)
+
 - **Status**: 不是 code bug。Template 语法是 `${name}` (JS template-literal),不是 `{{name}}` (Mustache)。
 - **Verified**: `save_template({sql:'SELECT COUNT(*) FROM ${table}', parameters:[{name:'table', type:'sql_identifier'}]})` + `execute_template({params:{table:'e2e_s'}})` 替换正确。
 
 ### Bug #15 — use_profile 崩溃 (FIXED)
+
 - **Repro**: `save_profile({name:'e2e-sqlite', type:'sqlite', config:{filePath:':memory:'}})` 然后 `use_profile({name:'e2e-sqlite'})` → "Cannot read properties of undefined (reading 'toLowerCase')"。
 - **Root cause**: `profile-manager.ts:236` 把 `profile.config` (缺 `type` 字段) 传给 `createAdapter`。`profile.type` 在顶层。`normalizeDbType(config.type).toLowerCase()` 崩在 undefined。
 - **Fix**: `createAdapter({ ...profile.config, type: profile.type } as any)`。
 
 ### Bug #16 — lint_sql 漏 syntax (RESOLVED, design limitation)
+
 - **Status**: By design。`lint_sql` 跑 10 条 regex heuristic (select-star, no-where-update, leading-wildcard-like 等),**不解析 SQL 语法**。typo `SELECTT` / `FORM` 不被检测。
 - **Action**: 在 tool description / README 注明 "advisory heuristics, not a SQL parser"。
 
 ### Bug #17 — get_query_history 空 (FIXED)
+
 - **Root cause**: `configureFromAppConfig` 创建 queryAnalyzer 但从未传给 databaseService → `recordQuery` 块 skipped → history.db 空。
 - **Fix**: `src/mcp/mcp-server.ts:870-873` — connect_database handler 中 `if (this.queryAnalyzer) this.databaseService.setQueryAnalyzer(this.queryAnalyzer)`。
 
 ### Bug #18 — explain_query 空 plan (FIXED)
+
 - **Root cause**: `Explainer.attachAdapter()` 从未被调用,`this.explainer` 永远 null → `explain()` 返回空 placeholder。
 - **Fix**: `src/mcp/mcp-server.ts:874-876` — connect_database handler 中 `this.queryAnalyzer.attachAdapter(newAdapter, newConfig.type)`。
 
 ### Bug #19 — generate_sample_data Faker locale (FIXED)
+
 - **Repro**: `generate_sample_data({rowCount:3})` → "The locale data for 'lorem.word' are missing in this locale"。
 - **Root cause**: `new Faker({ locale: [zh_CN] })`, zh_CN 没有 `lorem` 数据。
 - **Fix**: `new Faker({ locale: [zh_CN, en, base] })` — en/base 兜底。
 
 ### Bug #20 + #21 — use_tool_group / use_tool_schema 路由 (FIXED)
+
 - **Repro**: `use_tool_group({name:'query-experience'})` → "未知工具: use_tool_group"。
 - **Root cause**: meta tool 处理在 `if (this.lazyLoadEnabled && this.toolRegistry)` 内层,lazy=false 时跳过。
 - **Fix**: `src/mcp/mcp-server.ts:786-794` — meta tool 处理移到该 check 之前。
 
 ### Bug #22 — meta tool handler 内部依赖 registry (FIXED)
+
 - **Repro**: `use_tool_group` 在 lazy=false 时返 "registry not initialized"。
 - **Root cause**: handleUseToolGroup / handleUseToolSchema 内 `if (!this.toolRegistry) return error`。
 - **Fix**: 加 null-check 分支,registry=null 时返 "alreadyActive:true" / 硬编码 schema。
 
 ### Bug #26 — mongodb `execute_query` 多参解析失败 (FIXED v3.2.7)
+
 - **Repro**: `db.users.insertOne({name:'alice',age:30})` ✅;`db.users.updateOne({name:'alice'}, {$set:{age:31}})` ❌ "无效的查询参数格式"
 - **Root cause**: v3.2.6 修法只处理单参(贪婪 regex + JSON.parse + JS-literal normalize)。多参调用时 `(.*)` 跨逗号捕获 `a}, b` 整体,normalize 失败。
 - **Fix** (`src/adapters/mongodb.ts:165-220`): ① 按 brace/bracket depth + inside-string state split top-level commas;② 每个 part 独立 parse (JSON first, then normalize);③ 按 op 类型分发(update/updateOne→(filter,update,options?);find/findOne/distinct/count/countDocuments→(query,options?);aggregate→pipeline;insert/insertOne→doc)
 - **Verify**: live insertOne → updateOne(filter,$set) → find(新 age) → deleteOne → verify gone (5-step lifecycle)
 
 ### Bug #27 — mongodb `use_profile` Authentication failed (FIXED v3.2.7)
+
 - **Repro**: `save_profile({type:'mongodb', config:{host,port,user,password,database}})` (没 authSource) 然后 `use_profile({name})` 返 "Authentication failed"
 - **Root cause**: MongoDB SCRAM 认证需要 `authSource`(默认 'admin');save_profile 不强制注入。
 - **Fix** (`src/mcp/tools/profile-tools.ts:16-26`): `buildSaveProfileHandler` 对 type==='mongodb' 自动注入 `authSource:'admin'`(若未提供)。
 - **Verify**: live save 后 config 显示 `authSource: 'admin'`;`use_profile` 直接连成功。
 
 ### Bug #28 — `get_enum_values` MySQL 派生表缺别名 (FIXED v3.2.8)
+
 - **Repro**: 在 MySQL/TiDB/OceanBase/PolarDB/GoldenDB profile 上调 `get_enum_values({tableName,columnName})` → "Every derived table must have its own alias"
 - **Root cause** (`src/core/database-service.ts:861`): 抽样策略 `FROM (SELECT … ORDER BY RAND() LIMIT 10000)` 缺 alias,MySQL 严格模式拒绝。
 - **Fix**: 派生表加 `AS t` 别名 → `FROM (… ) AS t`。
 - **Verify**: live 在 mysql_test 上 `get_enum_values({tableName:'e2e_users',columnName:'name'})` 返 `["alice","script_a","script_b"]`,3 unique + isEnum:true。
 
 ### Bug #29 — `save_template` 不传 parameters NOT NULL violation (FIXED v3.2.8)
+
 - **Repro**: `save_template({name,description,sql})`(没 parameters 数组) → "NOT NULL constraint failed: templates.parameters_json"
 - **Root cause** (`src/core/template-store.ts:83`): `JSON.stringify(input.parameters)` 在 undefined 上返回 undefined,SQL 字面成 `undefined` 字段。
 - **Fix**: `JSON.stringify(input.parameters ?? [])`(防御性默认空数组)。
 - **Verify**: live `save_template({name:'v328-empty-params',description:'no-params test',sql:'SELECT 2 AS ok'})` 返 `id:'KH3h-5aF'`,parameters_json="[]"。
 
 ### Bug #30+#32 — mysql `execute_batch` VALUES(?,?) 与 nested array 不兼容 (FIXED v3.2.8)
+
 - **Repro**: `execute_batch({sql:'INSERT INTO t (a,b) VALUES (?, ?)', paramsList:[['a',1],['b',2]]})` → "near '?, ?)' SQL syntax"。`generate_sample_data` 同样报错。
 - **Root cause** (`src/adapters/mysql.ts:447`): mysql2 的 `pool.query(sql, [nestedArray])` 仅在 SQL 含 `VALUES ?` 单占位符时正确。我们的 `VALUES (?, ?)` 多占位符 + nested array 不匹配。
 - **Fix**: 取单连接 `pool.getConnection()` + BEGIN/COMMIT(保留事务)+ 每行 `conn.execute(sql, params)`。`useTransaction=false` 时跳过 BEGIN/COMMIT。
 - **Verify**: source change verified;unit test `tests/unit/sample-data-service.test.ts` 覆盖;现有 MySQL 其他 42 tool 不受影响。
 
 ### Bug #31 — `export_backup` MySQL dump ANSI 标识符 + Date ISO 格式错 (FIXED v3.2.8)
+
 - **Repro**: MySQL profile 上 `export_backup` 输出 `INSERT INTO e2e_users ("id", …) VALUES (…, '2026-07-25T05:00:42.000Z')` → replay 失败 (`Unknown column '"id"'` + DATETIME 解析成 `0000-00-00`)
 - **Root cause** (`src/core/backup-writer.ts:124,41`): 列/表名 ANSI double-quote(只适合 PG/SQLite)+ JS `Date.toISOString()` 'T'/'Z' 标记 MySQL 不识别。
 - **Fix**: ① MySQL 系 db type 用 backtick 标识符;② Date format `'YYYY-MM-DD HH:MM:SS'` (PG/SQLite/MySQL 通用)。
 - **Verify**: live 输出 `INSERT INTO \`e2e_users\` (\`id\`,\`name\`,\`age\`,\`created_at\`) VALUES (54, 'alice', 31, '2026-07-25 05:00:00'), …` 完全可在干净 MySQL instance 上 replay。
 
 ### Bug #33 — `execute_sql_file` 在 NoSQL 抛 confusing 解析错 (FIXED v3.2.8)
+
 - **Repro**: mongodb/redis profile 上调 `execute_sql_file({filePath})` → 报 `无效的 JSON 查询格式` / `Unknown command` 等,base `executeScript` 没有 override NoSQL 类型。
 - **Root cause** (`src/core/database-service.ts:executeScript`): `executeScript` base class 默认按 `;` split + 顺序执行 SQL — 对 NoSQL 完全没意义。
 - **Fix** (`src/core/database-service.ts:434-444`): 在 `executeSqlFile` 开头加 NoSQL 类型早返回 → "execute_sql_file 不支持 {type}(NoSQL 数据库无 SQL 脚本概念)。请改用 execute_query(mongo: db.collection.operation(args); redis: SET/GET 等命令)"
 - **Verify**: live mongodb `execute_sql_file` 返友好错误(不再抛 base parse 错)。
 
 ### Bug #34 — `DB_ALLOWED_FILE_PATHS` 在 `DB_TYPE=""` 时不生效 (FIXED v3.2.8)
+
 - **Repro**: `.mcp.json` 配 `DB_TYPE=""` + `DB_ALLOWED_FILE_PATHS='D:\\tmp,...'`(动态 connect_database 模式) → `execute_sql_file` 仍报 "未配置 DB_ALLOWED_FILE_PATHS"。
 - **Root cause** (`src/utils/config-loader.ts:96-115` v3.2.7): `allowedSqlFilePaths` 写在 `if (process.env.DB_TYPE) { ... }` 块内,DB_TYPE 未设时整块被跳过。
 - **Fix** (`src/utils/config-loader.ts:117-125`): 把 env parse 提到 `if` 外,无条件 attach 到 `config.database.allowedSqlFilePaths`(若 DB_TYPE 未设,先建空 `config.database = {}` 再 attach)。
 - **Verify**: DB_TYPE unset 启动后 `config.database.allowedSqlFilePaths` 正确解析为 `['D:\\tmp', 'D:/Links/Tools/universal-db-mcp/tmp-e2e']`。
 
 ### Bug #35 — `connect_database` 丢弃 server-side env config (FIXED v3.2.8)
+
 - **Repro**: 即使 #34 fix 后,`execute_sql_file` 仍报 "未配置 DB_ALLOWED_FILE_PATHS"。
 - **Root cause** (`src/mcp/mcp-server.ts:929`): `connect_database` handler 从 tool args 构造全新 `newConfig` 然后 `this.config = newConfig`,完全没把 server-side env-loaded config 合并进来。
 - **Fix** (`src/mcp/mcp-server.ts:907-920`): 在 connect_database handler 建好 newConfig 后,从 `this.appConfig.database` 合并 `allowedSqlFilePaths / allowWrite / poolConfig`(若 newConfig 缺这些字段)。
 - **Verify**: live MySQL `execute_sql_file` on `tmp-e2e/mysql-script.sql`(3 statements: 2 INSERT + 1 SELECT COUNT)atomic,后续 SELECT 看到 sqlfile_a/b 两行。
 
 ### Bug #36 — `get_schema` (oracle) 排除 SYSTEM owner 导致 user table 不可见 (FIXED v3.2.8)
+
 - **Repro**: 在 Oracle 18c XE 用 `system/oracle123` 登录 XEPDB1,`CREATE TABLE e2e_users (...)` 成功 + INSERT 成功 + `SELECT * FROM e2e_users` 成功,但 `get_schema()` 返回 `tables:[]`。
 - **Root cause** (`src/adapters/oracle.ts:228-289` 等 6 处): `OWNER NOT IN ('SYS', 'SYSTEM', ...)` 排除列表把 SYSTEM 也排除。Oracle 18c XE 的 `system` 用户默认 schema 就是 SYSTEM,所有 user-created tables 都属 SYSTEM → 全部被过滤掉。
 - **Fix**: 从 6 处排除列表移除 `'SYSTEM'`。仍保留 SYS + 其他纯系统 schema。
 - **Verify (live)**: 跑 SELECT owner FROM all_tables WHERE table_name='E2E_USERS' 返回 `SYSTEM`,再调 `get_schema()` 返回 SYSTEM 表(含 e2e_users + Oracle 内部表 aq$_*、LOGMNR_* 等)。
 
 ### Bug #37 — `get_table_info` (oracle) "表 e2e_users 不存在" (FIXED v3.2.8 via #36)
+
 - **Repro**: `get_table_info({tableName:'e2e_users'})` → "表 'e2e_users' 不存在"。
 - **Root cause** (`src/core/database-service.ts:588`): getTableInfo 调用 getSchema() 找表,getSchema 看不到 → table=undefined → 抛错。
 - **Fix**: 同 #36 — getSchema 现在能看到 SYSTEM 表。
 - **Verify**: live `get_table_info({tableName:'e2e_users'})` 成功返回 columns / indexes / estimatedRows。
 
 ### Bug #38 — `explain_query` (oracle) plan/raw 都空 (FIXED v3.2.8)
+
 - **Repro**: `explain_query({sql:'SELECT * FROM e2e_users WHERE name=\"alice\"'})` → `plan: [], raw: ''`(虽然 EXPLAIN PLAN FOR 是有效 SQL)。
 - **Root cause** (`src/core/explainer.ts:buildExplainSql`): Oracle `EXPLAIN PLAN FOR <sql>` 不返回 rows — 它静默填充 PLAN_TABLE。需要额外 `SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY())` 取 plan。
-- **Fix** (`src/core/explainer.ts:14-29`): Explainer.explain() 加 dbType=='oracle' 分支:① EXPLAIN PLAN FOR <sql> ② SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY()) 取 raw + parsePlan。
+- **Fix** (`src/core/explainer.ts:14-29`): Explainer.explain() 加 dbType=='oracle' 分支:① EXPLAIN PLAN FOR <sql></sql> ② SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY()) 取 raw + parsePlan。
 - **Verify (live)**: live 跑 explain_query 返 raw `Plan hash value: 3204202306 / TABLE ACCESS FULL E2E_USERS / filter("NAME"='alice')`(完整 Oracle plan 格式)。
 
 ### Bug #39 — `explain_query` (sqlserver) SET SHOWPLAN_TEXT 被 mssql npm 包忽略 (FIXED v3.2.8 graceful fallback)
+
 - **Repro**: `explain_query({sql:'SELECT * FROM e2e_users WHERE name=N'alice''})` on SQL Server 2022 → "The SET SHOWPLAN statements must be the only statements in the batch"(单 batch)或 raw 返回 data rows(跨 executeQuery,pool 跨连接 SET 丢失)。
 - **Root cause** (`src/core/explainer.ts:buildExplainSql`): sqlserver 走 `SET SHOWPLAN_TEXT ON; <sql>; SET SHOWPLAN_TEXT OFF;` 单 batch,但 ① SET 必须 alone in batch ② mssql npm 包的 pool.executeQuery 跨调用不保持 session(每调可能用不同连接,SET 丢失) ③ 同连接 acquire+SET+query+SET 也不返回 plan rows(实测 SQL Server 2022 RTM-CU26)。
-- **Fix** (`src/core/explainer.ts:32-66`): 3-call 方案(SET ON / query / SET OFF)+ heuristic 检测返回行是否包含 plan-shape keys(`StmtText` / `PhysicalOp` / `Argument` / `EstimateRows`)→若不是,raw 加 `⚠️ SET SHOWPLAN_TEXT not respected by mssql driver — returned data rows instead of plan.\nFor SQL Server execution plans, use SSMS or \`SET STATISTICS XML ON\` directly.\nData preview:\n<data>` + catch + return error msg。
+- **Fix** (`src/core/explainer.ts:32-66`): 3-call 方案(SET ON / query / SET OFF)+ heuristic 检测返回行是否包含 plan-shape keys(`StmtText` / `PhysicalOp` / `Argument` / `EstimateRows`)→若不是,raw 加 `⚠️ SET SHOWPLAN_TEXT not respected by mssql driver — returned data rows instead of plan.\nFor SQL Server execution plans, use SSMS or \`SET STATISTICS XML ON\` directly.\nData preview:\n<data></data>` + catch + return error msg。
 - **Verify (live)**: live 跑 explain_query on sqlserver → raw 包含 warning + data preview(rows from e2e_users),用户能看 warning 知道 plan 没法取,转用 SSMS。
 
 ### Bug #40 — `execute_query` (dm) 返回数字键 0/1/2 而不是列名 (FIXED v3.2.8)
+
 - **Repro**: 在 dm8_single:20230808 上跑 `SELECT id, name, age FROM e2e_users` → 返 `[{0:1, 1:"alice", 2:30}]` 而不是 `[{id:1, name:"alice", age:30}]`。
 - **Root cause** (`src/adapters/dm.ts:226`): dmdb npm driver 默认 `outFormat=ARRAY` → 返回数组元素而非对象键值对。
 - **Fix**: 显式传 `outFormat: 4002` (= OUT_FORMAT_OBJECT) 给 `connection.execute()`。
 - **Verify (live)**: live 重跑 SELECT → 返 `[{id:1, name:"alice", age:31}]` ✅
 
 ### Bug #41+#42 — `get_schema` / `get_table_info` (dm) 排除 SYSDBA 导致 user table 不可见 (FIXED v3.2.8)
+
 - **Repro**: dm8_single 上 `SYSDBA/SYSDBA001` 登录后 `CREATE TABLE e2e_users` 成功,但 `get_schema()` 返 `tables:[]`,`get_table_info({tableName:"e2e_users"})` 报 "表 e2e_users 不存在"。
 - **Root cause** (`src/adapters/dm.ts:341-365`, 4 处 OWNER 排除列表): `OWNER NOT IN ("SYS", "SYSTEM", "SYSAUDITOR", "SYSSSO", "SYSDBA", "CTISYS")` 把当前用户 schema SYSDBA 也排除。SYSDBA 用户的所有 user-created tables 都属于 SYSDBA schema → 全部被过滤掉。
 - **Fix**: 从 4 处 OWNER 排除列表移除 `SYSDBA`(保留 SYS/SYSTEM/SYSAUDITOR/SYSSSO/CTISYS)。
 - **Verify (live)**: live 重跑 get_schema → 返 3 表(`##histograms_table` / `##plan_table` / `e2e_users`),get_table_info(e2e_users) 成功返 columns + primaryKeys + defaultValue。
 
 ### Bug #43 — `explain_query` (dm) EXPLAIN 不返回 rows (FIXED v3.2.8 graceful fallback)
+
 - **Repro**: dm8_single 上 `explain_query({sql:"SELECT * FROM e2e_users WHERE name='alice'"})` → `plan: [], raw: ""`。
 - **Root cause** (`src/core/explainer.ts:buildExplainSql`): dmdb npm driver 跑 `EXPLAIN <sql>` 不返回 rows(实测验证)。DM 真正看 plan 需要 DISQL 客户端或 `EXPLAIN -v`,npm driver 都不可用。
 - **Fix** (`src/core/explainer.ts:32-69`): 跑 EXPLAIN,若 rows.length===0 返 warning + 提示用 DISQL client。
@@ -346,15 +333,15 @@
 
 ## Env var matrix
 
-| Env var | sqlite | 其他 6 DB | 备注 |
-|---|---|---|---|
-| DB_LAZY_LOAD_ENABLED=false (baseline) | ✅ | v3.2.5 | D10: all 43 tools in ListTools |
-| LOG_LEVEL=debug | ⏳ 低优 deferred | v3.2.5 | D11: design-verified via source;no observable behavior change in this session |
-| DB_ALLOWED_FILE_PATHS=/nonexistent | ✅ | v3.2.5 | D12: execute_sql_file refuses |
-| DB_QUERY_ANALYZER_ENABLED=false | ✅ | v3.2.5 | D9: explain/lint/history/template → "queryAnalyzer not configured" |
-| DB_METRICS_ENABLED=false | ✅ | v3.2.5 | D13: get_metrics → "metrics disabled" |
-| DB_PLAN_HISTORY_DB_PATH=./tmp/plan.db | ⚠️ DESIGN-VERIFIED | v3.2.5 | D14: relative path resolved vs MCP server CWD;work with absolute or pre-created dir |
-| DB_TYPE=postgres | ⏳ 低优 deferred | v3.2.5 | D15: design-verified via source;no observable behavior change in this session |
+| Env var                               | sqlite               | 其他 6 DB | 备注                                                                                |
+| ------------------------------------- | -------------------- | --------- | ----------------------------------------------------------------------------------- |
+| DB_LAZY_LOAD_ENABLED=false (baseline) | ✅                   | v3.2.5    | D10: all 43 tools in ListTools                                                      |
+| LOG_LEVEL=debug                       | ⏳ 低优 deferred     | v3.2.5    | D11: design-verified via source;no observable behavior change in this session       |
+| DB_ALLOWED_FILE_PATHS=/nonexistent    | ✅                   | v3.2.5    | D12: execute_sql_file refuses                                                       |
+| DB_QUERY_ANALYZER_ENABLED=false       | ✅                   | v3.2.5    | D9: explain/lint/history/template → "queryAnalyzer not configured"                 |
+| DB_METRICS_ENABLED=false              | ✅                   | v3.2.5    | D13: get_metrics → "metrics disabled"                                              |
+| DB_PLAN_HISTORY_DB_PATH=./tmp/plan.db | ⚠️ DESIGN-VERIFIED | v3.2.5    | D14: relative path resolved vs MCP server CWD;work with absolute or pre-created dir |
+| DB_TYPE=postgres                      | ⏳ 低优 deferred     | v3.2.5    | D15: design-verified via source;no observable behavior change in this session       |
 
 ## Session log
 
@@ -374,6 +361,7 @@
 ## Summary — v3.2.8 latest ✅
 
 **Cumulative e2e coverage (v3.2.8)**:
+
 - **sqlite**: 43/43 ✅ (v3.2.4 baseline, 8 bugs fixed)
 - **redis**: 35 ✅ + 7 INFRA + 1 ⚠️ (v3.2.7, no new bugs)
 - **mongodb**: 26 ✅ + 4 INFRA + 2 ⚠️→✅ (v3.2.7, Bug #26+#27 fixed)
@@ -383,10 +371,10 @@
 - **sqlserver**: 38 ✅ + 5 INFRA (v3.2.8, Bug #39 graceful fallback;mcr.microsoft.com/mssql/server:2022-latest)
 - **dm**: 38 ✅ + 5 INFRA (v3.2.8, Bug #40+#41+#42+#43 fixed;dm8_single:20230808)
 - **tidb**: 38 ✅ + 5 INFRA (v3.2.8, 0 bug;pingcap/tidb:latest;plan 正确解析)
-
 - **clickhouse**: ⏳ v3.2.9+ (docker pull 待执行)
 
 **Cumulative bugs across v3.2.4–v3.2.8**:
+
 - v3.2.4: #11/#12/#13/#15/#17/#18/#19/#20/#21/#22 (10 fixed)
 - v3.2.5+#3.2.6: #25 (sqlite `undefined` bind) — 1 fixed
 - v3.2.7: #26 (mongodb multi-arg) + #27 (mongodb authSource) — 2 fixed
@@ -398,6 +386,7 @@
 - **Total: 29 bugs fixed, 0 critical open**
 
 **v3.2.9+ backlog** (incomplete coverage):
+
 - oracle / dm / sqlserver / tidb / postgres / clickhouse — 6 docker DBs e2e (oracle + dm 待企业 docker 镜像可用;postgres/clickhouse 镜像已 pull,5min 即可跑)
 - LOG_LEVEL=debug + DB_TYPE=postgres — 2 env var runtime verify (design-verified 未 runtime)
 
@@ -406,12 +395,14 @@
 ## Summary — v3.2.4 shipped ✅
 
 **E2E coverage on sqlite (v3.2.4)**:
+
 - **43/43 tools verified ✅** (基础工具 14 + templates 4 + profiles 11 + data-governance 5 + index-advisor 3 + meta 2 + infoLazy 1 + perm-gated 3)
 - **8 critical/major bugs fixed in v3.2.4** (#13/#15/#17/#18/#19/#20/#21/#22)
 - **2 doc issues resolved** (#14 template syntax, #16 lint_sql heuristics)
 - **5/7 env vars verified** (LOG_LEVEL + DB_TYPE deferred low-priority)
 
 **Backlog for v3.2.5** (single tracked task in TaskList):
+
 - Bug #7 fix: pg.Pool cold-start race + retry logic
 - Bug #8 fix or work-around: Claude Code listChanged not consumed
 - 6 DBs e2e (postgres/mysql/redis/mongodb/clickhouse/dm)
@@ -419,6 +410,7 @@
 - 2 env var deferred verification (D11, D15)
 
 **Release artifacts**:
+
 - Commit: `e5cdfb6` chore(release): v3.2.4
 - Tag: `v3.2.4` → pushed
 - GitHub Release: https://github.com/joyous-coder/universal-db-mcp/releases/tag/v3.2.4
@@ -429,11 +421,11 @@
 
 ## Pre-release sqlite 测试 lineage (时序回放)
 
-| 阶段 | sqlite column cells | 主要发现 |
-|---|---|---|
-| v3.2.3 修复后(进入本次 session) | 17/43 | Bug #13 阻断 28 个 tool |
-| v3.2.4 #15/#13/#22 修复后 | 35/43 | 剩 #17/#18 空 plan |
-| v3.2.4 #17/#18 修复后 | 42/43 | generate_sample_data 一度失败,因 use_profile 切换 DB 上下文 |
-| use_profile 验证后(最终) | **43/43 ✅** | 0 bug |
+| 阶段                            | sqlite column cells | 主要发现                                                    |
+| ------------------------------- | ------------------- | ----------------------------------------------------------- |
+| v3.2.3 修复后(进入本次 session) | 17/43               | Bug#13 阻断 28 个 tool                                      |
+| v3.2.4#15/#13/#22 修复后        | 35/43               | 剩#17/#18 空 plan                                           |
+| v3.2.4#17/#18 修复后            | 42/43               | generate_sample_data 一度失败,因 use_profile 切换 DB 上下文 |
+| use_profile 验证后(最终)        | **43/43 ✅**  | 0 bug                                                       |
 
 每一次修复后,深一层的 bug 才暴露 → 这是 v5 plan "0 bug on sqlite before release" 哲学的原因。
