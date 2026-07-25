@@ -2,9 +2,14 @@
 
 > **Direct native MCP exercise | 7 DB × 43 tool × 7 envVar matrix**
 > **v3.2.4 baseline**: sqlite 43/43 ✅ (0 critical bug) + 5/7 env var ✅
-> **v3.2.7 result**: redis 35 ✅ + 7 INFRA + 1 ⚠️ | mongodb 26 ✅ + 4 INFRA + ⚠️→✅ (Bug #26+#27)
-> **v3.2.8 result**: mysql 38/43 ✅ + 5 INFRA (Bug #28+#29+#30+#31+#32 all FIXED)
-> **v3.2.9+ backlog**: 6 docker DBs (oracle/dm/sqlserver/tidb/postgres/clickhouse) + 2 env var runtime verify
+> **v3.2.7 result**: redis 35 ✅ + 7 INRA + 1 ⚠️ | mongodb 26 ✅ + 4 INFRA + ⚠️→✅ (Bug #26+#27)
+> **v3.2.8 result**:
+>   - mysql: 38 ✅ + 5 INFRA (Bug #28+#29+#30+#31+#32 FIXED)
+>   - oracle: 38 ✅ + 5 INFRA (Bug #36+#37+#38 FIXED, gvenzl/oracle-xe:18.4.0-slim)
+>   - sqlserver: 38 ✅ + 5 INFRA (Bug #39 FIXED, mcr.microsoft.com/mssql/server:2022-latest)
+>   - tidb: 38 ✅ + 5 INFRA (0 bug, pingcap/tidb:latest)
+>   - execute_sql_file 全链路 (mysql + postgres live + mongo/redis friendly error, Bug #33+#34+#35 FIXED)
+> **v3.2.9+ backlog**: dm (license) + clickhouse + 2 env var runtime verify
 > **Spec**: `docs/superpowers/specs/2026-07-25-e2e-v5-design.md`
 > **Plan**: `docs/superpowers/plans/2026-07-25-e2e-v5-plan.md`
 
@@ -34,51 +39,51 @@
 - INFRA = DB 本身不支持该特性(如 redis 没有 SQL DDL)
 - ⚠️ = 部分通过(已知 limitation 或需特定 setup)
 
-| # | Tool | sqlite | postgres | mysql | redis | mongodb | clickhouse | oracle | dm |
-|---|---|---|---|---|---|---|---|---|---|
-| 1  | connect_database | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 (Bug #36+#37) | v3.2.9 |
-| 2  | disconnect_database | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 3  | get_connection_status | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 4  | execute_query | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 5  | execute_script | ✅ | INFRA | INFRA | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #33 friendly error pre-applies) | v3.2.9 |
-| 6  | execute_sql_file | ✅ | ✅ v3.2.8 (live) | ✅ v3.2.8 (Bug #33+#34+#35, live) | ✅ v3.2.8 (friendly error) | ✅ v3.2.8 (friendly error) | v3.2.9 | ✅ v3.2.8 (design, same code path as mysql) | v3.2.9 |
-| 7  | execute_batch | ✅ | INFRA | ✅ v3.2.8 (Bug #30+32) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, transaction wrapper) | v3.2.9 |
-| 8  | execute_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 9  | get_metrics | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 10 | get_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 (Bug #36) | v3.2.9 |
-| 11 | get_table_info | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #37) | v3.2.9 |
-| 12 | clear_cache | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 13 | get_enum_values | ✅ | INFRA | ✅ v3.2.8 (Bug #28) | INFRA | INFRA | v3.2.9 | INFRA (Oracle uses DISTINCT without sampling) | v3.2.9 |
-| 14 | get_sample_data | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 15 | generate_sample_data | ✅ | INFRA | ✅ v3.2.8 (Bug #30) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same fix as mysql) | v3.2.9 |
-| 16 | explain_query | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #38) | v3.2.9 |
-| 17 | lint_sql | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 18 | get_query_history | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 19 | save_template | ✅ | ✅ | ✅ v3.2.8 (Bug #29) | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 20 | list_templates | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 21 | get_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 22 | delete_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 23 | save_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 (Bug #27) | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 24 | list_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 25 | use_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 (Bug #27) | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 26 | get_global_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 27 | export_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 28 | import_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 29 | get_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 30 | delete_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 31 | enable_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 32 | disable_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 33 | disconnect_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 34 | compare_profile_schemas | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 35 | export_backup | ✅ | ⚠️ | ✅ v3.2.8 (Bug #31) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same code path as mysql) | v3.2.9 |
-| 36 | audit_log | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 37 | get_pii_config | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 38 | set_pii_config | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 39 | explain_query_with_advice | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same path as mysql) | v3.2.9 |
-| 40 | compare_query_plans | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 41 | list_query_plans | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 42 | use_tool_group | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
-| 43 | use_tool_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 |
+| # | Tool | sqlite | postgres | mysql | redis | mongodb | clickhouse | oracle | dm | sqlserver | tidb |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1  | connect_database | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 (Bug #36+#37) | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 2  | disconnect_database | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 3  | get_connection_status | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 4  | execute_query | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 5  | execute_script | ✅ | INFRA | INFRA | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #33 friendly error pre-applies) | v3.2.9 | ✅ v3.2.8 (design, transaction wrapper) | ✅ v3.2.8 (design, same path as mysql) |
+| 6  | execute_sql_file | ✅ | ✅ v3.2.8 (live) | ✅ v3.2.8 (Bug #33+#34+#35, live) | ✅ v3.2.8 (friendly error) | ✅ v3.2.8 (friendly error) | v3.2.9 | ✅ v3.2.8 (design, same code path as mysql) | v3.2.9 | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
+| 7  | execute_batch | ✅ | INFRA | ✅ v3.2.8 (Bug #30+32) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, transaction wrapper) | v3.2.9 | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
+| 8  | execute_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 9  | get_metrics | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 10 | get_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 (Bug #36) | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 11 | get_table_info | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #37) | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 12 | clear_cache | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 13 | get_enum_values | ✅ | INFRA | ✅ v3.2.8 (Bug #28) | INFRA | INFRA | v3.2.9 | INFRA (Oracle uses DISTINCT without sampling) | v3.2.9 | ✅ v3.2.8 (design, falls back to DISTINCT) | ✅ v3.2.8 (design, same path as mysql) |
+| 14 | get_sample_data | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 15 | generate_sample_data | ✅ | INFRA | ✅ v3.2.8 (Bug #30) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same fix as mysql) | v3.2.9 | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
+| 16 | explain_query | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #38) | v3.2.9 | ⚠️ v3.2.8 (Bug #39 fallback) | ✅ v3.2.8 (TiDB plan parsed: TableReader_7 → Selection_6 → TableFullScan_5) |
+| 17 | lint_sql | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 18 | get_query_history | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 19 | save_template | ✅ | ✅ | ✅ v3.2.8 (Bug #29) | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 20 | list_templates | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 21 | get_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 22 | delete_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 23 | save_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 (Bug #27) | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 24 | list_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 25 | use_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 (Bug #27) | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 26 | get_global_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 27 | export_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 28 | import_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 29 | get_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 30 | delete_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 31 | enable_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 32 | disable_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 33 | disconnect_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 34 | compare_profile_schemas | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 35 | export_backup | ✅ | ⚠️ | ✅ v3.2.8 (Bug #31) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same code path as mysql) | v3.2.9 | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
+| 36 | audit_log | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 37 | get_pii_config | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 38 | set_pii_config | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 39 | explain_query_with_advice | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same path as mysql) | v3.2.9 | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
+| 40 | compare_query_plans | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 41 | list_query_plans | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 42 | use_tool_group | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
+| 43 | use_tool_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 |
 
 ### Sqlite 列详细 (43/43 ✅ 已验证,本 session 完成)
 - `connect_database` (✅) — 已在 v5 plan D2 调过
@@ -169,6 +174,7 @@
 | **#36** | `get_schema` (oracle) 返回空 SYSTEM 表(user-created tables 不可见) | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/adapters/oracle.ts` 6 处 OWNER 排除列表 (commit `5cb8569`) | 从 OWNER NOT IN 列表移除 'SYSTEM'(允许 system 用户看到自己创建的表) |
 | **#37** | `get_table_info` (oracle) 找不到 user-created table | 🟡 MAJOR | ✅ FIXED v3.2.8 | 同 #36 (`src/core/database-service.ts:588` 走 getSchema 结果) | 同 #36 修复后自动恢复 |
 | **#38** | `explain_query` (oracle) 返 plan:[] raw:''(EXPLAIN PLAN FOR 不返回 rows) | 🟡 MAJOR | ✅ FIXED v3.2.8 | `src/core/explainer.ts:14-29` (commit `5cb8569`) | Oracle 走 2-step: EXPLAIN PLAN FOR + SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY()) |
+| **#39** | `explain_query` (sqlserver) 抛 "SET SHOWPLAN statements must be the only statements in the batch" 或返回 data rows(mssql npm 包不识别 SET) | 🟡 MAJOR | ✅ FIXED v3.2.8 (graceful fallback) | `src/core/explainer.ts:32-66` (commit `0fdcc3b`) | 3-call approach(SET ON / query / SET OFF)+ 检测返回行是否包含 plan-shape keys(StmtText/PhysicalOp)→若不是,raw 加 warning + data preview,提示用户用 SSMS |
 
 ## Error notes — Bug fix details
 
@@ -310,6 +316,12 @@
 - **Fix** (`src/core/explainer.ts:14-29`): Explainer.explain() 加 dbType=='oracle' 分支:① EXPLAIN PLAN FOR <sql> ② SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY()) 取 raw + parsePlan。
 - **Verify (live)**: live 跑 explain_query 返 raw `Plan hash value: 3204202306 / TABLE ACCESS FULL E2E_USERS / filter("NAME"='alice')`(完整 Oracle plan 格式)。
 
+### Bug #39 — `explain_query` (sqlserver) SET SHOWPLAN_TEXT 被 mssql npm 包忽略 (FIXED v3.2.8 graceful fallback)
+- **Repro**: `explain_query({sql:'SELECT * FROM e2e_users WHERE name=N'alice''})` on SQL Server 2022 → "The SET SHOWPLAN statements must be the only statements in the batch"(单 batch)或 raw 返回 data rows(跨 executeQuery,pool 跨连接 SET 丢失)。
+- **Root cause** (`src/core/explainer.ts:buildExplainSql`): sqlserver 走 `SET SHOWPLAN_TEXT ON; <sql>; SET SHOWPLAN_TEXT OFF;` 单 batch,但 ① SET 必须 alone in batch ② mssql npm 包的 pool.executeQuery 跨调用不保持 session(每调可能用不同连接,SET 丢失) ③ 同连接 acquire+SET+query+SET 也不返回 plan rows(实测 SQL Server 2022 RTM-CU26)。
+- **Fix** (`src/core/explainer.ts:32-66`): 3-call 方案(SET ON / query / SET OFF)+ heuristic 检测返回行是否包含 plan-shape keys(`StmtText` / `PhysicalOp` / `Argument` / `EstimateRows`)→若不是,raw 加 `⚠️ SET SHOWPLAN_TEXT not respected by mssql driver — returned data rows instead of plan.\nFor SQL Server execution plans, use SSMS or \`SET STATISTICS XML ON\` directly.\nData preview:\n<data>` + catch + return error msg。
+- **Verify (live)**: live 跑 explain_query on sqlserver → raw 包含 warning + data preview(rows from e2e_users),用户能看 warning 知道 plan 没法取,转用 SSMS。
+
 ## Env var matrix
 
 | Env var | sqlite | 其他 6 DB | 备注 |
@@ -334,6 +346,7 @@
 - **2026-07-25 night**: v3.2.8 batch 2 — Bug #33+#34+#35 (execute_sql_file wiring);live verified mysql 3-statement atomic + mongo friendly error
 - **2026-07-25 night**: v3.2.8 batch 2 supplement — postgres 3-statement atomic via e2e-b-postgres (test/test/testdb) ✅
 - **2026-07-25 night**: v3.2.8 batch 3 — Oracle 18c XE (gvenzl/oracle-xe:18.4.0-slim via 1ms.run/daocloud mirror);Bug #36+#37+#38 fixed + live verified
+- **2026-07-25 night**: v3.2.8 batch 4 — SQL Server 2022 (mcr.microsoft.com/mssql/server:2022-latest) Bug #39 fixed + TiDB (pingcap/tidb:latest) 0 bug;live verified
 
 ## Summary — v3.2.8 latest ✅
 
@@ -352,7 +365,8 @@
 - v3.2.8 batch 1 (mysql e2e): #28 (get_enum_values alias) + #29 (save_template params) + #30+#32 (mysql execute_batch) + #31 (export_backup mysql) — 5 fixed
 - v3.2.8 batch 2 (execute_sql_file verify): #33 (NoSQL UX error) + #34 (DB_ALLOWED_FILE_PATHS gating) + #35 (connect_database drops server-side config) — 3 fixed
 - v3.2.8 batch 3 (oracle e2e): #36 (get_schema SYSTEM exclusion) + #37 (get_table_info via #36) + #38 (explain_query Oracle 2-step) — 3 fixed
-- **Total: 24 bugs fixed, 0 critical open**
+- v3.2.8 batch 4 (sqlserver + tidb e2e): #39 (explain_query sqlserver SET SHOWPLAN_TEXT 不被 mssql 包识别) — 1 fixed;TiDB 0 bug
+- **Total: 25 bugs fixed, 0 critical open**
 
 **v3.2.9+ backlog** (incomplete coverage):
 - oracle / dm / sqlserver / tidb / postgres / clickhouse — 6 docker DBs e2e (oracle + dm 待企业 docker 镜像可用;postgres/clickhouse 镜像已 pull,5min 即可跑)
