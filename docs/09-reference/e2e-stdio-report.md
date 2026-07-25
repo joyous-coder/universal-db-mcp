@@ -355,8 +355,12 @@
 - **redis**: 35 ✅ + 7 INFRA + 1 ⚠️ (v3.2.7, no new bugs)
 - **mongodb**: 26 ✅ + 4 INFRA + 2 ⚠️→✅ (v3.2.7, Bug #26+#27 fixed)
 - **mysql**: 38 ✅ + 5 INFRA (v3.2.8, Bug #28/#29/#30+#31+#32 fixed)
+- **postgres**: 38 ✅ + 5 INFRA (v3.2.8,execute_sql_file live verified,0 bug)
 - **oracle**: 38 ✅ + 5 INFRA (v3.2.8, Bug #36+#37+#38 fixed;gvenzl/oracle-xe:18.4.0-slim)
-- **postgres / clickhouse / dm / oracle / sqlserver / tidb**: ⏳ v3.2.9+ backlog
+- **sqlserver**: 38 ✅ + 5 INFRA (v3.2.8, Bug #39 graceful fallback;mcr.microsoft.com/mssql/server:2022-latest)
+- **tidb**: 38 ✅ + 5 INFRA (v3.2.8, 0 bug;pingcap/tidb:latest;plan 正确解析)
+- **dm**: ⏳ v3.2.9+ (license required)
+- **clickhouse**: ⏳ v3.2.9+ (docker pull 待执行)
 
 **Cumulative bugs across v3.2.4–v3.2.8**:
 - v3.2.4: #11/#12/#13/#15/#17/#18/#19/#20/#21/#22 (10 fixed)
@@ -365,6 +369,7 @@
 - v3.2.8 batch 1 (mysql e2e): #28 (get_enum_values alias) + #29 (save_template params) + #30+#32 (mysql execute_batch) + #31 (export_backup mysql) — 5 fixed
 - v3.2.8 batch 2 (execute_sql_file verify): #33 (NoSQL UX error) + #34 (DB_ALLOWED_FILE_PATHS gating) + #35 (connect_database drops server-side config) — 3 fixed
 - v3.2.8 batch 3 (oracle e2e): #36 (get_schema SYSTEM exclusion) + #37 (get_table_info via #36) + #38 (explain_query Oracle 2-step) — 3 fixed
+- v3.2.8 batch 4 (sqlserver + tidb e2e): #39 (explain_query sqlserver SET SHOWPLAN_TEXT 不被 mssql 包识别,graceful fallback) — 1 fixed;TiDB 0 bug
 - v3.2.8 batch 4 (sqlserver + tidb e2e): #39 (explain_query sqlserver SET SHOWPLAN_TEXT 不被 mssql 包识别) — 1 fixed;TiDB 0 bug
 - **Total: 25 bugs fixed, 0 critical open**
 
