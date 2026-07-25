@@ -94,6 +94,7 @@
 - `get_enum_values` (✅) — DISTINCT values + count
 - `get_sample_data` (✅) — masked:false (无 PII 规则时)
 - `generate_sample_data` (✅) — `#19` fix: Faker [zh_CN, en, base]
+- `generate_sample_data` (✅) — `#25` fix: `undefined→null` (node:sqlite rejects undefined bind)
 - `explain_query` (✅) — `#18` fix: attachAdapter → plan + raw
 - `lint_sql` (✅) — `select-star` heuristic 命中
 - `get_query_history` (✅) — `#17` fix: 3 entries
@@ -147,6 +148,9 @@
 | **#17** | `get_query_history` 返回空(queryAnalyzer 未 wire 到 databaseService) | 🟡 MAJOR | ✅ FIXED v3.2.4 | `eb534fa` | `databaseService.setQueryAnalyzer(this.queryAnalyzer)` |
 | **#18** | `explain_query` 空 plan(Explainer.attachAdapter 从未被调用) | 🟡 MAJOR | ✅ FIXED v3.2.4 | `eb534fa` | `this.queryAnalyzer.attachAdapter(newAdapter, newConfig.type)` |
 | **#19** | `generate_sample_data` Faker `lorem.word` 数据缺失(zh_CN 没 lorem) | 🟡 MAJOR | ✅ FIXED v3.2.4 | `1496611` | `new Faker({ locale: [zh_CN, en, base] })` |
+| **#25** | `generate_sample_data` SQL bind 失败 — undefined 不接受 | 🟡 MAJOR | ✅ FIXED v3.2.6 | `83549e7` | `value === undefined ? null : value` |
+| **#26** | mongodb `execute_query` insertOne/updateOne 返回 "无效的查询参数格式" | 🔴 CRITICAL | OPEN | execute_query / mongodb | — |
+| **#27** | mongodb `use_profile` 返回 "Authentication failed"(saved profile 没保存 authSource) | 🔴 CRITICAL | OPEN | use_profile / mongodb | — |
 | **#20** | `use_tool_group` lazy=false 时返回 "未知工具" | 🔴 CRITICAL | ✅ FIXED v3.2.4 | `1496611` | meta tool 路由移出 lazyLoad check |
 | **#21** | `use_tool_schema` 同 #20 | 🔴 CRITICAL | ✅ FIXED v3.2.4 | `1496611` | 同上 |
 | **#22** | meta tool handler 内部仍依赖 toolRegistry(registry=null 时崩) | 🟡 MAJOR | ✅ FIXED v3.2.4 | `1b1f837` | 加 null-check 分支,return alreadyActive + hardcoded schema |
