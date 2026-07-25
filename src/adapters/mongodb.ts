@@ -165,29 +165,73 @@ export class MongoDBAdapter extends BaseAdapter {
     // 解析 db.collection.operation() 格式
     const match = trimmed.match(/db\.(\w+)\.(\w+)\((.*)\)/s);
     if (match) {
-      const [, collection, operation, argsStr] = match;
+      const [, collection, operation, fullArgs] = match;
 
       let args: Document = {};
-      if (argsStr.trim()) {
+      if (fullArgs.trim()) {
         // v3.2.7 Bug #26 fix: try JSON parse first; if that fails, try to coerce JS-style
         // (unquoted keys, single quotes) into JSON by normalizing.
         const tryParse = (s: string): unknown => {
           try { return JSON.parse(s); } catch { return null; }
         };
-        let parsed: unknown = tryParse(argsStr.trim());
+        const normalize = (s: string): string =>
+          s.replace(/'/g, '"')
+           .replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, '$1"$2"$3');
+
+        let parsed: unknown = tryParse(fullArgs.trim());
+        if (parsed === null) parsed = tryParse(normalize(fullArgs.trim()));
+
+        // Multi-arg call (e.g., updateOne(filter, update), find(query, options)):
+        // split top-level comma-separated JS literals into array
         if (parsed === null) {
-          // Normalize JS object literal to JSON: add double quotes around unquoted keys,
-          // replace single-quoted strings with double-quoted.
-          const normalized = argsStr
-            .replace(/'/g, '"')
-            .replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, '$1"$2"$3');
-          parsed = tryParse(normalized);
+          const splitArgs: string[] = [];
+          let depth = 0;
+          let inStr = false;
+          let prev = '';
+          let rest = fullArgs;
+          for (let i = 0; i < rest.length; i++) {
+            const c = rest[i];
+            if (c === '"' && prev !== '\\') inStr = !inStr;
+            if (!inStr) {
+              if (c === '{' || c === '[') depth++;
+              else if (c === '}' || c === ']') depth--;
+              else if (c === ',' && depth === 0) {
+                splitArgs.push(rest.slice(0, i).trim());
+                prev = '';
+                rest = rest.slice(i + 1).trimStart();
+                i = -1; continue;
+              }
+            }
+            prev = c;
+          }
+          if (rest.trim()) splitArgs.push(rest.trim());
+          const arr = splitArgs.map(s => tryParse(s) ?? tryParse(normalize(s)));
+          if (arr.every(x => x !== null)) parsed = arr;
         }
+
         if (parsed === null) {
           throw new Error(
             '无效的查询参数格式。请使用 JSON 格式 (例如 db.users.insertOne({"name":"alice"}))' +
-            `或 JSON 整体格式 (例如 {"collection":"users","operation":"insertOne","query":{"name":"alice"}}). 原始: ${argsStr.slice(0, 100)}`
+            `或 JSON 整体格式 (例如 {"collection":"users","operation":"insertOne","query":{"name":"alice"}}). 原始: ${fullArgs.slice(0, 100)}`
           );
+        }
+
+        // For multi-arg operations: distribute args correctly
+        const op = operation.toLowerCase();
+        if (Array.isArray(parsed)) {
+          if ((op === 'update' || op === 'updateone' || op === 'updatemany') && parsed.length >= 2) {
+            return { collection, operation, query: parsed[0] as Document, update: parsed[1] as Document };
+          }
+          if ((op === 'find' || op === 'findone' || op === 'distinct' || op === 'count' || op === 'countdocuments') && parsed.length >= 2) {
+            return { collection, operation, query: parsed[0] as Document, options: parsed[1] as Document };
+          }
+          if (op === 'aggregate') {
+            return { collection, operation, pipeline: parsed[0] as any };
+          }
+          if (op === 'insert' || op === 'insertone') {
+            return { collection, operation, query: parsed[0] as Document };
+          }
+          return { collection, operation, query: parsed[0] as Document };
         }
         args = parsed as Document;
       }
