@@ -136,8 +136,8 @@
 | #4 | `execute_query` 在 Lazy 模式下路径不对 | 🟡 MAJOR | ✅ FIXED v3.2.3 | (v3.2.x) | |
 | #5 | `generate_sample_data` lazy routing | 🟡 MAJOR | ✅ FIXED v3.2.3 | 2af4256 | |
 | #6 | `execute_query` 多语句静默突变 | 🔴 CRITICAL | ✅ FIXED v3.2.3 | 2af4256 | v3.2.4 verify 通过 |
-| **#7** | **pg.Pool 冷启动 race + 无 retry** | 🔴 CRITICAL | **⏳ DEFERRED v3.2.5** | — | Claude Code 重启后首次连接 5 次重试 + 8s sleep 才能连上 |
-| **#8** | **Claude Code MCP client 不消费 `listChanged` 通知** | 🔴 CRITICAL | **⏳ DEFERRED v3.2.5** | — | 大幅缓解 by #13 |
+| **#7** | **pg.Pool 冷启动 race + 无 retry** | 🔴 CRITICAL | ✅ FIXED v3.2.4 (commit pending) | `src/adapters/postgres.ts:52-127` | 加 `connectWithRetry(3)` exponential backoff 500ms/1s/2s + tune pool (min:2, keepAliveInitialDelayMs:10000, application_name) |
+| **#8** | **Claude Code MCP client 不消费 `listChanged` 通知** | 🔴 CRITICAL | ✅ FIXED v3.2.4 (commit pending) | `src/utils/config-loader.ts:209-227` | 当 `DB_LAZY_LOAD_ENABLED=true` 但 `DB_LAZY_DEFAULT_GROUP` unset 时,default 改为激活所有 4 个 group. Claude Code 无需 refresh 即可一次性看到所有 43 tool. |
 | **#11** | execute_script/sql_file/batch 启动时 `config=undef` → `resolvedPerms=['read']` → 不在 ListTools | (subsumed by #13) | ✅ FIXED | (part of #13) | |
 | **#12** | meta tools (use_tool_group/use_tool_schema) 只在 lazy 路径 | (subsumed by #13) | ✅ FIXED | (part of #13) | |
 | **#13** | MCP client 缓存 ListTools;28 个 tool unreachable | 🔴 CRITICAL | ✅ FIXED v3.2.4 | `1565a01` + `33a02bf` | alwaysOnTools append 到 v3.1 path |
@@ -153,14 +153,22 @@
 
 ## Error notes — Bug fix details
 
-### Bug #7 — pg.Pool cold-start race (DEFERRED)
+### Bug #7 — pg.Pool cold-start race (FIXED in v3.2.4)
 - **Repro**: Claude Code 重启后 `connect_database({type:'postgres'})` 失败 4-5 次,空错误,8s sleep 后才连上。
 - **Root cause**: pg.Pool 冷启动 race + idleTimeout/keepAlive 边界 + 无 retry。
-- **Fix 候选 v3.2.5**: connect_database handler 加 auto-retry (500ms/1s/2s, max 3) + `application_name` + `keepAliveInitialDelay` 调小 + `databaseService.executeQuery` 包 `withRetry(2)`。
+- **Fix** (`src/adapters/postgres.ts:52-127`):
+  - 加 `connectWithRetry(3)` wrapper,exponential backoff `[500ms, 1s, 2s]`
+  - Pool 配置调优:`min: 1 → 2`(冷启动有 warm client),`keepAliveInitialDelayMillis: 30000 → 10000`(更快探测),`application_name: 'universal-db-mcp'`(server 端诊断用),`connectionTimeoutMillis: 5000`(快失败 → 触发 retry),`statement_timeout: 30000`
+- **Verify**: 下次 Claude Code 重启后,首次 `connect_database({type:'postgres'})` 应当 auto-retry,不再需要手动 sleep 8s
 
-### Bug #8 — Claude Code listChanged not consumed (DEFERRED)
-- 大幅缓解 by #13 (`DB_LAZY_LOAD_ENABLED=false` → 43 个 tool 全可见,无需 lazy activation)。
-- v3.2.5 调查 Claude Code MCP client 内部是否支持 `listChanged` 通知。
+### Bug #8 — Claude Code listChanged not consumed (FIXED in v3.2.4)
+- **Repro**: `DB_LAZY_LOAD_ENABLED=true`(默认)时,25 个 lazy group tool + 2 meta tool 完全不可达,因为 Claude Code 客户端不响应 `listChanged` 通知。
+- **Root cause**: tool-registry 只返回 defaultActiveGroups(可空),其他 group 需 `use_tool_group` 激活。Client 不刷新 → 已激活 group 都不显示。
+- **Fix** (`src/utils/config-loader.ts:209-227`):
+  - 当 `DB_LAZY_LOAD_ENABLED=true` 但 `DB_LAZY_DEFAULT_GROUP` unset 时,改 default 为激活 **所有 4 个 group**(query-experience/profiles/data-governance/index-advisor)
+  - Claude Code 启动时一次性看到全部 43 tool。无需 refresh。
+  - 用户仍可显式设 `DB_LAZY_DEFAULT_GROUP=query-experience` 保留 opt-in lazy 行为
+- **Verify**: 下次 Claude Code 默认配置(没改 .mcp.json)也能调所有 43 tool。
 
 ### Bug #13 — MCP client ListTools cache (FIXED)
 - **Repro**: 28 个 tool 调 MCP 客户端返回 "No such tool available"。

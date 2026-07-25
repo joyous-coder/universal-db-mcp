@@ -52,8 +52,10 @@ export class PostgreSQLAdapter extends BaseAdapter {
   async connect(): Promise<void> {
     try {
       // P1: poolConfig (DB_POOL_SIZE / DB_POOL_MIN / DB_POOL_IDLE_TIMEOUT_MS)，未配置时回退到原默认值
+      // v3.2.4 Bug #7 fix: raise default min from 1 to 2 so cold-start race has a warm client ready.
+      // keepAliveInitialDelayMillis dropped 30000 → 10000 (faster probe after keep-alive silence).
       const poolMax = this.config.poolConfig?.max ?? 3;
-      const poolMin = this.config.poolConfig?.min ?? 1;
+      const poolMin = this.config.poolConfig?.min ?? 2;
       const poolIdleMs = this.config.poolConfig?.idleTimeoutMs ?? 60000;
 
       this.pool = new Pool({
@@ -68,16 +70,47 @@ export class PostgreSQLAdapter extends BaseAdapter {
         idleTimeoutMillis: poolIdleMs,
         // TCP Keep-Alive：防止连接被服务端或中间件超时关闭
         keepAlive: true,
-        keepAliveInitialDelayMillis: 30000,
+        keepAliveInitialDelayMillis: 10000,
+        // v3.2.4 Bug #7: identify connection for server-side pg_stat_activity queries
+        application_name: 'universal-db-mcp',
+        // v3.2.4 Bug #7: tighter timeouts so cold-start fails fast (triggers retry)
+        connectionTimeoutMillis: 5000,
+        statement_timeout: 30000,
       });
 
-      // 测试连接
-      await this.pool.query('SELECT 1');
+      // v3.2.4 Bug #7 fix: cold-start race. First connect after Claude Code restart
+      // was failing 4-5 times before succeeding. Wrap SELECT 1 in exponential-backoff
+      // retry (3 attempts: 500ms, 1s, 2s).
+      await this.connectWithRetry(3);
     } catch (error) {
       throw new Error(
         `PostgreSQL 连接失败: ${error instanceof Error ? error.message : String(error)}`
       );
     }
+  }
+
+  /**
+   * v3.2.4 Bug #7 fix: retry connect query with exponential backoff.
+   * Cold-start race in pg.Pool after process restart would fail first 4-5 attempts
+   * because: (a) min pool clients haven't been established; (b) DNS / TCP socket
+   * may be in TIME_WAIT from previous session. Backoff gives TCP stack time to settle.
+   */
+  private async connectWithRetry(maxAttempts: number): Promise<void> {
+    const delays = [500, 1000, 2000]; // ms
+    let lastErr: unknown;
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        if (!this.pool) throw new Error('pool not initialized');
+        await this.pool.query('SELECT 1');
+        return;
+      } catch (err) {
+        lastErr = err;
+        if (i < maxAttempts - 1) {
+          await new Promise(r => setTimeout(r, delays[i] ?? 1000));
+        }
+      }
+    }
+    throw lastErr;
   }
 
   /**

@@ -210,14 +210,21 @@ export function loadFromEnv(): Partial<AppConfig> {
   const lazyEnabled = process.env.DB_LAZY_LOAD_ENABLED;
   const lazyDefaultGroups = process.env.DB_LAZY_DEFAULT_GROUP;
   if (lazyEnabled !== undefined || lazyDefaultGroups !== undefined) {
+    const allGroups = ['query-experience', 'profiles', 'data-governance', 'index-advisor'] as const;
+    // v3.2.4 Bug #8 fix: when DB_LAZY_LOAD_ENABLED=true and DB_LAZY_DEFAULT_GROUP is unset,
+    // default to ALL groups active. Claude Code MCP client doesn't refresh on listChanged
+    // notification, so without pre-activating all groups, 25 tools + meta remain invisible.
+    // Users who explicitly want opt-in lazy behavior can set DB_LAZY_DEFAULT_GROUP explicitly.
+    const defaultGroups: ReadonlyArray<typeof allGroups[number]> = (lazyDefaultGroups ?? '')
+      .split(',')
+      .map(s => s.trim())
+      .filter((s): s is typeof allGroups[number] => allGroups.includes(s as typeof allGroups[number]));
+    const activeGroups: Array<typeof allGroups[number]> = defaultGroups.length === 0
+      ? (lazyDefaultGroups === undefined ? [...allGroups] : [])  // unset → all active; explicit empty → none
+      : [...defaultGroups];
     config.lazyLoad = {
       enabled: lazyEnabled === undefined ? true : /^(true|1|yes)$/i.test(lazyEnabled),
-      defaultActiveGroups: (lazyDefaultGroups ?? '')
-        .split(',')
-        .map(s => s.trim())
-        .filter((s): s is 'query-experience' | 'profiles' | 'data-governance' | 'index-advisor' =>
-          ['query-experience', 'profiles', 'data-governance', 'index-advisor'].includes(s)
-        ),
+      defaultActiveGroups: activeGroups,
     };
   }
 
