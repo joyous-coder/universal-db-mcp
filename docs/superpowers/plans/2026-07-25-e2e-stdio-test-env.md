@@ -128,9 +128,42 @@ The full original T1-T12 below (lines 49+) is preserved for archival, but **curr
 - `get_schema({})` — 验证 schema 缓存 + 推理
 - `get_table_info({table: 'users'})` — 验证单表详情
 - `get_enum_values({table, column})` / `get_sample_data({table})`(任选)
+- `get_connection_status({})` — 验证 connection state 跟踪
+- `clear_cache({})` — 验证 schema 缓存清理
 - `disconnect_database({})`
 
 → 验证:每个 adapter 工作,**CRUD 全通**
+
+### Layer 1.5 完整 41 tool 列表(防漏)
+
+**Stateful Core (14)**:
+connect_database, disconnect_database, **get_connection_status**, execute_query,
+get_schema, get_table_info, **clear_cache**, get_enum_values, get_sample_data,
+execute_script, execute_sql_file, execute_batch, execute_template, get_metrics
+
+**Lazy: query-experience (7)**:
+explain_query, lint_sql, get_query_history, save_template, list_templates, get_template, delete_template
+
+**Lazy: profiles (11)**:
+save_profile, list_profiles, get_profile, delete_profile, enable_profile, disable_profile,
+disconnect_profile, compare_profile_schemas, export_profiles, import_profiles, get_global_schema
+
+**Lazy: data-governance (4)**:
+export_backup, audit_log, get_pii_config, set_pii_config
+
+**Lazy: index-advisor / plan-history (3)**:
+explain_query_with_advice, compare_query_plans, list_query_plans
+
+**InfoLazy (1)**:
+generate_sample_data
+
+**Stateful Lazy (1)**:
+use_profile
+
+**Meta (2)** — 不算进 41 case,加 2 个 meta:
+use_tool_group, use_tool_schema
+
+**总计 41 case + 2 meta = 43 tool call**
 
 ### Layer 2(postgres × 45 calls)
 
