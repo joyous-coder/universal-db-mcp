@@ -9,4 +9,13 @@ coverage/
 .idea/
 # Test scratch files (vitest creates .tmp-*.db / .tmp-*.wal / etc.)
 .tmp-*
+# E2E test databases (query history, profiles, templates, plan history)
+*.db
+*.db-shm
+*.db-wal
+plans.db
+profiles.db
+templates.db
+history.db
+.e2e-plan-history.db
 

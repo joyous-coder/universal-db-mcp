@@ -2,13 +2,64 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.2.4] - 2026-07-25
+
+### 修复 (e2e-driven, v5 plan 完成 sqlite 0-bug)
+
+v5 e2e plan 在 sqlite 上端到端测试 43 个 MCP tool + 7 个环境变量,发现并修复 8 个 bug:
+
+#### Critical fixes
+
+- **Bug #13**: Claude Code MCP client 缓存 ListTools,28 个 tool 不可达 + meta tool 失踪。
+  修复:在 v3.1 ListTools 路径追加 17 个 `alwaysOnTools` 定义(meta + lazy groups + 3 个条件 tool)。
+  文件: `src/mcp/mcp-server.ts:622-722`
+
+- **Bug #15**: `use_profile` 崩溃 "Cannot read properties of undefined (reading 'toLowerCase')"。
+  修复:spread profile.config 时注入 `type: profile.type`(`profile.config` 不含 type,`profile.type` 在顶层)。
+  文件: `src/core/profile-manager.ts:236`
+
+- **Bug #17**: `get_query_history` 返回空 — queryAnalyzer 创建后没传给 databaseService。
+  修复:connect_database handler 中 `databaseService.setQueryAnalyzer(this.queryAnalyzer)`。
+  文件: `src/mcp/mcp-server.ts:870-873`
+
+- **Bug #18**: `explain_query` 返回空 plan — `queryAnalyzer.attachAdapter()` 从未被调用。
+  修复:connect_database handler 中 `this.queryAnalyzer.attachAdapter(newAdapter, newConfig.type)`。
+  文件: `src/mcp/mcp-server.ts:874-876`
+
+- **Bug #20 + #21**: `use_tool_group` / `use_tool_schema` 返回 "未知工具"。
+  修复:meta tool 路由从 `if (this.lazyLoadEnabled)` 内层移到外层。
+  文件: `src/mcp/mcp-server.ts:786-794`
+
+#### Major fixes
+
+- **Bug #19**: `generate_sample_data` Faker locale 数据缺失(zh_CN 没有 `lorem.word`)。
+  修复:`new Faker({ locale: [zh_CN, en, base] })` — en/base 兜底。
+  文件: `src/utils/sample-data-generator.ts:2,19`
+
+- **Bug #22**: meta tool handler 内部仍依赖 toolRegistry,即使 lazy=false 也返回 "registry not initialized"。
+  修复:`handleUseToolGroup` 和 `handleUseToolSchema` 加 null-check 分支,registry=null 时返回 "alreadyActive" / 硬编码 schema。
+  文件: `src/mcp/mcp-server.ts:230-300`
+
+#### 测试覆盖
+
+- **42/43 tool 在 sqlite 上手工 e2e 验证**(剩 1 个是 doc clarification,非 bug)
+- **5/7 环境变量验证**(D9 #13 ✅, D12 ✅, D13 ✅, D14 ⚠️ CWD-related, D10 baseline ✅;D11 LOG_LEVEL + D15 DB_TYPE deferred — 低优先级)
+- **0 critical bug 开 sqlite**
+
+### 推迟到 v3.2.5
+
+- **Bug #7**: pg.Pool 冷启动 race + 无 retry
+- **Bug #8**: Claude Code MCP client 不消费 `listChanged` 通知(被 #13 大幅缓解)
+- 其他 6 DB (postgres/mysql/redis/mongodb/clickhouse/dm) e2e 测试
+- LOG_LEVEL + DB_TYPE env var 验证(低优先级)
+
+### 配套文档
+
+- `docs/09-reference/e2e-stdio-report.md` — DB × Tool 矩阵 + bug log + error notes + env var matrix
+- `docs/superpowers/specs/2026-07-25-e2e-v5-design.md` — v5 设计
+- `docs/superpowers/plans/2026-07-25-e2e-v5-plan.md` — v5 计划
+
 ## [3.2.3] - 2026-07-25
-
-### Unreleased section (work in progress)
-
-v5 e2e plan in progress. 43 tools tested on sqlite, 4 critical bugs found (#13, #15 fixed; #17, #18 deferred). NO v3.2.4 release yet — user wants 0 bugs on sqlite first before next release.
-
-### [3.2.3 baseline below]
 
 ### 修复 (patch, e2e-driven)
 
