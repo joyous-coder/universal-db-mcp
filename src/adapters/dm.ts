@@ -222,9 +222,12 @@ export class DMAdapter extends BaseAdapter {
       // 执行查询
       // 对于写操作（INSERT/UPDATE/DELETE），设置 autoCommit: true 确保操作立即提交
       // 对于读操作（SELECT），autoCommit 无影响
+      // v3.2.8 Bug #40 fix: dmdb 默认 outFormat=ARRAY(返回数字键 0/1/2),
+      // 必须显式设 OUT_FORMAT_OBJECT 才能返回列名键
       const isWrite = this.isWriteOperation(cleanQuery);
       const result: any = await this.withRetry(() => this.connection.execute(cleanQuery, params || [], {
         autoCommit: isWrite,
+        outFormat: 4002, // OUT_FORMAT_OBJECT
       }));
 
       const executionTime = Date.now() - startTime;
@@ -331,11 +334,13 @@ export class DMAdapter extends BaseAdapter {
       // 获取所有表的列信息
       // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=COLUMN_NAME, 3=DATA_TYPE, 4=DATA_LENGTH,
       //        5=DATA_PRECISION, 6=DATA_SCALE, 7=NULLABLE, 8=DATA_DEFAULT, 9=COLUMN_ID
+      // v3.2.8 Bug #41+#42 fix: remove 'SYSDBA' from exclusion list (current user's schema).
+      // Otherwise user-created tables in SYSDBA schema are invisible.
       const allColumnsResult = await this.connection.execute(
         `SELECT OWNER, TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
                 DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
          FROM ALL_TAB_COLUMNS
-         WHERE OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'SYSDBA', 'CTISYS')
+         WHERE OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'CTISYS')
          ORDER BY OWNER, TABLE_NAME, COLUMN_ID`,
         []
       );
@@ -345,7 +350,7 @@ export class DMAdapter extends BaseAdapter {
       const allCommentsResult = await this.connection.execute(
         `SELECT OWNER, TABLE_NAME, COLUMN_NAME, COMMENTS
          FROM ALL_COL_COMMENTS
-         WHERE OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'SYSDBA', 'CTISYS')
+         WHERE OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'CTISYS')
            AND COMMENTS IS NOT NULL`,
         []
       );
@@ -358,7 +363,7 @@ export class DMAdapter extends BaseAdapter {
          JOIN ALL_CONS_COLUMNS cols
            ON cons.CONSTRAINT_NAME = cols.CONSTRAINT_NAME AND cons.OWNER = cols.OWNER
          WHERE cons.CONSTRAINT_TYPE = 'P'
-           AND cons.OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'SYSDBA', 'CTISYS')
+           AND cons.OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'CTISYS')
          ORDER BY cons.OWNER, cons.TABLE_NAME, cols.POSITION`,
         []
       );
@@ -370,7 +375,7 @@ export class DMAdapter extends BaseAdapter {
          FROM ALL_INDEXES i
          JOIN ALL_IND_COLUMNS ic
            ON i.INDEX_NAME = ic.INDEX_NAME AND i.OWNER = ic.INDEX_OWNER
-         WHERE i.OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'SYSDBA', 'CTISYS')
+         WHERE i.OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'CTISYS')
          ORDER BY i.OWNER, i.TABLE_NAME, i.INDEX_NAME, ic.COLUMN_POSITION`,
         []
       );
@@ -381,7 +386,7 @@ export class DMAdapter extends BaseAdapter {
         `SELECT t.OWNER, t.TABLE_NAME, t.NUM_ROWS, c.COMMENTS AS TABLE_COMMENT
          FROM ALL_TABLES t
          LEFT JOIN ALL_TAB_COMMENTS c ON t.TABLE_NAME = c.TABLE_NAME AND t.OWNER = c.OWNER
-         WHERE t.OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'SYSDBA', 'CTISYS')`,
+         WHERE t.OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'CTISYS')`,
         []
       );
 
@@ -406,7 +411,7 @@ export class DMAdapter extends BaseAdapter {
           JOIN ALL_CONSTRAINTS rc ON c.R_CONSTRAINT_NAME = rc.CONSTRAINT_NAME AND c.R_OWNER = rc.OWNER
           JOIN ALL_CONS_COLUMNS rcc ON rc.CONSTRAINT_NAME = rcc.CONSTRAINT_NAME AND rc.OWNER = rcc.OWNER AND cc.POSITION = rcc.POSITION
           WHERE c.CONSTRAINT_TYPE = 'R'
-            AND c.OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'SYSDBA', 'CTISYS')
+            AND c.OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'CTISYS')
           ORDER BY c.OWNER, c.TABLE_NAME, c.CONSTRAINT_NAME, cc.POSITION`,
           []
         );

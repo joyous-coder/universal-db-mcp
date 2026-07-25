@@ -29,6 +29,43 @@ export class Explainer {
       return { db: this.dbType, sql, plan, raw, format: 'tabular', duration_ms: Date.now() - start };
     }
 
+    // v3.2.8 Bug #43 fix: DM (达梦) `EXPLAIN <sql>` doesn't return rows in dmdb driver
+    // (verified live: raw empty, plan []). The proper DM way to get plan is via the
+    // DISQL client or `EXPLAIN` with `-v` flag, both not available via dmdb npm package.
+    // Graceful fallback: run EXPLAIN, return whatever (empty) raw + guidance to use DISQL.
+    if (this.dbType === 'dm') {
+      const trimmed = sql.trim().replace(/;$/, '');
+      try {
+        const explainSql = `EXPLAIN ${trimmed}`;
+        const result = await this.adapter.executeQuery(explainSql, params);
+        const rows = (result.rows ?? []) as Array<Record<string, unknown>>;
+        const raw = rows.map(r => Object.values(r).join('|')).join('\n');
+        if (rows.length === 0) {
+          return {
+            db: this.dbType,
+            sql,
+            plan: [],
+            raw: '⚠️ DM `EXPLAIN <sql>` returns no rows via dmdb npm driver.\n' +
+                 'For DM execution plans, use DISQL client with `EXPLAIN <sql>` or\n' +
+                 'the DM management console — both bypass the driver-level row limitation.',
+            format: 'tabular',
+            duration_ms: Date.now() - start,
+          };
+        }
+        const plan = this.parsePlan(rows);
+        return { db: this.dbType, sql, plan, raw, format: 'tabular', duration_ms: Date.now() - start };
+      } catch (e) {
+        return {
+          db: this.dbType,
+          sql,
+          plan: [],
+          raw: `explain_query failed for dm: ${e instanceof Error ? e.message : String(e)}`,
+          format: 'tabular',
+          duration_ms: Date.now() - start,
+        };
+      }
+    }
+
     // v3.2.8 Bug #39 fix: SQL Server `SET SHOWPLAN_TEXT ON; <sql>; SET SHOWPLAN_TEXT OFF;`
     // ① SET SHOWPLAN_TEXT must be the only statement in its batch (so 3-statement batch fails).
     // ② The mssql npm package does NOT respect SET options across separate executeQuery
