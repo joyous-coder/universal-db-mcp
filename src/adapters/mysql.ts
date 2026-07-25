@@ -427,8 +427,10 @@ export class MySQLAdapter extends BaseAdapter {
   }
 
   /**
-   * Override executeBatch with native MySQL batch (single round-trip).
-   * mysql2 supports nested array format: pool.query(sql, [params1, params2, ...])
+   * Override executeBatch with per-row execution (loop over paramsList).
+   * v3.2.8 Bug #30 + #32 fix: mysql2's `pool.query(sql, [nestedArray])` only works for `VALUES ?`
+   * syntax (single placeholder). For our generic `VALUES (?, ?)` shape we must loop row-by-row.
+   * We use a single physical connection from the pool to keep atomic semantics when useTransaction=true.
    */
   async executeBatch(sql: string, paramsList: unknown[][], options: ExecuteBatchOptions = {}): Promise<BatchResult> {
     const maxBatchSize = options.maxBatchSize ?? 1000;
@@ -442,16 +444,37 @@ export class MySQLAdapter extends BaseAdapter {
     }
 
     const startTime = Date.now();
+    const affected: number[] = [];
 
-    // mysql2 native batch: nested array
-    const [result] = await this.pool!.query(sql, [paramsList]);
-    const affectedRows = (result as any)?.affectedRows ?? 0;
-
-    void useTransaction; // mysql2 batch runs in single statement, autocommit handles atomicity
+    // Single connection so BEGIN/COMMIT wraps all statements atomically when useTransaction=true.
+    const conn = await this.pool!.getConnection();
+    let autoCommit = true;
+    try {
+      if (useTransaction) {
+        await conn.query('BEGIN');
+        // mysql2 doesn't expose setAutoCommit on pool connections uniformly; manual BEGIN suffices.
+        autoCommit = false;
+      }
+      for (const params of paramsList) {
+        const [res] = await conn.execute(sql, params);
+        const ar = (res as any)?.affectedRows ?? 0;
+        affected.push(ar);
+      }
+      if (useTransaction) {
+        await conn.query('COMMIT');
+      }
+    } catch (err) {
+      if (!autoCommit) {
+        try { await conn.query('ROLLBACK'); } catch { /* ignore */ }
+      }
+      throw err;
+    } finally {
+      conn.release();
+    }
 
     return {
-      affectedRowsPerStatement: [],
-      totalAffectedRows: affectedRows,
+      affectedRowsPerStatement: affected,
+      totalAffectedRows: affected.reduce((a, b) => a + b, 0),
       executionTime: Date.now() - startTime,
     };
   }

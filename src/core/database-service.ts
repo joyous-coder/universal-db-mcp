@@ -858,7 +858,8 @@ export class DatabaseService {
 
     // 外层：基于样本取 DISTINCT 并排序；DISTINCT 在样本中已经去重，但 ORDER BY 需要确定性，
     // 所以显式排序后再 LIMIT；appendLimit 处理各数据库的 LIMIT/FETCH/TOP 语法差异
-    const baseQuery = `SELECT DISTINCT ${quotedColumn} as value FROM (${sampleSubquery}) ORDER BY ${quotedColumn}`;
+    // v3.2.8 Bug #28 fix: MySQL requires derived tables to have an alias (FROM (subq) AS t)
+    const baseQuery = `SELECT DISTINCT ${quotedColumn} as value FROM (${sampleSubquery}) AS t ORDER BY ${quotedColumn}`;
 
     return this.appendLimit(baseQuery, limit);
   }

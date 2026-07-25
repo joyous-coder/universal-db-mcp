@@ -80,7 +80,7 @@ export class TemplateStore {
     const id = nanoid(8);
     const profileName = input.profile_name ?? null;
     this.conn!.exec(
-      `INSERT INTO templates (id, name, description, sql, parameters_json, tags_json, created_at, updated_at, created_by, use_count, profile_name) VALUES (${q(id)}, ${q(input.name)}, ${q(input.description)}, ${q(input.sql)}, ${q(JSON.stringify(input.parameters))}, ${q(JSON.stringify(input.tags ?? []))}, ${q(now)}, ${q(now)}, ${q(createdBy)}, 0, ${q(profileName)})`
+      `INSERT INTO templates (id, name, description, sql, parameters_json, tags_json, created_at, updated_at, created_by, use_count, profile_name) VALUES (${q(id)}, ${q(input.name)}, ${q(input.description)}, ${q(input.sql)}, ${q(JSON.stringify(input.parameters ?? []))}, ${q(JSON.stringify(input.tags ?? []))}, ${q(now)}, ${q(now)}, ${q(createdBy)}, 0, ${q(profileName)})`
     );
     return {
       id,

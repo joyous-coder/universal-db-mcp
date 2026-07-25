@@ -38,7 +38,13 @@ function sqlEscape(value: unknown): string {
   if (value === null || value === undefined) return 'NULL';
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : 'NULL';
   if (typeof value === 'boolean') return value ? '1' : '0';
-  if (value instanceof Date) return `'${value.toISOString().replace(/'/g, "''")}'`;
+  if (value instanceof Date) {
+    // v3.2.8 Bug #31 fix: MySQL DATETIME expects 'YYYY-MM-DD HH:MM:SS', not ISO with 'T' + 'Z'.
+    const d = value;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const formatted = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+    return `'${formatted}'`;
+  }
   if (Buffer.isBuffer(value)) return `X'${value.toString('hex')}'`;
   const s = String(value).replace(/'/g, "''");
   return `'${s}'`;
@@ -110,22 +116,26 @@ async function readCreateTable(profile: ProfileManager, profileName: string, tab
 
 async function dumpTable(profile: ProfileManager, profileName: string, table: string): Promise<string> {
   const live = await profile.loadProfile(profileName);
+  const dbType = live.profile.type;
   safeIdent(table);
+  // v3.2.8 Bug #31 fix: MySQL requires backtick identifiers; PostgreSQL/SQLite use double-quote
+  const quote = (name: string): string => MYSQL_TYPES.has(dbType) ? `\`${name}\`` : `"${name}"`;
+  const ident = (name: string): string => MYSQL_TYPES.has(dbType) ? `\`${name}\`` : `"${name}"`;
   // Pagination via LIMIT/OFFSET works on sqlite, mysql, pg.
   const out: string[] = [];
   let offset = 0;
   while (true) {
     const res = await live.adapter.executeQuery(
-      `SELECT * FROM ${table} LIMIT ${MAX_INSERT_ROWS_PER_STATEMENT} OFFSET ${offset}`
+      `SELECT * FROM ${ident(table)} LIMIT ${MAX_INSERT_ROWS_PER_STATEMENT} OFFSET ${offset}`
     );
     const rows = (res.rows ?? []) as Array<Record<string, unknown>>;
     if (rows.length === 0) break;
     const cols = Object.keys(rows[0] as Record<string, unknown>);
-    const colList = cols.map(c => `"${c}"`).join(', ');
+    const colList = cols.map(c => quote(c)).join(', ');
     for (let i = 0; i < rows.length; i += MAX_INSERT_ROWS_PER_STATEMENT) {
       const chunk = rows.slice(i, i + MAX_INSERT_ROWS_PER_STATEMENT);
       const values = chunk.map(r => `(${cols.map(c => sqlEscape(r[c])).join(', ')})`).join(', ');
-      out.push(`INSERT INTO ${table} (${colList}) VALUES ${values};`);
+      out.push(`INSERT INTO ${ident(table)} (${colList}) VALUES ${values};`);
     }
     offset += rows.length;
     if (rows.length < MAX_INSERT_ROWS_PER_STATEMENT) break;

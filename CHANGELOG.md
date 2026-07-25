@@ -2,6 +2,48 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.2.8] - 2026-07-25
+
+### 修复 (mysql e2e-driven, 4 bugs)
+
+v3.2.7 发布后跑 v3.2.8 backlog 中 mysql e2e,发现 4 个 bug 并修复:
+
+#### Fixes
+
+- **Bug #28: `get_enum_values` 在 MySQL/TiDB/OceanBase/PolarDB/GoldenDB 上 "Every derived table must have its own alias"**
+  - **Repro**: 任何 SQL 类型表 + 这些 db,调 `get_enum_values({tableName, columnName})` → 派生表缺别名
+  - **Root cause** (`src/core/database-service.ts:861`): 抽样子查询 `FROM (SELECT … LIMIT 10000)` 没有 alias,MySQL 严格模式拒绝
+  - **Fix**: 加 `AS t` 别名
+  - **效果**: MySQL 返回 `["alice","script_a","script_b"]` 等真实 unique values
+
+- **Bug #29: `save_template` 不传 `parameters` 报 "NOT NULL constraint failed: templates.parameters_json"**
+  - **Repro**: `save_template({name, description, sql})` — 没传 parameters 数组
+  - **Root cause** (`src/core/template-store.ts:83`): `JSON.stringify(input.parameters)` 在 undefined 上返回 `undefined`,SQL 字面成 `undefined` 字段
+  - **Fix**: `JSON.stringify(input.parameters ?? [])`
+  - **效果**: 默认 `parameters: []` 存盘成功
+
+- **Bug #30+#32: MySQL `execute_batch` + `generate_sample_data` 报 "near '?, ?)'"**
+  - **Repro**: `execute_batch({sql:"INSERT … (?, ?)", paramsList:[[a,b],[c,d]]})` → SQL 语法错误
+  - **Root cause** (`src/adapters/mysql.ts:447`): `pool.query(sql, [nestedArray])` 是 `VALUES ?` 专用语法,我们用 `VALUES (?, ?)` 行不通
+  - **Fix**: 单连接取出来 + BEGIN/COMMIT 包裹 + 逐行 `conn.execute(sql, params)`
+  - **效果**: 保留事务语义同时支持任意 placeholder 形式
+
+- **Bug #31: `export_backup` MySQL dump 不可执行**
+  - **Repro**: 在 MySQL profile 上 `export_backup` 输出 `INSERT INTO e2e_users ("id", …) VALUES (…, '2026-07-25T05:00:42.000Z')` → 报 Unknown column '"id"';timestamp 无效
+  - **Root cause** (`src/core/backup-writer.ts:124,41`): 列/表名 ANSI double-quote + JS `Date.toISOString()` 'T'/'Z' MySQL 不识别
+  - **Fix**: MySQL 类型用 backtick 标识符 + Date format 为 `YYYY-MM-DD HH:MM:SS`;其他 db 保持 double-quote
+  - **效果**: 生成的 dump 在 MySQL 实例上可直接 replay,`created_at` 正确还原
+
+### v3.2.8 mysql e2e
+
+- ✅ **mysql** (35 ✅ + 3 ❌→✅ 修复后 38/43): 全 43 tool lifecycle 跑通,4 bug 已 verify
+- ⏳ oracle / dm / sqlserver / tidb / postgres / clickhouse 推到 v3.2.9
+
+### 测试
+
+- `npm test` 484/484 (unit) 通过
+- live e2e verify: get_enum_values + save_template + export_backup 已 live 通过
+
 ## [3.2.7] - 2026-07-25
 
 ### 修复 (mongodb e2e-driven, redis/mongo coverage)
