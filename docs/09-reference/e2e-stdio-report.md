@@ -65,7 +65,7 @@
 |---|---|---|---|---|---|
 | #11 | execute_script/sql_file/batch missing from v3.1 list (perms gated at startup, not refreshed) | 🔴 CRITICAL | OPEN | execute_script/sql_file/batch / sqlite | — |
 | #12 | use_tool_group / use_tool_schema missing from v3.1 list (lazy-path only) | 🔴 CRITICAL | OPEN | use_tool_group/schema / sqlite | — |
-| #13 | MCP client caches ListTools at startup; 25 lazy group tools + 3 conditional tools unreachable even after connect_database | 🔴 CRITICAL | OPEN | 28 tools / all DBs | — |
+| #13 | MCP client caches ListTools at startup; 25 lazy group tools + 3 conditional tools unreachable even after connect_database | 🔴 CRITICAL | ✅ FIXED (pending regression) | 28 tools / all DBs | (pending commit) |
 | #14 | execute_template doesn't substitute {{var}} placeholders | 🔴 CRITICAL | OPEN | execute_template / sqlite | — |
 | #15 | use_profile crashes: "Cannot read properties of undefined (reading 'toLowerCase')" | 🔴 CRITICAL | OPEN | use_profile / sqlite | — |
 | #16 | lint_sql doesn't detect syntax errors (returns no issues for "SELECTT * FORM t") | 🟡 MAJOR | OPEN | lint_sql / sqlite | — |

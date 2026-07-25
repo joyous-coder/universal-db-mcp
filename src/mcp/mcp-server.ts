@@ -742,6 +742,33 @@ export class DatabaseMCPServer {
         });
       }
 
+      // v3.2.4 (Bug #13 fix): always register meta + lazy group tools so they're discoverable
+      // regardless of session-start config state. Claude Code MCP client caches ListTools at
+      // session start; without these the 25 lazy group + 2 meta tools are unreachable.
+      // Execution is still gated by perms in CallToolRequest handler.
+      const alwaysOnTools = [
+        { name: 'use_tool_group', description: '激活一个 tool group 以解锁其下的工具。已激活的 group 重复调用是 no-op。', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['query-experience', 'profiles', 'data-governance', 'index-advisor'] } }, required: ['name'] } },
+        { name: 'use_tool_schema', description: '加载 info-lazy 工具的完整 schema。', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['generate_sample_data'] } }, required: ['name'] } },
+        { name: 'export_profiles', description: '导出 profiles 为 YAML/JSON。', inputSchema: { type: 'object', properties: { format: { type: 'string', enum: ['yaml', 'json'] }, includeSecrets: { type: 'boolean' } } } },
+        { name: 'import_profiles', description: '从 YAML/JSON 导入 profiles。', inputSchema: { type: 'object', properties: { input: { type: 'string' }, format: { type: 'string', enum: ['yaml', 'json'] }, mode: { type: 'string', enum: ['merge', 'replace'] }, dryRun: { type: 'boolean' } }, required: ['input'] } },
+        { name: 'get_profile', description: '获取指定 profile 的配置。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+        { name: 'delete_profile', description: '删除指定 profile。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+        { name: 'enable_profile', description: '启用 profile。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+        { name: 'disable_profile', description: '禁用 profile。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+        { name: 'disconnect_profile', description: '断开指定 profile 的连接。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+        { name: 'compare_profile_schemas', description: '比较两个 profile 的 schema 差异。', inputSchema: { type: 'object', properties: { nameA: { type: 'string' }, nameB: { type: 'string' } }, required: ['nameA', 'nameB'] } },
+        { name: 'export_backup', description: '导出 DB 到文件。', inputSchema: { type: 'object', properties: { profileName: { type: 'string' }, schemaOnly: { type: 'boolean' }, tables: { type: 'array', items: { type: 'string' } }, outputPath: { type: 'string' } }, required: ['profileName'] } },
+        { name: 'audit_log', description: '查询审计日志。', inputSchema: { type: 'object', properties: { actor: { type: 'string' }, severity: { type: 'string', enum: ['read', 'write', 'ddl'] }, profileName: { type: ['string', 'null'] }, since: { type: 'string' }, until: { type: 'string' }, limit: { type: 'number' } } } },
+        { name: 'get_pii_config', description: '获取 PII 脱敏配置。', inputSchema: { type: 'object', properties: {} } },
+        { name: 'set_pii_config', description: '设置 PII 脱敏规则。', inputSchema: { type: 'object', properties: { profileName: { type: 'string' }, rules: { type: 'array', items: { type: 'object', properties: { table: { type: 'string' }, column: { type: 'string' }, strategy: { type: 'string', enum: ['mask', 'mask_last4', 'hash', 'redact', 'passthrough'] } }, required: ['table', 'column', 'strategy'] } } }, required: ['profileName', 'rules'] } },
+        { name: 'explain_query_with_advice', description: 'EXPLAIN + 索引建议。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, profileName: { type: 'string' }, persist: { type: 'boolean' } }, required: ['sql'] } },
+        { name: 'compare_query_plans', description: '比较两个保存的执行计划。', inputSchema: { type: 'object', properties: { queryHash: { type: 'string' }, entryA: { type: 'number' }, entryB: { type: 'number' } }, required: ['queryHash'] } },
+        { name: 'list_query_plans', description: '列出已保存的执行计划。', inputSchema: { type: 'object', properties: { limit: { type: 'number' }, queryHash: { type: 'string' } } } },
+      ];
+      for (const t of alwaysOnTools) {
+        if (!tools.find(x => x.name === t.name)) tools.push(t);
+      }
+
       return { tools };
     });
 
