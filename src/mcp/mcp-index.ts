@@ -67,11 +67,14 @@ export async function startMcpServer(): Promise<void> {
           process.on('SIGINT', () => gracefulShutdown('SIGINT'));
           process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
-          // stdin 关闭处理（核心修复）
-          // 当 MCP 客户端（如 Codex CLI）关闭 stdin 管道时触发
+          // v3.2.2: keep stdin open so the MCP server stays alive across batches
+          // of tool calls. Previously `process.stdin.on('end', ...)` and
+          // `process.stdin.on('close', ...)` were attached and triggered
+          // gracefulShutdown — but Claude Code's MCP client intermittently
+          // closes its read end of stdin (idle rebalance / heartbeats), causing
+          // the server to kill itself mid-session. Only explicit SIGINT/SIGTERM
+          // should terminate the server.
           process.stdin.resume();
-          process.stdin.on('end', () => gracefulShutdown('stdin-end'));
-          process.stdin.on('close', () => gracefulShutdown('stdin-close'));
         }
 
         if (options.type) {
