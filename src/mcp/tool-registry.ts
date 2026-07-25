@@ -90,7 +90,11 @@ export class ToolRegistry {
   }
 
   isToolActive(sessionId: string, name: string): boolean {
-    // Core tools always active
+    // infoLazy tools are stateful — execution lives in mcp-server switch.
+    // They should NOT be routed through this.callTool (stub returns error).
+    // Returning false makes mcp-server fall through to the switch.
+    if (this.cfg.tools.core.some(t => t.name === name && t.infoLazy)) return false;
+    // Core (non-infoLazy) tools always active
     if (this.cfg.tools.core.some(t => t.name === name)) return true;
     if (!this.cfg.lazyLoadEnabled) return true;
     const active = this.getSessionActiveSet(sessionId);

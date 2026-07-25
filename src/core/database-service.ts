@@ -154,18 +154,18 @@ export class DatabaseService {
     // Validate query safety
     this.validateQuery(query);
 
-    // Auto-downgrade: if script-like and script permission available, route to executeScript
+    // v3.2.3 Bug #6 fix: if SQL is multi-statement (PL/SQL block, BEGIN...END, etc.),
+    // DO NOT silently route to executeScript — that path runs the statements but
+    // returns an aggregated response (statementCount:1, lastResult:{}) that hides
+    // changes from the caller. Instead, reject with a clear error pointing to the
+    // dedicated execute_script tool. Users who actually want multi-stmt semantics
+    // can call execute_script explicitly, which returns a structured per-stmt response.
     if (isScriptLike(query)) {
       const permissions = resolvePermissions(this.config);
-      if (permissions.includes('script')) {
-        return this.executeScript(query, { useTransaction: false });
-      } else {
-        throw new Error(
-          `检测到 PL/SQL 块或多语句脚本,需要 script 权限。\n` +
-          `当前权限: ${permissions.join(', ')}\n` +
-          `请使用 execute_script 工具,或在 connect_database 时添加 'script' 到 permissions。`
-        );
-      }
+      throw new Error(
+        `检测到 PL/SQL 块或多语句脚本。execute_query 仅支持单语句。\n` +
+        `请改用 execute_script 工具(需要 ${permissions.includes('script') ? '' : 'script 权限' + (permissions.includes('script') ? '' : '、')}并确保 connect_database 时 permissionMode='full')。`
+      );
     }
 
     // Execute query with timeout + slow log (P1-5, P1-6) + metrics (v2.16)
