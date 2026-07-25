@@ -102,6 +102,71 @@ export class MongoDBAdapter implements DbAdapter {
 - [ ] 更新了相关文档
 - [ ] 测试了基本功能
 
+## 📦 发布流程
+
+本项目通过 GitHub Actions + NPM Trusted Publishing 自动发布，**无需 `NPM_TOKEN` secret**。
+
+### 维护者发布步骤
+
+1. **本地准备**
+   ```bash
+   # 修改 package.json 的 version 字段（手动或 npm version <major|minor|patch>）
+   # 在 CHANGELOG.md 顶部加新版本条目
+   git add package.json CHANGELOG.md
+   git commit -m "chore(release): vX.Y.Z — <summary>"
+   git tag vX.Y.Z
+   ```
+
+2. **推送**
+   ```bash
+   git push origin main
+   git push origin vX.Y.Z
+   ```
+
+3. **创建 GitHub Release**（触发 `.github/workflows/publish.yml`）
+   ```bash
+   # 准备 release notes（推荐从 CHANGELOG 提炼）
+   gh release create vX.Y.Z \
+     --title "vX.Y.Z — <short summary>" \
+     --notes-file release-notes.md \
+     --target main \
+     --verify-tag
+   ```
+
+4. **监控 publish workflow**
+   ```bash
+   gh run list --workflow=publish.yml --limit 1
+   # 若未自动触发（罕见），手动触发：
+   gh workflow run publish.yml --ref vX.Y.Z
+   ```
+
+5. **验证**
+   ```bash
+   gh release view vX.Y.Z
+   # 访问 https://www.npmjs.com/package/@joyous-coder/universal-db-mcp
+   ```
+
+### 发布机制说明
+
+- **触发条件**: `.github/workflows/publish.yml` 监听 GitHub Release `created` 事件
+- **认证**: NPM Trusted Publishing via OIDC（无需 `NPM_TOKEN` secret）
+- **包来源**: `@joyous-coder/universal-db-mcp`（public 访问）
+- **Provenance**: 自动启用（`--provenance` 标志），npmjs.com 显示构建来源
+
+### 版本号规范
+
+- 遵循 [Semantic Versioning](https://semver.org/)
+- `major.minor.patch`：`X.Y.Z`
+- 重大不兼容 → major；新功能（向后兼容）→ minor；bug 修复 → patch
+
+### 发布前检查清单
+
+- [ ] 所有测试通过 (`npm test`)
+- [ ] 构建成功 (`npm run build`)
+- [ ] CHANGELOG.md 已更新
+- [ ] README 反映最新功能
+- [ ] 没有未提交的本地修改 (`git status` clean)
+
 ## 📄 许可证
 
 提交代码即表示你同意将代码以 MIT 许可证开源。
