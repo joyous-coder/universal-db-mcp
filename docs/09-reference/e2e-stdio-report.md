@@ -35,18 +35,18 @@
 
 **🚨 CRITICAL findings:**
 
-#### Bug #1: `execute_query` substring error (universal)
+#### Bug #1: `execute_query` substring error (universal) — ✅ FIXED in `76f70c2`
 - **Reproduced**: any SQL on any DB
 - **Error**: `Cannot read properties of undefined (reading 'substring')`
-- **Likely root cause**: handler calls `.substring()` on undefined — code path missing null check
-- **Impact**: **CRITICAL** — entire query path is broken; can't run any SQL
-- **Must fix before continuing**
+- **Root cause**: schema declares param `query`, but AI (and users) naturally pass `sql`. Handler does `args.query.substring(0, 100)` → `query` undefined → throws
+- **Fix**: rename `query` → `sql` (consistent with `execute_batch` which already used `sql`)
 
-#### Bug #2: `execute_script` / `execute_batch` not visible with `permissionMode:'full'`
+#### Bug #2: `execute_script` / `execute_batch` not visible with `permissionMode:'full'` — ✅ FIXED in `76f70c2`
 - **Reproduced**: `permissionMode:'full'` should grant `script` + `batch` + `insert` perms (per connect_database schema)
 - **Actual**: tools NOT in `tools/list`
-- **Likely cause**: perms not computed at connect time, or 'full' value not mapped correctly
-- **Impact**: HIGH — multi-statement SQL + batch insert broken
+- **Root cause**: `PERMISSION_PRESETS.full = ['read','insert','update','delete','ddl']` — missing `'script'` and `'batch'`. There was a comment saying "users opt-in via custom permissions" but `connect_database` doesn't accept custom mode
+- **Fix**: add `'script'` + `'batch'` to `full` preset
+- **Test updated**: `script-permission.test.ts` now asserts full INCLUDES script + batch
 
 ### postgres (Layer 1+2+3)
 
