@@ -66,7 +66,7 @@
 | #11 | execute_script/sql_file/batch missing from v3.1 list (perms gated at startup, not refreshed) | 🔴 CRITICAL | OPEN | execute_script/sql_file/batch / sqlite | — |
 | #12 | use_tool_group / use_tool_schema missing from v3.1 list (lazy-path only) | 🔴 CRITICAL | OPEN | use_tool_group/schema / sqlite | — |
 | #13 | MCP client caches ListTools at startup; 25 lazy group tools + 3 conditional tools unreachable even after connect_database | 🔴 CRITICAL | ✅ FIXED (pending regression) | 28 tools / all DBs | (pending commit) |
-| #14 | execute_template doesn't substitute {{var}} placeholders | 🔴 CRITICAL | OPEN | execute_template / sqlite | — |
+| #14 | execute_template {{var}} syntax doesn't work — uses ${var} (Mustache vs JS template-literal) | 🟢 MINOR (doc) | ✅ RESOLVED | execute_template / sqlite | — |
 | #15 | use_profile crashes: "Cannot read properties of undefined (reading 'toLowerCase')" | 🔴 CRITICAL | OPEN | use_profile / sqlite | — |
 | #16 | lint_sql doesn't detect syntax errors (returns no issues for "SELECTT * FORM t") | 🟡 MAJOR | OPEN | lint_sql / sqlite | — |
 | #17 | get_query_history returns empty despite execute_query history | 🟡 MAJOR | OPEN | get_query_history / sqlite | — |
@@ -84,10 +84,10 @@
   - Once client caches tool list at startup, no refresh mechanism (same root cause as Bug #8)
 - **Fix candidate**: Make all 43 tools always visible in ListTools; gate execution by perms check in CallToolRequest (not in ListTools).
 
-### Bug #14 — execute_template placeholder substitution broken
-- **Repro**: `save_template({name:'sel_count_t', sql:'SELECT COUNT(*) FROM {{table}}', parameters:['table']})` then `execute_template({id:'6xeRU_kc', params:{table:'e2e_t'}})`
-- **Symptom**: "查询执行失败: unrecognized token: '{'"
-- **Root cause**: Template handler passes raw SQL to adapter without substituting `{{table}}` with `e2e_t`.
+### Bug #14 — execute_template placeholder syntax (RESOLVED, doc issue)
+- **Status**: Not a code bug. Template syntax is `${name}` (JS template-literal style), NOT `{{name}}` (Mustache).
+- **Verified**: `save_template({sql:'SELECT COUNT(*) FROM ${table}', parameters:[{name:'table', type:'sql_identifier'}]})` + `execute_template({params:{table:'e2e_s'}})` substitutes correctly.
+- **Action**: Document in tool description / README — currently misleading by implying Mustache syntax.
 
 ### Bug #15 — use_profile crashes
 - **Repro**: `save_profile({name:'e2e-sqlite', type:'sqlite', config:{filePath:':memory:'}})` then `use_profile({name:'e2e-sqlite'})`

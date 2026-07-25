@@ -749,6 +749,13 @@ export class DatabaseMCPServer {
       const alwaysOnTools = [
         { name: 'use_tool_group', description: '激活一个 tool group 以解锁其下的工具。已激活的 group 重复调用是 no-op。', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['query-experience', 'profiles', 'data-governance', 'index-advisor'] } }, required: ['name'] } },
         { name: 'use_tool_schema', description: '加载 info-lazy 工具的完整 schema。', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['generate_sample_data'] } }, required: ['name'] } },
+        // v3.2.4 Bug #13: execute_script/sql_file/batch/generate_sample_data were gated
+        // on perms at server start (config undefined → read-only) so never listed.
+        // Move visibility to always-on; CallToolRequest still enforces perms.
+        { name: 'execute_script', description: '执行多语句 SQL 脚本或 PL/SQL 块。需要 permissions 包含 script。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['sql'] } },
+        { name: 'execute_sql_file', description: '执行 .sql 文件。需要 permissions 包含 script + DB_ALLOWED_FILE_PATHS。', inputSchema: { type: 'object', properties: { filePath: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['filePath'] } },
+        { name: 'execute_batch', description: '批量执行同一条 SQL 的多个参数集。需要 permissions 包含 batch。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, paramsList: { type: 'array', items: { type: 'array' } }, useTransaction: { type: 'boolean', default: true }, maxBatchSize: { type: 'number', default: 1000 } }, required: ['sql', 'paramsList'] } },
+        { name: 'generate_sample_data', description: '按表结构生成 + 插入样例数据。需要 insert+batch 权限。完整参数用 use_tool_schema 拿。', inputSchema: { type: 'object', properties: { tableName: { type: 'string' }, rowCount: { type: 'number', default: 10 } }, required: ['tableName'] } },
         { name: 'export_profiles', description: '导出 profiles 为 YAML/JSON。', inputSchema: { type: 'object', properties: { format: { type: 'string', enum: ['yaml', 'json'] }, includeSecrets: { type: 'boolean' } } } },
         { name: 'import_profiles', description: '从 YAML/JSON 导入 profiles。', inputSchema: { type: 'object', properties: { input: { type: 'string' }, format: { type: 'string', enum: ['yaml', 'json'] }, mode: { type: 'string', enum: ['merge', 'replace'] }, dryRun: { type: 'boolean' } }, required: ['input'] } },
         { name: 'get_profile', description: '获取指定 profile 的配置。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
