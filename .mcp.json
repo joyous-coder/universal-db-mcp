@@ -11,8 +11,8 @@
         "DB_HOST": "localhost",
         "DB_LAZY_LOAD_ENABLED": "false",
         "DB_ALLOWED_FILE_PATHS": "/tmp",
-        "DB_QUERY_ANALYZER_ENABLED": "false",
-        "DB_METRICS_ENABLED": "true",
+        "DB_QUERY_ANALYZER_ENABLED": "true",
+        "DB_METRICS_ENABLED": "false",
         "DB_PLAN_HISTORY_DB_PATH": ".e2e-plan-history.db"
       }
     }
