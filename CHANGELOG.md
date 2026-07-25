@@ -2,6 +2,33 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.2.3] - 2026-07-25
+
+### 修复 (patch, e2e-driven)
+
+通过 stdio mode 端到端测试 (Claude native MCP tool 调用) 发现的 4 个关键 bug:
+
+- **`PERMISSION_PRESETS.full` 缺少 `script` + `batch`** — `permissionMode:'full'` 应启用 multi-statement SQL + 批量 insert,但实际 preset = `['read','insert','update','delete','ddl']`,缺 `script` 和 `batch`。`execute_script` / `execute_batch` / `generate_sample_data` 全部静默不见。修复:full preset 加入两个 perm,`connect_database({permissionMode:'full'})` 现在正确暴露三个 tool。
+- **`execute_query` 参数名 `query` 不一致** — `execute_query` / `execute_script` 用 `query`,但 `execute_batch` 用 `sql`。AI/用户自然传 `sql` → `args.query` undefined → `query.substring` 抛错。修复:统一为 `sql`(handler + schema)。
+- **MCP server 在 stdin close 时自杀** — `src/mcp/mcp-index.ts:73-74` 监听了 `stdin.on('end')` + `stdin.on('close')` 触发 gracefulShutdown。Claude Code 客户端间歇关闭 stdin 读端,导致 MCP server 误以为客户端走了,server 自杀,后续 tool call 返回 "No such tool available"。修复:移除 stdin end/close handler,只保留 SIGINT/SIGTERM 终止。
+- **`execute_query` 在 Lazy 模式下路径不对**(原 v3.2.1 已部分修),本 release 进一步清理,使 stateful core tool 在 lazy 启用时也能被发现并路由。
+
+### 改进
+
+- 新增 `tests/helpers/cleanup.ts` 共享 helper(`closeAllStores` + `safeUnlink` + `cleanupTestArtifacts`)解决 Windows EBUSY
+- `npm test` 严格模式下:533/533 通过(包括新增的 `script-permission.test.ts`)
+- `publish.yml` 启用:`npm test` 步骤 + CHANGELOG 版本校验 + 失败时自动评论 GitHub Release
+
+### 测试
+
+- v3.2.3 测试基线:**533 passed**(66 test files)
+- e2e stdio test smoke 跑通 (sqlite + postgres),基础设施沉淀在 `docs/09-reference/e2e-stdio-report.md`
+- 端到端测试架构 (`tests/e2e/stdio/` + `scripts/e2e-stdio.ts`) 已在 plan 中记录,后续 release 落实完整自动化
+
+### 升级
+
+- 从 v3.2.2 升级:无 breaking change,直接 `npm install -g @joyous-coder/universal-db-mcp@latest`
+
 ## [3.2.2] - 2026-07-25
 
 ### 修复 (patch)
