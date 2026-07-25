@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { unlinkSync, existsSync } from 'node:fs';
 import { createHttpServer } from '../../src/http/server.js';
 import type { AppConfig } from '../../src/types/http.js';
+import { cleanupTestArtifacts } from '../helpers/cleanup.js';
 
 const ts = Date.now();
 const tpl = `.tmp-http-tpl-${ts}.db`;
@@ -15,7 +15,7 @@ const cfg: AppConfig = {
 } as AppConfig;
 
 beforeAll(async () => { server = await createHttpServer(cfg); await server.listen({ port: 3010, host: '127.0.0.1' }); });
-afterAll(async () => { await server?.close(); [tpl, hist].forEach(p => { if (existsSync(p)) unlinkSync(p); }); });
+afterAll(async () => { await cleanupTestArtifacts(server, [tpl, hist]); });
 
 describe('HTTP query-experience endpoints', () => {
   it('POST /api/lint returns issues for SELECT *', async () => {

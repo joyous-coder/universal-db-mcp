@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { unlinkSync, existsSync } from 'node:fs';
 import { createHttpServer } from '../../src/http/server.js';
 import type { AppConfig } from '../../src/types/http.js';
+import { cleanupTestArtifacts } from '../helpers/cleanup.js';
 
 const dbPath = `.tmp-http-prof-${Date.now()}-${Math.random()}`;
 let server: any;
@@ -12,7 +12,7 @@ const cfg: AppConfig = {
 } as AppConfig;
 
 beforeAll(async () => { server = await createHttpServer(cfg); await server.listen({ port: 3020, host: '127.0.0.1' }); });
-afterAll(async () => { await server?.close(); if (existsSync(dbPath)) unlinkSync(dbPath); });
+afterAll(async () => { await cleanupTestArtifacts(server, [dbPath]); });
 
 describe('HTTP profile routes', () => {
   it('POST /api/profiles saves a profile', async () => {
