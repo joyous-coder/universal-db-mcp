@@ -4,6 +4,12 @@
 
 ## [3.2.3] - 2026-07-25
 
+### Unreleased section (work in progress)
+
+v5 e2e plan in progress. 43 tools tested on sqlite, 4 critical bugs found (#13, #15 fixed; #17, #18 deferred). NO v3.2.4 release yet — user wants 0 bugs on sqlite first before next release.
+
+### [3.2.3 baseline below]
+
 ### 修复 (patch, e2e-driven)
 
 通过 stdio mode 端到端测试 (Claude native MCP tool 调用) 发现的 4 个关键 bug:
