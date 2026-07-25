@@ -40,11 +40,27 @@ export class KeyRotationError extends Error {
  * Extract schema (CREATE TABLE / CREATE INDEX statements, excluding
  * triggers and FTS virtual tables which are reconstructed by the target
  * store's init() on first open).
+ *
+ * Filters:
+ *   - sqlite_*   — internal SQLite tables
+ *   - * triggers — not data, rebuilt by init() if needed
+ *   - * FTS5 shadow tables (`*_fts_config`, `*_fts_data`, `*_fts_content`,
+ *     `*_fts_idx`, `*_fts_docsize`) — recreated automatically by FTS5
+ *     when its parent virtual table is created
+ *   - FTS5 virtual tables (`*_fts`) — skipped; the owning store's init()
+ *     recreates them so its FTS schema (columns + tokenizer) stays in sync.
+ *     Re-executing a stale CREATE VIRTUAL TABLE here would also collide
+ *     with the auto-created shadow tables.
  */
 async function readSchema(conn: SQLiteConnection): Promise<string[]> {
-  // sqlite_master lists all non-FTS5 objects. We grab tables + indexes.
   const rows = conn.prepare(
-    `SELECT type, sql FROM sqlite_master WHERE sql IS NOT NULL AND type IN ('table', 'index') ORDER BY type DESC, name`
+    `SELECT type, sql FROM sqlite_master
+     WHERE sql IS NOT NULL
+       AND type IN ('table', 'index')
+       AND name NOT LIKE 'sqlite_%'
+       AND name NOT LIKE '%_fts'
+       AND name NOT LIKE '%_fts_%'
+     ORDER BY type DESC, name`
   ).all() as Array<{ type: string; sql: string }>;
   return rows.map(r => r.sql);
 }
