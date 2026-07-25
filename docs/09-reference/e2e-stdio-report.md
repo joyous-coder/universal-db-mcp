@@ -69,8 +69,8 @@
 | #14 | execute_template {{var}} syntax doesn't work — uses ${var} (Mustache vs JS template-literal) | 🟢 MINOR (doc) | ✅ RESOLVED | execute_template / sqlite | — |
 | #15 | use_profile crashes: "Cannot read properties of undefined (reading 'toLowerCase')" | 🔴 CRITICAL | ✅ FIXED (pending regression) | use_profile / sqlite | (pending commit) |
 | #16 | lint_sql doesn't detect syntax errors (returns no issues for "SELECTT * FORM t") | 🟢 MINOR (doc) | ✅ RESOLVED | lint_sql / sqlite | — |
-| #17 | get_query_history returns empty despite execute_query history | 🟡 MAJOR | ⏳ DEFERRED v3.2.5 | get_query_history / sqlite | — |
-| #18 | explain_query returns empty plan for simple SELECT | 🟡 MAJOR | ⏳ DEFERRED v3.2.5 | explain_query / sqlite | — |
+| #17 | get_query_history returns empty despite execute_query history | 🟡 MAJOR | ✅ FIXED (pending regression) | get_query_history / sqlite | (pending commit) |
+| #18 | explain_query returns empty plan for simple SELECT | 🟡 MAJOR | ✅ FIXED (pending regression) | explain_query / sqlite | (pending commit) |
 
 ## Error notes
 

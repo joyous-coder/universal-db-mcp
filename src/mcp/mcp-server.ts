@@ -864,6 +864,17 @@ export class DatabaseMCPServer {
             this.adapter = newAdapter;
             this.config = newConfig;
             this.databaseService = new DatabaseService(newAdapter, newConfig, this.cacheConfig);
+            // v3.2.4 Bug #17 fix: wire queryAnalyzer to new databaseService so
+            // executeQuery records history + applies lint hints. Previously queryAnalyzer
+            // was created at server start but never propagated to per-connection service,
+            // so get_query_history always returned empty.
+            if (this.queryAnalyzer) {
+              this.databaseService.setQueryAnalyzer(this.queryAnalyzer);
+              // v3.2.4 Bug #18 fix: attachAdapter wires Explainer for explain_query.
+              // Previously attachAdapter was never called so explainer stayed null
+              // and explain_query always returned empty plan.
+              this.queryAnalyzer.attachAdapter(newAdapter as any, newConfig.type);
+            }
 
             const connInfo = newConfig.type === 'sqlite'
               ? `SQLite: ${newConfig.filePath}`
