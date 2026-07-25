@@ -169,11 +169,27 @@ export class MongoDBAdapter extends BaseAdapter {
 
       let args: Document = {};
       if (argsStr.trim()) {
-        try {
-          args = JSON.parse(argsStr);
-        } catch (error) {
-          throw new Error('无效的查询参数格式');
+        // v3.2.7 Bug #26 fix: try JSON parse first; if that fails, try to coerce JS-style
+        // (unquoted keys, single quotes) into JSON by normalizing.
+        const tryParse = (s: string): unknown => {
+          try { return JSON.parse(s); } catch { return null; }
+        };
+        let parsed: unknown = tryParse(argsStr.trim());
+        if (parsed === null) {
+          // Normalize JS object literal to JSON: add double quotes around unquoted keys,
+          // replace single-quoted strings with double-quoted.
+          const normalized = argsStr
+            .replace(/'/g, '"')
+            .replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, '$1"$2"$3');
+          parsed = tryParse(normalized);
         }
+        if (parsed === null) {
+          throw new Error(
+            '无效的查询参数格式。请使用 JSON 格式 (例如 db.users.insertOne({"name":"alice"}))' +
+            `或 JSON 整体格式 (例如 {"collection":"users","operation":"insertOne","query":{"name":"alice"}}). 原始: ${argsStr.slice(0, 100)}`
+          );
+        }
+        args = parsed as Document;
       }
 
       return {

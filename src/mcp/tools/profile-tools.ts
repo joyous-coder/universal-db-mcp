@@ -14,7 +14,17 @@ import type { ProfileInput } from '../../core/profile-manager.js';
 import type { ProfileStore } from '../../core/profile-store.js';
 
 export function buildSaveProfileHandler(pm: ProfileManager) {
-  return async (args: ProfileInput) => pm.saveProfile(args, 'mcp');
+  return async (args: ProfileInput) => {
+    // v3.2.7 Bug #27 fix: mongodb requires authSource for SCRAM authentication.
+    // Default to 'admin' if missing (the convention used by MONGO_INITDB_ROOT_USERNAME env).
+    if (args.type === 'mongodb' && args.config && !(args.config as any).authSource) {
+      args = {
+        ...args,
+        config: { ...args.config, authSource: 'admin' } as any,
+      };
+    }
+    return pm.saveProfile(args, 'mcp');
+  };
 }
 
 export function buildListProfilesHandler(pm: ProfileManager) {
