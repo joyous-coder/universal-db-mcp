@@ -2,6 +2,36 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.2.5] - 2026-07-25
+
+### 修复 (v3.2.4-patch1, e2e-driven hotfix)
+
+v3.2.4 发布后发现仍有 2 个遗留 bug,本次 hotfix 立刻修复:
+
+#### Critical fixes
+
+- **Bug #7: pg.Pool 冷启动 race + 无 retry**
+  - **Repro**: Claude Code 重启后首次 `connect_database({type:'postgres'})` 失败 4-5 次,空错误,8s sleep 后才连上
+  - **Fix** (`src/adapters/postgres.ts:52-127`):
+    - 加 `connectWithRetry(3)` wrapper,exponential backoff `[500ms, 1s, 2s]`
+    - Pool config 调优:`min: 1 → 2`(冷启动有 warm client),`keepAliveInitialDelayMillis: 30000 → 10000`(更快探测),`application_name: 'universal-db-mcp'`(server 端诊断用),`connectionTimeoutMillis: 5000`,`statement_timeout: 30000`
+  - **效果**: Claude Code 重启后 pg 连接不再需要手动 sleep
+
+- **Bug #8: Claude Code MCP client 不消费 `listChanged` 通知**
+  - **Repro**: `DB_LAZY_LOAD_ENABLED=true`(默认配置)时,25 个 lazy group tool + 2 meta tool 完全不可达,即使 `use_tool_group` 激活所有 group 也无效
+  - **Root cause**: tool-registry 只返回 defaultActiveGroups 内的 tool;其他 group 需 `use_tool_group` 激活。Claude Code 客户端不响应 `listChanged` 通知 → 永远看不到新激活的 tool
+  - **Fix** (`src/utils/config-loader.ts:209-227`): 当 `DB_LAZY_LOAD_ENABLED=true` 但 `DB_LAZY_DEFAULT_GROUP` unset 时,default 改为激活 **所有 4 个 group** (query-experience/profiles/data-governance/index-advisor)
+  - **效果**: Claude Code 启动时一次性看到全部 43 tool。用户仍可显式设 `DB_LAZY_DEFAULT_GROUP=query-experience` 保留 opt-in lazy 行为
+
+### 测试
+
+- `npm test` 533/533 通过
+- source review 验证 fixes 不破坏现有行为
+
+### 配套文档
+
+- `docs/09-reference/e2e-stdio-report.md` 更新 bug log (#7 / #8 ✅ FIXED)
+
 ## [3.2.4] - 2026-07-25
 
 ### 修复 (e2e-driven, v5 plan 完成 sqlite 0-bug)
