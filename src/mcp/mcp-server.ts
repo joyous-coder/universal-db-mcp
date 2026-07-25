@@ -64,6 +64,8 @@ export class DatabaseMCPServer {
   private currentSessionId: string = 'stdio-default';
   // v3.2: whether lazy-loading is enabled (DB_LAZY_LOAD_ENABLED; default false = v3.1 behavior)
   private lazyLoadEnabled: boolean = false;
+  // v3.1: PlanHistory instance (set via setPlanHistory from entrypoint)
+  private planHistory: any = null;
 
   constructor(config?: DbConfig, cacheConfig?: Partial<SchemaCacheConfig>) {
     this.config = config || null;
@@ -96,6 +98,7 @@ export class DatabaseMCPServer {
    */
   setQueryAnalyzer(qa: QueryAnalyzer | null): void {
     this.queryAnalyzer = qa;
+    this.rebuildToolRegistry();
   }
 
   /**
@@ -104,6 +107,78 @@ export class DatabaseMCPServer {
    */
   setProfileManager(pm: ProfileManager | null): void {
     this.profileManager = pm;
+    this.rebuildToolRegistry();
+  }
+
+  /**
+   * v3.1: set the PlanHistory (optional). When set, index-advisor tools
+   * (explain_query_with_advice, compare_query_plans, list_query_plans) become available.
+   */
+  setPlanHistory(ph: any): void {
+    this.planHistory = ph;
+    this.rebuildToolRegistry();
+  }
+
+  /**
+   * v3.2: configure all optional dependencies from a loaded AppConfig.
+   * Constructs and wires QueryAnalyzer, ProfileManager, PlanHistory when their
+   * respective env flags are enabled. Idempotent — safe to call multiple times.
+   */
+  async configureFromAppConfig(appConfig: AppConfig): Promise<void> {
+    this.appConfig = appConfig;
+
+    // v3.2: lazy-loading opt-in
+    if (appConfig.lazyLoad?.enabled) {
+      this.lazyLoadEnabled = true;
+    }
+
+    // v2.17: QueryAnalyzer (explain/lint/history/templates)
+    if (appConfig.queryAnalyzer?.enabled) {
+      const { QueryAnalyzer } = await import('../core/query-analyzer.js');
+      this.queryAnalyzer = new QueryAnalyzer({
+        enabled: true,
+        templatesDbPath: appConfig.queryAnalyzer.templatesDbPath ?? 'templates.db',
+        historyDbPath: appConfig.queryAnalyzer.historyDbPath ?? 'history.db',
+        historyTtlDays: appConfig.queryAnalyzer.historyTtlDays,
+        historyMaxRows: appConfig.queryAnalyzer.historyMaxRows,
+        explainTimeoutMs: appConfig.queryAnalyzer.explainTimeoutMs,
+        templatesCipherKey: appConfig.queryAnalyzer.templatesCipherKey,
+        historyCipherKey: appConfig.queryAnalyzer.historyCipherKey,
+        templatesCipherKeyOld: appConfig.queryAnalyzer.templatesCipherKeyOld,
+        historyCipherKeyOld: appConfig.queryAnalyzer.historyCipherKeyOld,
+      });
+    }
+
+    // v2.18: ProfileManager
+    if (appConfig.profileManager?.enabled) {
+      const { ProfileManager } = await import('../core/profile-manager.js');
+      const pm = new ProfileManager({
+        enabled: true,
+        profilesDbPath: appConfig.profileManager.profilesDbPath ?? 'profiles.db',
+        maxProfiles: appConfig.profileManager.maxProfiles,
+        defaultRole: appConfig.profileManager.defaultRole,
+        readRouting: appConfig.profileManager.readRouting,
+        cipherKey: appConfig.profileManager.cipherKey,
+        cipherKeyOld: appConfig.profileManager.cipherKeyOld,
+      });
+      // Wire QueryAnalyzer → ProfileManager so routeQuery records history
+      if (this.queryAnalyzer) pm.setQueryAnalyzer(this.queryAnalyzer);
+      this.profileManager = pm;
+    }
+
+    // v3.1: PlanHistory
+    try {
+      const path = (appConfig as any).planHistoryPath ?? process.env.DB_PLAN_HISTORY_DB_PATH;
+      if (path) {
+        const { PlanHistory } = await import('../core/plan-history.js');
+        this.planHistory = new PlanHistory({
+          dbPath: path,
+        });
+      }
+    } catch {
+      // PlanHistory is best-effort; missing native deps shouldn't block startup
+    }
+
     this.rebuildToolRegistry();
   }
 
@@ -137,17 +212,15 @@ export class DatabaseMCPServer {
       this.toolRegistry = null;
       return;
     }
-    const profileStore = (this.profileManager as any)?.profileStore;
-    // PlanHistory is optional — only present when v3.1 PlanHistory is configured
-    const planHistory = (this as any).planHistory;
+    const profileStore = (this.profileManager as any)?.profileStore ?? null;
     this.toolRegistry = buildToolRegistry({
       queryAnalyzer: this.queryAnalyzer,
       profileManager: this.profileManager,
-      profileStore: profileStore ?? null,
+      profileStore,
       config: this.config,
-      planHistory,
+      planHistory: this.planHistory,
       lazyLoadEnabled: true,
-      defaultActiveGroups: [],
+      defaultActiveGroups: this.appConfig?.lazyLoad?.defaultActiveGroups ?? [],
     });
   }
 
@@ -1117,19 +1190,16 @@ export class DatabaseMCPServer {
           }
           case 'explain_query_with_advice': {
             if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
-            const ph = (this as any).planHistory;
-            if (!ph) throw new Error('planHistory not configured');
-            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/plan-history.js')).buildExplainQueryWithAdviceHandler(this.queryAnalyzer, ph)(args as any), null, 2) }] };
+            if (!this.planHistory) throw new Error('planHistory not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/plan-history.js')).buildExplainQueryWithAdviceHandler(this.queryAnalyzer, this.planHistory)(args as any), null, 2) }] };
           }
           case 'compare_query_plans': {
-            const ph = (this as any).planHistory;
-            if (!ph) throw new Error('planHistory not configured');
-            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/plan-history.js')).buildCompareQueryPlansHandler(ph)(args as any), null, 2) }] };
+            if (!this.planHistory) throw new Error('planHistory not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/plan-history.js')).buildCompareQueryPlansHandler(this.planHistory)(args as any), null, 2) }] };
           }
           case 'list_query_plans': {
-            const ph = (this as any).planHistory;
-            if (!ph) throw new Error('planHistory not configured');
-            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/plan-history.js')).buildListQueryPlansHandler(ph)(args as any), null, 2) }] };
+            if (!this.planHistory) throw new Error('planHistory not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/plan-history.js')).buildListQueryPlansHandler(this.planHistory)(args as any), null, 2) }] };
           }
 
           default:

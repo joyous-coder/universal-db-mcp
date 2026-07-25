@@ -9,6 +9,7 @@ import { DatabaseMCPServer } from './mcp-server.js';
 import type { DbConfig, PermissionType, PermissionMode } from '../types/adapter.js';
 import { createAdapter, normalizeDbType } from '../utils/adapter-factory.js';
 import { resolvePermissions, formatPermissions } from '../utils/safety.js';
+import { loadConfig } from '../utils/config-loader.js';
 
 /**
  * Start MCP server
@@ -126,6 +127,10 @@ export async function startMcpServer(): Promise<void> {
           // Create server
           const server = new DatabaseMCPServer(config);
 
+          // v3.2: wire optional dependencies (QueryAnalyzer/ProfileManager/PlanHistory/lazyLoad) from env
+          const appConfig = loadConfig();
+          await server.configureFromAppConfig(appConfig);
+
           // Create adapter using factory
           const adapter = createAdapter(config);
 
@@ -140,6 +145,8 @@ export async function startMcpServer(): Promise<void> {
           console.error('');
 
           const server = new DatabaseMCPServer();
+          const appConfig = loadConfig();
+          await server.configureFromAppConfig(appConfig);
           await server.start();
 
           setupGracefulShutdown(server);

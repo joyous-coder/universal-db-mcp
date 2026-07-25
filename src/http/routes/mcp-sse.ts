@@ -71,6 +71,9 @@ async function createMcpServer(config: DbConfig): Promise<DatabaseMCPServer> {
   const mcpServer = new DatabaseMCPServer(config);
   const adapter = createAdapter(config);
   mcpServer.setAdapter(adapter);
+  // v3.2: wire optional dependencies (QueryAnalyzer/ProfileManager/PlanHistory/lazyLoad) from env
+  const { loadConfig } = await import('../../utils/config-loader.js');
+  await mcpServer.configureFromAppConfig(loadConfig());
   await mcpServer.connectDatabase();
   return mcpServer;
 }
