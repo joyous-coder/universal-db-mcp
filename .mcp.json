@@ -9,7 +9,7 @@
         "LOG_LEVEL": "warn",
         "DB_TYPE": "",
         "DB_HOST": "localhost",
-        "DB_LAZY_LOAD_ENABLED": "true",
+        "DB_LAZY_LOAD_ENABLED": "false",
         "DB_ALLOWED_FILE_PATHS": "/tmp",
         "DB_QUERY_ANALYZER_ENABLED": "true",
         "DB_METRICS_ENABLED": "true",
