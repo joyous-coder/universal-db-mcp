@@ -38,6 +38,7 @@ v2.15.0 已发布,包含 P0/P1/P2 全部主要功能。Code quality review (comm
 **修复方案**:
 
 1. `src/utils/config-loader.ts` 在 `loadFromEnv` 中读取:
+
 ```typescript
 function parseIntOrUndefined(val: string | undefined): number | undefined {
   if (!val) return undefined;
@@ -54,6 +55,7 @@ return {
 ```
 
 2. `AppConfig` type 添加两个字段:
+
 ```typescript
 export interface AppConfig {
   // ... existing ...
@@ -63,6 +65,7 @@ export interface AppConfig {
 ```
 
 3. `src/index.ts:loadConfig` 之后传给 `startHttpServer` 或 `startMcpServer`,让 DatabaseService 读取:
+
 ```typescript
 const config = loadConfig();
 // 透传到 service
@@ -73,6 +76,7 @@ const service = new DatabaseService(adapter, dbConfig, cacheConfig, enhancerConf
 ```
 
 4. DatabaseService 构造函数接收 service options,优先使用 options,否则用硬编码默认:
+
 ```typescript
 constructor(
   adapter, config, cacheConfig, enhancerConfig,
@@ -89,6 +93,7 @@ constructor(
 ```
 
 **测试**:
+
 - `tests/unit/config-env-vars.test.ts` 验证 env vars 解析
 - 手动验证:设置 `DB_QUERY_TIMEOUT_MS=5000`,启动后用 sleep 查询验证超时时间
 
@@ -101,6 +106,7 @@ constructor(
 **修复方案**:
 
 定义错误类型映射表(共享 util):
+
 ```typescript
 // src/http/middleware/error-mapping.ts
 export function mapErrorToStatus(error: Error): { status: number; code: string } {
@@ -125,6 +131,7 @@ export function mapErrorToStatus(error: Error): { status: number; code: string }
 ```
 
 应用到所有 HTTP 路由 - 创建统一错误处理器:
+
 ```typescript
 // src/http/middleware/error-handler.ts
 import { mapErrorToStatus } from './error-mapping.js';
@@ -148,6 +155,7 @@ export function setupErrorHandler(fastify: FastifyInstance) {
 修改 `src/http/server.ts` 挂载统一错误处理,移除每个路由的 try/catch(简化代码)。
 
 **测试**:
+
 - `tests/unit/error-mapping.test.ts` 覆盖各种错误类型
 - 集成测试:慢查询 → 504,SQL 错误 → 500,not-found → 404
 
@@ -209,6 +217,7 @@ async executeScript(query, options) {
 **Phase 2 留到下个 spec**: kingbase/gaussdb/oceanbase/tidb/polardb/vastbase/highgo/goldendb(8 个)
 
 **测试**:
+
 - `tests/unit/with-transaction-mysql.test.ts` 等 - 用 mock connection 测试事务原子性
 - 集成测试(需要真实 DB): 模拟失败确保 ROLLBACK 触发
 
@@ -221,6 +230,7 @@ async executeScript(query, options) {
 **修复方案**:
 
 新增路由 `src/http/routes/sql-file.ts`:
+
 ```typescript
 import type { FastifyInstance } from 'fastify';
 import type { SqlFileRequest, ApiResponse } from '../../types/http.js';
@@ -261,6 +271,7 @@ export async function setupSqlFileRoutes(
 ```
 
 类型定义添加:
+
 ```typescript
 // src/types/http.ts
 export interface SqlFileRequest {
@@ -273,6 +284,7 @@ export interface SqlFileRequest {
 挂载到 `src/http/server.ts:setupRoutes`。
 
 **测试**:
+
 - 集成测试:通过 /api/execute-sql-file 读取一个测试 .sql 文件,验证执行成功
 - 错误测试:路径不在白名单 → 404;script 权限不足 → 403
 
@@ -280,12 +292,12 @@ export interface SqlFileRequest {
 
 ## 4. 测试策略
 
-| 变更 | 测试类型 |
-|---|---|
-| env vars 接入 | 单元测试 (config-env-vars.test.ts) + 手动验证 |
-| HTTP 错误映射 | 单元测试 (error-mapping.test.ts) + 集成测试 |
-| Pooled adapter 事务 | 单元测试 (mock connection) + 集成测试 (需要真 DB) |
-| HTTP /api/execute-sql-file | 集成测试 |
+| 变更                       | 测试类型                                          |
+| -------------------------- | ------------------------------------------------- |
+| env vars 接入              | 单元测试 (config-env-vars.test.ts) + 手动验证     |
+| HTTP 错误映射              | 单元测试 (error-mapping.test.ts) + 集成测试       |
+| Pooled adapter 事务        | 单元测试 (mock connection) + 集成测试 (需要真 DB) |
+| HTTP /api/execute-sql-file | 集成测试                                          |
 
 **回归测试**: 跑 `npm test -- --run` 确认 209+ 测试不回归(预存在 2-3 个失败与本次无关)。
 
@@ -293,12 +305,12 @@ export interface SqlFileRequest {
 
 ## 5. 风险
 
-| 风险 | 缓解 |
-|---|---|
-| Pooled adapter 改造可能引入连接泄漏 | 测试覆盖 `release()`,`finally` 块保证 |
-| HTTP 错误映射可能改变预存在的 500 行为 | 集成测试覆盖关键路径 |
-| DB_QUERY_TIMEOUT_MS 改动可能影响用户配置 | 默认值保持 30000ms,只有显式 env var 才会改变 |
-| execute_sql-file 路由可能让 HTTP 用户访问任意文件 | 复用现有 path-guard 白名单机制 |
+| 风险                                              | 缓解                                         |
+| ------------------------------------------------- | -------------------------------------------- |
+| Pooled adapter 改造可能引入连接泄漏               | 测试覆盖`release()`,`finally` 块保证     |
+| HTTP 错误映射可能改变预存在的 500 行为            | 集成测试覆盖关键路径                         |
+| DB_QUERY_TIMEOUT_MS 改动可能影响用户配置          | 默认值保持 30000ms,只有显式 env var 才会改变 |
+| execute_sql-file 路由可能让 HTTP 用户访问任意文件 | 复用现有 path-guard 白名单机制               |
 
 ---
 
