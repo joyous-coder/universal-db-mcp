@@ -1,0 +1,67 @@
+{
+  "version": "3.2.1",
+  "generatedAt": "2026-07-25",
+  "summary": {
+    "totalItems": 12,
+    "documented": 4,
+    "missing": 8
+  },
+  "missing": [
+    {
+      "name": "/api/profiles",
+      "sourceLocation": "src/http/routes/*.ts (/api/profiles)",
+      "docLocation": "—",
+      "docStatus": "missing",
+      "oneLineDescription": "HTTP endpoint"
+    },
+    {
+      "name": "/api/global-schema",
+      "sourceLocation": "src/http/routes/*.ts (/api/global-schema)",
+      "docLocation": "—",
+      "docStatus": "missing",
+      "oneLineDescription": "HTTP endpoint"
+    },
+    {
+      "name": "/api/lint",
+      "sourceLocation": "src/http/routes/*.ts (/api/lint)",
+      "docLocation": "—",
+      "docStatus": "missing",
+      "oneLineDescription": "HTTP endpoint"
+    },
+    {
+      "name": "/api/explain",
+      "sourceLocation": "src/http/routes/*.ts (/api/explain)",
+      "docLocation": "—",
+      "docStatus": "missing",
+      "oneLineDescription": "HTTP endpoint"
+    },
+    {
+      "name": "/api/query-history",
+      "sourceLocation": "src/http/routes/*.ts (/api/query-history)",
+      "docLocation": "—",
+      "docStatus": "missing",
+      "oneLineDescription": "HTTP endpoint"
+    },
+    {
+      "name": "/api/templates",
+      "sourceLocation": "src/http/routes/*.ts (/api/templates)",
+      "docLocation": "—",
+      "docStatus": "missing",
+      "oneLineDescription": "HTTP endpoint"
+    },
+    {
+      "name": "/api/query-explain-advice",
+      "sourceLocation": "src/http/routes/*.ts (/api/query-explain-advice)",
+      "docLocation": "—",
+      "docStatus": "missing",
+      "oneLineDescription": "HTTP endpoint"
+    },
+    {
+      "name": "/api/query-plan-diff",
+      "sourceLocation": "src/http/routes/*.ts (/api/query-plan-diff)",
+      "docLocation": "—",
+      "docStatus": "missing",
+      "oneLineDescription": "HTTP endpoint"
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "version": "3.2.1",
+  "generatedAt": "2026-07-25",
+  "summary": {
+    "totalItems": 9,
+    "documented": 6,
+    "missing": 3
+  },
+  "missing": [
+    {
+      "name": "Index Advisor v3.1",
+      "sourceLocation": "CHANGELOG.md feature: Index Advisor v3.1",
+      "docLocation": "—",
+      "docStatus": "missing",
+      "oneLineDescription": "Feature added in Index Advisor v3.1"
+    },
+    {
+      "name": "Multi-DB",
+      "sourceLocation": "CHANGELOG.md feature: Multi-DB",
+      "docLocation": "—",
+      "docStatus": "missing",
+      "oneLineDescription": "Feature added in Multi-DB"
+    },
+    {
+      "name": "P2",
+      "sourceLocation": "CHANGELOG.md feature: P2",
+      "docLocation": "—",
+      "docStatus": "missing",
+      "oneLineDescription": "Feature added in P2"
+    }
+  ]
+}

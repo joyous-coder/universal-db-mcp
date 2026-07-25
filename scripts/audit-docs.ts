@@ -122,3 +122,109 @@ export async function findDocReferences(name: string, docDir: string): Promise<b
   }
   return walk(docDir);
 }
+
+interface ReportItem {
+  name: string;
+  sourceLocation?: string;
+  docLocation: string;
+  docStatus: 'missing' | 'partial' | 'ok';
+  oneLineDescription?: string;
+}
+
+interface AuditReport {
+  version: string;
+  generatedAt: string;
+  summary: { totalItems: number; documented: number; missing: number };
+  missing: ReportItem[];
+}
+
+async function buildReport(
+  items: string[],
+  docDir: string,
+  sourceLocationFor: (name: string) => string | undefined,
+  descriptionFor: (name: string) => string | undefined,
+): Promise<AuditReport> {
+  const missing: ReportItem[] = [];
+  for (const name of items) {
+    const found = await findDocReferences(name, docDir);
+    if (!found) {
+      missing.push({
+        name,
+        sourceLocation: sourceLocationFor(name),
+        docLocation: '—',
+        docStatus: 'missing',
+        oneLineDescription: descriptionFor(name),
+      });
+    }
+  }
+  const version = (await readFile('./package.json', 'utf-8'))
+    .match(/"version":\s*"([^"]+)"/)?.[1] ?? 'unknown';
+  return {
+    version,
+    generatedAt: new Date().toISOString().split('T')[0],
+    summary: {
+      totalItems: items.length,
+      documented: items.length - missing.length,
+      missing: missing.length,
+    },
+    missing,
+  };
+}
+
+async function main() {
+  const auditDir = './docs/09-reference/audit';
+  const tools = await extractToolNames('./src/mcp/tools');
+  const envVars = await extractEnvVars('./src/utils/config-loader.ts');
+  const adapters = await extractAdapterNames('./src/adapters');
+  const endpoints = await extractEndpointNames('./src/http/routes');
+  const features = await extractFeatureNames('./CHANGELOG.md');
+
+  const toolsReport = await buildReport(
+    tools, './docs',
+    (n) => `src/mcp/tools/*.ts or src/mcp/tool-definitions.ts`,
+    (n) => `MCP tool — see src/mcp/tools/*.ts for handler`,
+  );
+  const envReport = await buildReport(
+    envVars, './docs',
+    (n) => `src/utils/config-loader.ts (process.env.${n})`,
+    (n) => `env var — see config-loader.ts`,
+  );
+  const adaptersReport = await buildReport(
+    adapters, './docs/02-databases',
+    (n) => `src/adapters/${n}.ts`,
+    (n) => `DB adapter for ${n}`,
+  );
+  const endpointsReport = await buildReport(
+    endpoints, './docs/05-http-api',
+    (n) => `src/http/routes/*.ts (${n})`,
+    (n) => `HTTP endpoint`,
+  );
+  const featuresReport = await buildReport(
+    features, './docs/03-features',
+    (n) => `CHANGELOG.md feature: ${n}`,
+    (n) => `Feature added in ${n}`,
+  );
+  const examplesReport: AuditReport = {
+    version: toolsReport.version,
+    generatedAt: toolsReport.generatedAt,
+    summary: { totalItems: 0, documented: 0, missing: 0 },
+    missing: [],
+  };
+
+  await writeFile(`${auditDir}/tools.json`, JSON.stringify(toolsReport, null, 2));
+  await writeFile(`${auditDir}/env-vars.json`, JSON.stringify(envReport, null, 2));
+  await writeFile(`${auditDir}/adapters.json`, JSON.stringify(adaptersReport, null, 2));
+  await writeFile(`${auditDir}/api-endpoints.json`, JSON.stringify(endpointsReport, null, 2));
+  await writeFile(`${auditDir}/features.json`, JSON.stringify(featuresReport, null, 2));
+  await writeFile(`${auditDir}/examples.json`, JSON.stringify(examplesReport, null, 2));
+
+  console.log(`📋 docs audit complete (v${toolsReport.version}):`);
+  for (const r of [toolsReport, envReport, adaptersReport, endpointsReport, featuresReport]) {
+    console.log(`  ${r.summary.missing}/${r.summary.totalItems} missing`);
+  }
+}
+
+main().catch(err => {
+  console.error('❌ audit failed:', err);
+  process.exit(1);
+});
