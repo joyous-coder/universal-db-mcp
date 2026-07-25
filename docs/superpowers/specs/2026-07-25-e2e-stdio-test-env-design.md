@@ -21,6 +21,7 @@
 **Why now:** v3.2.1 发布了 31 个 route-able MCP tool + 14 个 stateful core tool,代码复杂度上升。现有 15 个 vitest integration test 只用 `server.inject()` (HTTP mode),没有覆盖真实 Claude Desktop 通过 stdio JSON-RPC 调用 MCP server 的路径,也没有覆盖所有 17 个 DB 类型。
 
 **Success criteria:**
+
 - 17 个 DB 类型 × ~45 个 tool 的 e2e 烟雾测试全跑通(或明确标记 SKIP/INFRA 原因)
 - 找出并修复至少 N 个真实 bug(N ≥ 5,目标 ≥ 10)
 - 报告沉淀到 `docs/09-reference/e2e-stdio-report.md`
@@ -29,6 +30,7 @@
 ## 2. Scope
 
 ### 2.1 In Scope
+
 - **stdio mode** MCP server(子进程 + stdio JSON-RPC)
 - **17 个 DB 类型** 全覆盖(SQLite + 16 个 RDBMS/NoSQL)
 - **~45 个 MCP tool** 全覆盖(stateful core + lazy groups + meta + infoLazy)
@@ -36,6 +38,7 @@
 - **vitest e2e + MCP native tool 驱动** 两阶段
 
 ### 2.2 Out of Scope (deferred)
+
 - SSE mode 测试 → 后续独立 spec
 - HTTP REST API 测试 → 后续独立 spec
 - 真实 Claude Desktop UI 集成测试
@@ -44,18 +47,18 @@
 
 ## 3. Resource Constraints (hard limits)
 
-| 约束 | 决定 | 原因 |
-|---|---|---|
-| **同时运行容器数** | **1 个**(严格) | 用户内存不够 |
-| **同时测试 DB 数** | **1 个** | 一个跑完 → 拆 → 下个 |
-| **镜像源** | **仅 Docker Hub** | 国产库用第三方打包镜像 |
-| **国内网络** | **使用 Docker Hub 镜像站**(可选,见 §3.1) | 国内拉 docker hub 慢/超时 |
-| **镜像总占用** | ~25-30GB(占 500GB 约 5-6%) | 完全够 |
-| **镜像保留** | **默认保留**(不删)| SSE + HTTP API 阶段还要复用,删了重新拉浪费 |
-| **容器清理** | `docker run --rm`(退出即删容器 layer)| 不留垃圾,但镜像保留 |
-| **预拉策略** | 按需拉,跑哪个 DB 才拉哪个 | 避免一次性下载 |
-| **DB 顺序** | 用户/脚本指定,默认从小的开始(sqlite → postgres → ...) | 大库(Oracle/OceanBase)放最后 |
-| **WSL2 docker 存储** | 默认 vhdx 256GB(动态扩) | 完全够 |
+| 约束                       | 决定                                                    | 原因                                       |
+| -------------------------- | ------------------------------------------------------- | ------------------------------------------ |
+| **同时运行容器数**   | **1 个**(严格)                                    | 用户内存不够                               |
+| **同时测试 DB 数**   | **1 个**                                          | 一个跑完 → 拆 → 下个                     |
+| **镜像源**           | **仅 Docker Hub**                                 | 国产库用第三方打包镜像                     |
+| **国内网络**         | **使用 Docker Hub 镜像站**(可选,见 §3.1)         | 国内拉 docker hub 慢/超时                  |
+| **镜像总占用**       | ~25-30GB(占 500GB 约 5-6%)                              | 完全够                                     |
+| **镜像保留**         | **默认保留**(不删)                                | SSE + HTTP API 阶段还要复用,删了重新拉浪费 |
+| **容器清理**         | `docker run --rm`(退出即删容器 layer)                 | 不留垃圾,但镜像保留                        |
+| **预拉策略**         | 按需拉,跑哪个 DB 才拉哪个                               | 避免一次性下载                             |
+| **DB 顺序**          | 用户/脚本指定,默认从小的开始(sqlite → postgres → ...) | 大库(Oracle/OceanBase)放最后               |
+| **WSL2 docker 存储** | 默认 vhdx 256GB(动态扩)                                 | 完全够                                     |
 
 ### 3.1 Docker Hub 镜像站(国内加速)
 
@@ -75,12 +78,14 @@
 ```
 
 `docker.ts` 拉取策略:
+
 1. `docker pull <mirror>`(默认)
 2. 失败 → 依次尝试 `fallbackMirrors[]`
 3. 全部失败 → `docker pull <image>` 直连 docker hub
 4. 全部失败 → 报告 `INFRA: image not found in any mirror`
 
 **实现要点**:
+
 - `~/.docker/daemon.json` 配 mirror(WSL 已配置,见 §3.2)
 - daemon.json 是全局的,`docker pull postgres` 自动走 mirror
 - fixture 里的 `mirror` 字段是 daemon.json 未配置时的手动 fallback
@@ -144,6 +149,7 @@ exit 0 / non-zero
 ```
 
 **`--all` 模式**:
+
 ```typescript
 for (const dbKey of ALL_DBS) {   // 严格串行,永不并行
   await runOne(dbKey)
@@ -288,17 +294,17 @@ use_profile, execute_template, get_metrics
 
 ### 6.1 Failure Classification
 
-| 类型 | 谁处理 | 报告标签 |
-|---|---|---|
-| 镜像拉取失败 | docker.ts try/catch | `INFRA: image not found` |
-| 容器启动失败 | docker.ts try/catch + exit code | `INFRA: container died` |
-| 容器就绪超时(60s) | docker.ts timeout + cleanup | `INFRA: not ready in 60s` |
-| MCP 子进程 spawn 失败 | mcp-stdio.ts try/catch | `INFRA: spawn failed` |
-| MCP initialize 失败 | mcp-stdio.ts JSON-RPC error | `INFRA: protocol error` |
-| Tool 调用出错 | 测试用例捕获 | `BUG: <error>` |
-| 响应 shape 不对 | vitest assertion | `BUG: schema mismatch` |
-| 响应慢(>10s) | mcp-stdio.ts 计时 | `PERF: 8.2s` |
-| 容器泄漏 | afterAll finally + 日志 | `LEAK` |
+| 类型                  | 谁处理                          | 报告标签                    |
+| --------------------- | ------------------------------- | --------------------------- |
+| 镜像拉取失败          | docker.ts try/catch             | `INFRA: image not found`  |
+| 容器启动失败          | docker.ts try/catch + exit code | `INFRA: container died`   |
+| 容器就绪超时(60s)     | docker.ts timeout + cleanup     | `INFRA: not ready in 60s` |
+| MCP 子进程 spawn 失败 | mcp-stdio.ts try/catch          | `INFRA: spawn failed`     |
+| MCP initialize 失败   | mcp-stdio.ts JSON-RPC error     | `INFRA: protocol error`   |
+| Tool 调用出错         | 测试用例捕获                    | `BUG: <error>`            |
+| 响应 shape 不对       | vitest assertion                | `BUG: schema mismatch`    |
+| 响应慢(>10s)          | mcp-stdio.ts 计时               | `PERF: 8.2s`              |
+| 容器泄漏              | afterAll finally + 日志         | `LEAK`                    |
 
 ### 6.2 Tool Test Result Structure
 
@@ -358,6 +364,7 @@ interface ToolTestResult {
 ```
 
 **关键决策**:
+
 - per-DB 串行(已确认)
 - 失败也写报告(不阻断)
 - `skip` 不算 fail(如 lazy-only tool 在默认模式跳过是预期)
@@ -439,14 +446,14 @@ describe('postgres — all MCP tools', () => {
 
 ## 10. Risks & Mitigations
 
-| 风险 | 缓解 |
-|---|---|
-| 国产库镜像找不到(Docker Hub 没第三方) | 单 DB 标 `INFRA: image not found`,不影响其他 DB |
-| 大库(OceanBase/Oracle) 内存吃紧 | `--memory=2g` 硬上限 + 顺序排最后 |
-| 镜像 pull 超时(国内网络慢) | 重试 3 次 + 给镜像标注 source 注释 |
-| MCP server 在某些 DB 下启动失败 | INFRA 标签 + skip 后续 test,不假阳性 |
-| vitest + docker 协调 bug 漏掉清理 | afterAll 用 try/finally + 独立 `docker ps -a` 清理脚本 |
-| 用户跑测试时环境被破坏(profiles.db 等) | tests 用 `.tmp-*` 路径(已有 cleanup helper) |
+| 风险                                   | 缓解                                                    |
+| -------------------------------------- | ------------------------------------------------------- |
+| 国产库镜像找不到(Docker Hub 没第三方)  | 单 DB 标`INFRA: image not found`,不影响其他 DB        |
+| 大库(OceanBase/Oracle) 内存吃紧        | `--memory=2g` 硬上限 + 顺序排最后                     |
+| 镜像 pull 超时(国内网络慢)             | 重试 3 次 + 给镜像标注 source 注释                      |
+| MCP server 在某些 DB 下启动失败        | INFRA 标签 + skip 后续 test,不假阳性                    |
+| vitest + docker 协调 bug 漏掉清理      | afterAll 用 try/finally + 独立`docker ps -a` 清理脚本 |
+| 用户跑测试时环境被破坏(profiles.db 等) | tests 用`.tmp-*` 路径(已有 cleanup helper)            |
 
 ## 11. Out of Scope for This Spec
 
@@ -458,6 +465,7 @@ describe('postgres — all MCP tools', () => {
 ## 12. Open Questions
 
 None — 关键决策已与用户确认:
+
 - ✅ stdio only(SSE/HTTP 后续)
 - ✅ 17 DB 全覆盖
 - ✅ 一个容器一个 DB,严格串行
