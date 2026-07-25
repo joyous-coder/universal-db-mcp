@@ -10,6 +10,14 @@
 
 **Goal:** 在 WSL + Docker 中,对 `universal-db-mcp` 的 **stdio mode** 做端到端测试,捕获真实使用时会遇到的 bug,在用户碰到之前修掉。
 
+**Execution architecture:**
+
+- **WSL**: 只跑 docker daemon + docker CLI(`wsl docker ...`)
+- **Claude Code 宿主机(Windows)**: Node / npm / vitest / `node dist/index.js`(MCP server 子进程)
+- 容器端口通过 `-p <host>:<container>` 映射到 Windows `localhost:<port>`,MCP server 通过 `localhost` 连接 DB
+
+**WSL 不需要 Node** — Node/npm/vitest/MCP server 全部跑在 Claude Code 宿主机。
+
 **Why now:** v3.2.1 发布了 31 个 route-able MCP tool + 14 个 stateful core tool,代码复杂度上升。现有 15 个 vitest integration test 只用 `server.inject()` (HTTP mode),没有覆盖真实 Claude Desktop 通过 stdio JSON-RPC 调用 MCP server 的路径,也没有覆盖所有 17 个 DB 类型。
 
 **Success criteria:**

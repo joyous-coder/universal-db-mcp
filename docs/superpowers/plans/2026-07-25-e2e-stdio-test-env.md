@@ -6,20 +6,34 @@
 
 **Architecture:** 两阶段测试 — vitest e2e 自动跑全 17 个 DB(广覆盖),MCP native tool 在 Claude 会话里手动调(抓 AI 认知类 bug)。每个测试 file = 1 个 DB × 45 个 tool 串行。容器用 `--rm`,镜像默认保留供 SSE/HTTP 阶段复用。
 
-**Tech Stack:** TypeScript / Node 20+ / vitest / Docker (WSL2) / MCP stdio JSON-RPC
+**Tech Stack:** TypeScript / Node 20+ / vitest / Docker (WSL) / MCP stdio JSON-RPC
+
+**Execution Architecture:**
+
+```
+[ Claude Code (Windows host) ]          [ WSL (Ubuntu) ]              [ Docker containers ]
+   ├─ Bash / Node / npm / vitest        ├─ docker daemon              ├─ postgres:16-alpine
+   ├─ edit files                        ├─ docker pull                ├─ mysql:8
+   ├─ git push                          ├─ docker run -p ...          ├─ mongodb:7
+   ├─ node dist/index.js  ←───────stdin/stdout─────────→  (MCP server process)
+   └─ connect localhost:5432 etc. ──port-mapped from containers─→  DBs
+```
+
+**No WSL Node needed.** WSL 仅提供 docker daemon + docker CLI。Node / TypeScript / vitest / `node dist/index.js` 全部跑在 Claude Code 宿主机(Windows)。
 
 ## Global Constraints
 
 [From spec — applied to every task]
 
-- **Node.js**: 20+ (`engines.node >= 20.0.0`)
+- **Node.js**: 20+ (`engines.node >= 20.0.0`)— 跑在 Claude Code 宿主
+- **WSL**: 仅 `docker` 命令需要进 WSL(`wsl docker pull / run`)。所有 node/npm 命令走宿主机
+- **Container port mapping**: `docker run -p <port>:<port>` 把容器端口映射到 Windows `localhost:5432` 等,Claude Code 宿主机的 MCP server 通过 `localhost` 访问
 - **Test framework**: vitest(已装,~1.2.0)
 - **TypeScript strict mode**: required
 - **One DB container at a time**:严格串行,`docker run --rm`
 - **Images**: 仅 Docker Hub,国产库允许第三方打包镜像
 - **Images default retained**:SSE/HTTP 阶段复用,不删
 - **Mirror support**: `db-images.json` 支持 `mirror` + `fallbackMirrors`
-- **WSL docker**: 用户已配置,假设 `docker` 命令在 WSL shell 可用
 - **Disk**: ~25-30GB 总镜像,500GB 硬盘完全够
 - **Tool count**: ~45(stateful core 14 + lazy groups 28 + meta 2 + infoLazy 1)
 - **Test data**: 用 MCP `execute_query` 自己在测试里建表/插数据,无独立 SQL fixture
@@ -32,74 +46,64 @@
 
 ---
 
-### Task 1: 验证 WSL + Docker 环境
+### Task 1: 验证 docker 可用 + 加文档
 
 **Files:**
-- Verify only (no files created/modified)
+- Verify only (no source files)
+- Create: `docs/06-deployment/wsl-docker-setup.md`
 
-**Verification checklist:**
+**Architecture note:** WSL 只跑 docker(daemon + CLI)。Node / vitest / MCP server 跑在 Claude Code 宿主机(Windows)。**WSL 不需要 Node**。
 
-- [ ] **Step 1: WSL shell 可用**
-
-```bash
-wsl --status
-```
-
-Expected: WSL2 default distro listed. If not, install WSL2 first.
-
-- [ ] **Step 2: docker 在 WSL 内可用**
+- [ ] **Step 1: 验证 docker CLI(在 WSL 里)可用**
 
 ```bash
-wsl docker --version && wsl docker ps
+wsl docker --version
 ```
 
-Expected:
-- `Docker version 24.x.x or newer`
-- `docker ps` 输出空(无运行容器)或已有列表
+Expected: `Docker version 24.x.x or newer`(用户已确认:29.6.2)
 
-- [ ] **Step 3: Docker Hub 镜像站配置(确认 daemon.json)**
+- [ ] **Step 2: 验证 docker daemon 响应**
 
 ```bash
-wsl cat /etc/docker/daemon.json 2>/dev/null || cat ~/.docker/daemon.json 2>/dev/null
+wsl docker ps
 ```
 
-Expected: JSON 包含 `"registry-mirrors": ["https://<mirror>.aliyuncs.com", ...]`(国内加速)。如果没有,提一句但不强制配(daemon.json 是全局配置)。
+Expected: 输出空(无运行容器)或已有容器列表 — 不报 connection error 即可
 
-- [ ] **Step 4: 测试拉取小镜像**
+- [ ] **Step 3: 验证 host 端 Node/npm 可用**
+
+```bash
+node --version && npm --version
+```
+
+Expected: 都有输出。如缺失从 nodejs.org 下载 LTS 装。
+
+- [ ] **Step 4: 烟雾测试 docker pull + run(WSL)**
 
 ```bash
 wsl docker pull hello-world && wsl docker run --rm hello-world
 ```
 
-Expected: 输出 `Hello from Docker!`,镜像残留(~13KB)。
+Expected: 输出 `Hello from Docker!`,容器自动退出并清理。hello-world 镜像(~13KB)保留(无害)。
 
-- [ ] **Step 5: 清理测试镜像(可保留)**
-
-```bash
-wsl docker image rm hello-world
-```
-
-OK 跳过 — 留着(13KB 不影响磁盘)。
-
-- [ ] **Step 6: 在仓库加 WSL 文档 quick-start**
+- [ ] **Step 5: 在仓库加 docker 设置 quick-start 文档**
 
 File: `docs/06-deployment/wsl-docker-setup.md`
 
 ```markdown
-# WSL + Docker 设置
+# Docker 设置(Windows + WSL 模式)
+
+## 架构
+
+- **WSL**:跑 docker daemon + docker CLI(`wsl docker ...`)
+- **Claude Code 宿主机(Windows)**:Node / npm / vitest / `node dist/index.js`(MCP server)
+- 容器端口通过 `-p <host>:<container>` 映射到 Windows `localhost`,MCP server 直接连
 
 ## 前置条件
 
 - Windows 10/11
-- WSL2 已启用
-- Docker Desktop 已装(会自动配置 WSL2 集成)
-
-## 验证
-
-\`\`\`bash
-wsl docker --version
-wsl docker ps
-\`\`\`
+- WSL2 已启用(`wsl --status` 显示 "默认版本: 2")
+- Docker Desktop 已装并启用 WSL2 集成
 
 ## 镜像加速(国内推荐)
 
@@ -114,6 +118,13 @@ wsl docker ps
 
 重启 Docker Desktop。
 
+## 验证
+
+\`\`\`bash
+wsl docker --version
+node --version && npm --version
+\`\`\`
+
 ## 项目用到的 DB 镜像
 
 - postgres:16-alpine (~80MB)
@@ -122,14 +133,14 @@ wsl docker ps
 - redis:7-alpine (~40MB)
 - ...
 
-总计 ~25-30GB。
+总计 ~25-30GB。镜像默认保留(SSE/HTTP 阶段复用)。
 ```
 
-- [ ] **Step 7: 提交**
+- [ ] **Step 6: 提交**
 
 ```bash
 git add docs/06-deployment/wsl-docker-setup.md
-git commit -m "docs(deployment): add WSL+Docker setup quick-start"
+git commit -m "docs(deployment): add WSL+docker setup quick-start (host runs node, WSL runs docker)"
 ```
 
 ---
@@ -1444,17 +1455,17 @@ describe(`${dbKey} — all MCP tools`, () => {
 })
 ```
 
-- [ ] **Step 3: 跑测试(在 WSL 里执行)**
+- [ ] **Step 3: 跑测试(Claude Code 宿主机执行)**
 
 ```bash
-# 在 Windows 上:
-wsl bash -c "./node_modules/.bin/vitest run tests/e2e/stdio/postgres.test.ts"
+# 在 Windows 上(Claude Code 宿主):
+./node_modules/.bin/vitest run tests/e2e/stdio/postgres.test.ts
 ```
 
-Expected: PG container 拉 + 启 + 等就绪 + MCP 子进程跑 + 45 个 it() 跑完。首次可能慢(pull 镜像 1-3 分钟)。报告追加到 `docs/09-reference/e2e-stdio-report.md`。
+Expected: docker helper 在 WSL 跑 `docker run`(pull 镜像 + 启容器 + 等就绪),MCP 子进程在 Windows 跑,连 `localhost:<port>` 上的 DB。45 个 it() 跑完。首次可能慢(pull 镜像 1-3 分钟)。报告追加到 `docs/09-reference/e2e-stdio-report.md`。
 
 如果失败:看 stderr 输出,常见原因:
-- WSL 里 docker 命令找不到 → `which docker`,确保 WSL 有 docker CLI
+- docker run 找不到 → `wsl docker ps` 确认 daemon 响应
 - 镜像镜像站配错 → 检查 daemon.json
 - MCP 子进程 crash → 看 helper stderr
 
@@ -1482,7 +1493,7 @@ File: `tests/e2e/stdio/scripts/gen-test-file.ts`
 
 ```typescript
 // Helper to generate per-DB test file from template.
-// Run: wsl node --experimental-strip-types scripts/gen-test-file.ts
+// Run: node --experimental-strip-types tests/e2e/stdio/scripts/gen-test-file.ts
 import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -1548,10 +1559,10 @@ for (const db of DB_LIST) {
 }
 ```
 
-- [ ] **Step 2: 跑生成脚本,创建 16 个 test file**
+- [ ] **Step 2: 跑生成脚本,创建 16 个 test file**(Claude Code 宿主)
 
 ```bash
-wsl node --experimental-strip-types tests/e2e/stdio/scripts/gen-test-file.ts
+node --experimental-strip-types tests/e2e/stdio/scripts/gen-test-file.ts
 ```
 
 Expected: 16 个 .test.ts 生成。
@@ -1582,7 +1593,7 @@ File: `scripts/e2e-stdio.ts`
  * E2E stdio test orchestrator.
  *
  * Usage:
- *   wsl node --experimental-strip-types scripts/e2e-stdio.ts [postgres|sqlite|...|--all]
+ *   node --experimental-strip-types scripts/e2e-stdio.ts [postgres|sqlite|...|--all]
  *
  * For each DB: start container → run vitest test file → stop container → append report.
  * Strictly sequential (one container at a time).
@@ -1634,10 +1645,10 @@ main().catch((err) => {
 })
 ```
 
-- [ ] **Step 2: 跑单 DB 烟雾**
+- [ ] **Step 2: 跑单 DB 烟雾**(Claude Code 宿主)
 
 ```bash
-wsl node --experimental-strip-types scripts/e2e-stdio.ts sqlite
+node --experimental-strip-types scripts/e2e-stdio.ts sqlite
 ```
 
 Expected: sqlite test 跑完(因为 :memory:,不需要 docker),输出 summary。
@@ -1681,14 +1692,14 @@ git commit -m "test(e2e): add orchestrator scripts/e2e-stdio.ts + .claude/mcp.js
 **Files:**
 - Modify: `docs/09-reference/e2e-stdio-report.md`(append new sections)
 
-- [ ] **Step 1: 跑 `--all`(在 WSL,bg 一晚)**
+- [ ] **Step 1: 跑 `--all`(Claude Code 宿主,放 background)**
 
 ```bash
-wsl bash -c "node --experimental-strip-types scripts/e2e-stdio.ts --all" 2>&1 | tee /tmp/e2e-stdio-$(date +%Y%m%d-%H%M).log &
+node --experimental-strip-types scripts/e2e-stdio.ts --all 2>&1 | tee /tmp/e2e-stdio-$(date +%Y%m%d-%H%M).log &
 echo "started PID $!"
 ```
 
-Expected: 17 个 DB 串行跑,每个 2-10 分钟。总时长:30min-3h(取决于 docker pull + 各 DB 启动时间)。可在 background,睡一晚上回来看。
+Expected: 17 个 DB 串行跑,每个 2-10 分钟。总时长:30min-3h(取决于 docker pull + 各 DB 启动时间)。docker 命令走 WSL,Node 走 Windows。background 跑,睡一晚上回来看。
 
 - [ ] **Step 2: 监控 + 收尾**
 
