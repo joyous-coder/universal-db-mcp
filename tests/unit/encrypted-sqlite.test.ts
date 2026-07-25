@@ -89,7 +89,15 @@ describe('EncryptedSqliteBackend', () => {
       conn.close();
 
       const conn2 = await backend.open(dbPath, { cipherKey: 'wrong-key-32-chars-long!!!!!!' });
-      expect(() => conn2.prepare('SELECT * FROM t').all()).toThrow(/failed to decrypt/);
+      // Accept any of the SQLCipher / better-sqlite3 error variants that
+      // indicate the cipher key could not decrypt the database header.
+      // Library version drift changes which message is thrown:
+      //   - older SQLCipher:  "failed to decrypt" (during pragma cipher_version)
+      //   - newer SQLCipher:  "file is not a database" (lazy decrypt on first query)
+      //   - some versions:    "database disk image is malformed"
+      expect(() => conn2.prepare('SELECT * FROM t').all()).toThrow(
+        /failed to decrypt|file is not a database|database disk image is malformed/,
+      );
       conn2.close();
     });
   });

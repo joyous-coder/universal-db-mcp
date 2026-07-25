@@ -49,10 +49,18 @@ async function readSchema(conn: SQLiteConnection): Promise<string[]> {
   return rows.map(r => r.sql);
 }
 
-/** Extract CREATE TABLE statements only (needed to count rows for INSERTs). */
+/** Extract user table names only — skips FTS5 virtual tables and their
+ *  internal shadow tables (`*_fts_data` / `*_fts_idx` / `*_fts_content` /
+ *  `*_fts_docsize` / `*_fts_config`) because they are rebuilt by the owning
+ *  store's init() on next open. Trying to INSERT INTO them raises
+ *  "object name reserved for internal use" in newer SQLite. */
 async function readTableNames(conn: SQLiteConnection): Promise<string[]> {
   const rows = conn.prepare(
-    `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`
+    `SELECT name FROM sqlite_master
+     WHERE type='table'
+       AND name NOT LIKE 'sqlite_%'
+       AND name NOT LIKE '%_fts'
+       AND name NOT LIKE '%_fts_%'`
   ).all() as Array<{ name: string }>;
   return rows.map(r => r.name);
 }
