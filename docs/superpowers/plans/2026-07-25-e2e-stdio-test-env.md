@@ -2,47 +2,161 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 在 WSL + Docker 中搭起 universal-db-mcp stdio 模式的端到端测试环境,覆盖 17 个 DB 类型 × ~45 个 MCP tool,捕获并修复真实使用时的 bug。
+## ⚠️ Plan Revision (2026-07-25 commit `92c4fc2`)
 
-**Architecture:** 两阶段测试 — vitest e2e 自动跑全 17 个 DB(广覆盖),MCP native tool 在 Claude 会话里手动调(抓 AI 认知类 bug)。每个测试 file = 1 个 DB × 45 个 tool 串行。容器用 `--rm`,镜像默认保留供 SSE/HTTP 阶段复用。
+**Original plan called for vitest e2e scaffolding (12 tasks). User pivoted: test directly in this Claude Code session via native MCP tools.**
 
-**Tech Stack:** TypeScript / Node 20+ / vitest / Docker (WSL) / MCP stdio JSON-RPC
+**Revised scope** (4 tasks, much lighter):
+
+| # | Task | Status |
+|---|---|---|
+| T1 | WSL + Docker verification doc | ✅ done (commit `32427e8`) |
+| T2 | Register `universal-db-mcp` in `.mcp.json` | ✅ done (commit `92c4fc2`) |
+| T3 | Native tool exercise: 17 DB × ~45 tools (one container at a time) | pending |
+| T4 | Report + fix bugs + regression | pending |
+| T5 | Cleanup + finish branch | pending |
+
+**Dropped tasks (no longer needed):**
+- T2 original (docker.ts helper) — `wsl docker run` from shell is enough
+- T3 original (mcp-stdio.ts helper) — we ARE the client
+- T4 original (tool-catalog.ts) — we call tools ad-hoc
+- T5 original (db-images.json + report-writer) — `wsl docker run` + Bash + Write
+- T6 original (postgres.test.ts) — replaced by T3 native exercise
+- T7-T8 original (scaffold/orchestrator) — irrelevant
+
+The full original T1-T12 below (lines 49+) is preserved for archival, but **current work follows the revised 4-task scope above**.
+
+---
+
+**Goal:** 在 WSL + Docker 中,**直接在当前 Claude Code 会话里**通过 native MCP tool 调用,对 `universal-db-mcp` 的 17 个 DB × ~45 个 tool 做端到端测试,捕获并修复真实使用时的 bug。
+
+**Architecture:** 单 MCP server(`.mcp.json` 注册)+ 切换 DB(`connect_database` 工具)+ Docker 容器按需启停(WSL `wsl docker run`)。镜像默认保留供 SSE/HTTP 阶段复用。
+
+**Tech Stack:** TypeScript / Node 20+ / MCP stdio / Docker (WSL)
 
 **Execution Architecture:**
 
 ```
 [ Claude Code (Windows host) ]          [ WSL (Ubuntu) ]              [ Docker containers ]
-   ├─ Bash / Node / npm / vitest        ├─ docker daemon              ├─ postgres:16-alpine
-   ├─ edit files                        ├─ docker pull                ├─ mysql:8
-   ├─ git push                          ├─ docker run -p ...          ├─ mongodb:7
-   ├─ node dist/index.js  ←───────stdin/stdout─────────→  (MCP server process)
-   └─ connect localhost:5432 etc. ──port-mapped from containers─→  DBs
+   ├─ Bash / Node / npm                  ├─ docker daemon              ├─ postgres:16-alpine
+   ├─ git                                ├─ docker pull                ├─ mysql:8
+   ├─ mcp__universal_db_mcp__* ←──────────┤ MCP server (stdio)         ├─ mongodb:7
+   └─ localhost:5432 etc. ←────port-mapped─→                          └─ ...
 ```
 
-**No WSL Node needed.** WSL 仅提供 docker daemon + docker CLI。Node / TypeScript / vitest / `node dist/index.js` 全部跑在 Claude Code 宿主机(Windows)。
+**No WSL Node needed.** Claude Code 宿主机跑 MCP client + git + bash,WSL 仅 docker,Node 跑在宿主。
 
 ## Global Constraints
 
 [From spec — applied to every task]
 
 - **Node.js**: 20+ (`engines.node >= 20.0.0`)— 跑在 Claude Code 宿主
-- **WSL**: 仅 `docker` 命令需要进 WSL(`wsl docker pull / run`)。所有 node/npm 命令走宿主机
-- **Container port mapping**: `docker run -p <port>:<port>` 把容器端口映射到 Windows `localhost:5432` 等,Claude Code 宿主机的 MCP server 通过 `localhost` 访问
-- **Test framework**: vitest(已装,~1.2.0)
+- **WSL**: 仅 `docker` 命令走 WSL(`wsl docker pull / run`)。所有 node/npm/git 走宿主机
+- **Container port mapping**: `docker run -p <port>:<port>` 把容器端口映射到 Windows `localhost:<port>`,Claude Code 宿主通过 `localhost` 访问
 - **TypeScript strict mode**: required
 - **One DB container at a time**:严格串行,`docker run --rm`
 - **Images**: 仅 Docker Hub,国产库允许第三方打包镜像
-- **Images default retained**:SSE/HTTP 阶段复用,不删
-- **Mirror support**: `db-images.json` 支持 `mirror` + `fallbackMirrors`
+- **Images default retained**:SSE/HTTP 阶段复用,不主动删
+- **Mirror support**: `~/.docker/daemon.json` 已配国内镜像站(用户声明)
 - **Disk**: ~25-30GB 总镜像,500GB 硬盘完全够
 - **Tool count**: ~45(stateful core 14 + lazy groups 28 + meta 2 + infoLazy 1)
-- **Test data**: 用 MCP `execute_query` 自己在测试里建表/插数据,无独立 SQL fixture
+- **Test data**: 用 MCP `execute_query` 在测试里建表/插数据
 - **Report**: `docs/09-reference/e2e-stdio-report.md`,每次跑追加 timestamp section
 - **Commit style**: Conventional Commits(`feat:` / `test:` / `fix:` / `docs:`)
-- **CHANGELOG**: 用户可见行为变更才更新
 - **Skip**: lazy-only tool 在默认模式属预期跳过,不算 fail
 - **Infra-error**: 镜像/容器/MCP spawn 失败与 bug 区分,不算 fail
 - **Past failures fixed**: Windows EBUSY(用 `tests/helpers/cleanup.ts`),`npm test` 已 533/533 pass
+
+---
+
+### Task 1: 验证 docker 可用 + 加文档 ✅ DONE (commit `32427e8`)
+
+详见下方完整原 plan。T1 已完成:写了 `docs/06-deployment/wsl-docker-setup.md`。
+
+### Task 2: 注册 `universal-db-mcp` 到 `.mcp.json` ✅ DONE (commit `92c4fc2`)
+
+详见下方完整原 plan。
+
+`.mcp.json` 内容:
+```json
+{
+  "mcpServers": {
+    "universal-db-mcp": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["D:/Links/Tools/universal-db-mcp/dist/index.js"],
+      "env": { "MODE": "mcp", "LOG_LEVEL": "warn", "DB_TYPE": "", "DB_HOST": "localhost" }
+    }
+  }
+}
+```
+
+**MCP server 烟雾测试**已通过(直接 stdio 调用 initialize 返回有效 JSON-RPC)。
+
+**Next step**: Claude Code 检测到 `.mcp.json` 后会在 UI 上提示 "Pending approval"(project-scope MCP 服务器需用户手动批准)。批准后本会话可调 `mcp__universal_db_mcp__*` 系列工具。
+
+---
+
+### Task 3: 17-DB native tool 端到端测试 ⏳ IN PROGRESS
+
+**Files:**
+- Modify: `docs/09-reference/e2e-stdio-report.md`(append per-DB findings)
+
+**流程**(每个 DB):
+1. `wsl docker run --rm -d -p <port>:<port> --name e2e-<db> <image>` (env vars per db)
+2. 等就绪(`wsl docker exec` probe) — 60s timeout,失败标 INFRA
+3. `mcp__universal_db_mcp__connect_database({type: <db>, host: 'localhost', port: '<port>', ...})`
+4. `mcp__universal_db_mcp__execute_query({sql: 'CREATE TABLE ...'})` 建表 + 插数据
+5. 依次调其余 ~28 个 tool(`get_schema`, `execute_query SELECT`, `save_profile`, ...)
+6. `mcp__universal_db_mcp__disconnect_database()`
+7. `wsl docker stop e2e-<db>` (自动 `--rm` 清理 container layer)
+
+**每个 tool 调用记录**:
+- dbKey, toolName, status (pass/fail/infra/error), duration, args (截断), response excerpt, AI cognition notes
+
+**17 DB 顺序**(从小到大):
+1. sqlite (本机,no docker) — 跳过 docker run,用 `:memory:`
+2. postgres — `postgres:16-alpine` ~80MB
+3. mysql — `mysql:8` ~500MB
+4. redis — `redis:7-alpine` ~40MB
+5. mongodb — `mongo:7` ~700MB
+6. clickhouse — `clickhouse/clickhouse-server:24` ~800MB
+7. tidb — `pingcap/tidb:v7.5` ~1GB
+8. sqlserver — `mcr.microsoft.com/mssql/server:2022-latest` ~1.5GB
+9. oracle — `gvenzl/oracle-xe:21-slim` ~5GB
+10-17. 国产库: dm / kingbase / gaussdb / oceanbase / polardb / goldendb / highgo / vastbase — 各 ~1-3GB,Docker Hub 第三方镜像,没找到就标 INFRA
+
+**Critical**: 用户在这轮批准 `.mcp.json` 后,这 task 实际由 Claude(我)逐 DB 调 MCP tools。**用户在每个 DB 之间可以打断、追问、修改流程**。
+
+**冒烟第一步**:postgres。启容器 + connect + execute_query 建表 + 5 个核心 tool + disconnect + stop。报告里追加 first DB section。
+
+### Task 4: 报告 + 修 bug
+
+**Files:**
+- Modify: `docs/09-reference/e2e-stdio-report.md`(汇总 + bug 修复记录)
+- Modify: `src/mcp/tools/*.ts` 等(按报告 BUG 列表修)
+
+每个 BUG:
+1. 重现(如需:重新 docker run + 调 tool)
+2. 写 failing test (in unit/ 或新 e2e)
+3. 修 source
+4. 跑对应 DB 回归
+5. `npm test` 全套回归
+6. commit + 报告里标 ✅ FIXED
+
+### Task 5: 收尾
+
+- 停所有遗留容器:`wsl docker ps -a --filter name=e2e-` → stop + rm
+- `npm test` 跑全 533+ 测试确保无回归
+- `git status` clean
+- `git push origin main`
+- Trigger `superpowers:finishing-a-development-branch`
+
+---
+
+## Appendix: Original T1-T12 Plan (preserved for archival)
+
+下方完整原 plan 完整保留(行 49+)。当前实施按上面修订的 4-task 范围。
 
 ---
 
