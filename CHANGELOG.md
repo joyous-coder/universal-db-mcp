@@ -2,6 +2,44 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.2.2] - 2026-07-25
+
+### 修复 (patch)
+
+- **测试清理 (Windows EBUSY)** — 新增 `tests/helpers/cleanup.ts`,提供 `closeAllStores()` / `safeUnlink()` / `cleanupTestArtifacts()` 三个 helper,解决 better-sqlite3 在 Windows 下持锁导致 `afterAll` `unlinkSync` 失败的旧问题。2 个 integration 测试 (`http-profile-routes` / `http-query-experience`) 已重构使用新 helper。同时清理了 62 个孤儿 `.tmp-*` 文件
+
+### 工具 (developer)
+
+- **`scripts/audit-docs.ts`** — TDD 实现,6 个 extractor 维度扫描 docs vs code 的覆盖差距:
+  - `tools.json` — 31 个 MCP tool vs docs
+  - `env-vars.json` — DB_* env var vs docs
+  - `adapters.json` — DB adapter vs docs/02-databases
+  - `api-endpoints.json` — HTTP endpoint vs docs/05-http-api
+  - `features.json` — CHANGELOG 新增 vs docs/03-features
+  - `examples.json` — placeholder for future code-example audit
+- 通过 `npm test` 覆盖 6 个 extract function
+- 生成 6 份 JSON gap report 到 `docs/09-reference/audit/`
+
+### 文档
+
+- **docs 结构重组 (sub-project 1)** — `docs/` 重组为 9 个编号用户旅程目录:
+  - `01-getting-started` / `02-databases` / `03-features` / `04-guides` / `05-http-api` / `06-deployment` / `07-mcp-integration` / `08-architecture` / `09-reference`
+  - 每个目录附带 README.md 导航页
+  - 删除冗余 `docs/plan/` 目录,内容并入 `09-reference/`
+  - v2.x-v3.x feature docs 统一迁入 `03-features/`
+- **CLAUDE.md** 新建在 repo root,记录项目 AI 工作约束
+- **CONTRIBUTING.md** 新增 `## 📦 发布流程` 章节(gh CLI + Trusted Publishing OIDC)
+- **`publish.yml` 加固**:
+  - 新增 `npm test` 步骤(失败阻断 publish)
+  - 新增 `Verify CHANGELOG entry exists for this version` 步骤
+  - 失败时自动评论到 GitHub Release
+
+### 兼容性
+
+- 无 API 变更、无 breaking change
+- HTTP REST / MCP tool 行为完全同 v3.2.1
+- 升级 3.2.1 → 3.2.2 无需任何 migration
+
 ## [3.2.1] - 2026-07-25
 
 ### 修复（基于 v3.2 code review）
