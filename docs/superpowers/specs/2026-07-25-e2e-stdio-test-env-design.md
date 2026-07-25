@@ -41,11 +41,48 @@
 | **同时运行容器数** | **1 个**(严格) | 用户内存不够 |
 | **同时测试 DB 数** | **1 个** | 一个跑完 → 拆 → 下个 |
 | **镜像源** | **仅 Docker Hub** | 国产库用第三方打包镜像 |
+| **国内网络** | **使用 Docker Hub 镜像站**(可选,见 §3.1) | 国内拉 docker hub 慢/超时 |
 | **镜像总占用** | ~25-30GB(占 500GB 约 5-6%) | 完全够 |
-| **容器清理** | `docker run --rm`(退出即删) | 不留垃圾 |
+| **镜像保留** | **默认保留**(不删)| SSE + HTTP API 阶段还要复用,删了重新拉浪费 |
+| **容器清理** | `docker run --rm`(退出即删容器 layer)| 不留垃圾,但镜像保留 |
 | **预拉策略** | 按需拉,跑哪个 DB 才拉哪个 | 避免一次性下载 |
 | **DB 顺序** | 用户/脚本指定,默认从小的开始(sqlite → postgres → ...) | 大库(Oracle/OceanBase)放最后 |
 | **WSL2 docker 存储** | 默认 vhdx 256GB(动态扩) | 完全够 |
+
+### 3.1 Docker Hub 镜像站(国内加速)
+
+国内拉 Docker Hub 经常超时/慢。fixture `db-images.json` 支持 `mirror` 字段:
+
+```json
+{
+  "postgres": {
+    "image": "postgres:16-alpine",
+    "mirror": "registry.cn-hangzhou.aliyuncs.com/library/postgres:16-alpine",
+    "fallbackMirrors": [
+      "docker.m.daocloud.io/library/postgres:16-alpine",
+      "hub-mirror.corp.example.com/library/postgres:16-alpine"
+    ]
+  }
+}
+```
+
+`docker.ts` 拉取策略:
+1. `docker pull <mirror>`(默认)
+2. 失败 → 依次尝试 `fallbackMirrors[]`
+3. 全部失败 → `docker pull <image>` 直连 docker hub
+4. 全部失败 → 报告 `INFRA: image not found in any mirror`
+
+**实现要点**:
+- `~/.docker/daemon.json` 配 mirror(WSL 已配置,见 §3.2)
+- daemon.json 是全局的,`docker pull postgres` 自动走 mirror
+- fixture 里的 `mirror` 字段是 daemon.json 未配置时的手动 fallback
+
+### 3.2 WSL Docker 状态(用户已配置)
+
+- ✅ WSL2 已装好 docker daemon
+- ✅ Docker 客户端命令在 WSL 可用
+- ✅ daemon.json 已配置国内镜像站(用户声明)
+- 此 spec **不包含** Docker 安装/配置任务,假设环境就绪
 
 ## 4. Architecture
 
