@@ -129,10 +129,10 @@
 
 | Env var | sqlite | postgres | mysql | redis | mongodb | clickhouse | dm |
 |---|---|---|---|---|---|---|---|
-| DB_LAZY_LOAD_ENABLED=false (baseline) | — | — | — | — | — | — | — |
+| DB_LAZY_LOAD_ENABLED=false (baseline) | ✅ | — | — | — | — | — | — | all 43 tools in ListTools |
 | LOG_LEVEL=debug | — | — | — | — | — | — | — |
 | DB_ALLOWED_FILE_PATHS=/nonexistent | — | — | — | — | — | — | — |
-| DB_QUERY_ANALYZER_ENABLED=false | — | — | — | — | — | — | — |
+| DB_QUERY_ANALYZER_ENABLED=false | ✅ | — | — | — | — | — | — | D9 verified; explain/lint/history/template → "queryAnalyzer not configured" |
 | DB_METRICS_ENABLED=false | — | — | — | — | — | — | — |
 | DB_PLAN_HISTORY_DB_PATH=./tmp/plan.db | — | — | — | — | — | — | — |
 | DB_TYPE=postgres | — | — | — | — | — | — | — |
