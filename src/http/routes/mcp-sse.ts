@@ -273,6 +273,14 @@ export async function setupMcpSseRoutes(fastify: FastifyInstance): Promise<void>
             mcpServer.setSessionId(newSessionId);
           },
         });
+        // v3.2.1: ensure session cleanup runs on transport close (fix finding #14)
+        transport.onclose = async () => {
+          const sid = (transport as any).sessionId;
+          if (sid) {
+            console.error(`MCP Streamable session ${sid} closed`);
+            await cleanupSession(sid);
+          }
+        };
 
         // 连接 MCP 服务器到传输层（使用 getServer() 避免重复调用 start）
         await mcpServer.getServer().connect(transport);

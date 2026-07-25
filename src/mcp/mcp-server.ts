@@ -77,7 +77,9 @@ export class DatabaseMCPServer {
       },
       {
         capabilities: {
-          tools: {},
+          tools: {
+            listChanged: true,  // v3.2.1: notify clients when tools change (fix finding #12)
+          },
         },
       }
     );
@@ -247,6 +249,12 @@ export class DatabaseMCPServer {
       };
     }
     const r = this.toolRegistry.activateGroup(this.currentSessionId, args.name as ToolGroup);
+    // v3.2.1: notify clients that the tool list changed (fix finding #12)
+    try {
+      await this.server.sendToolListChanged();
+    } catch {
+      // Older SDKs may not support sendToolListChanged; ignore
+    }
     return { content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] };
   }
 
