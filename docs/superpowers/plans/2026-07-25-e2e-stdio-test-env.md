@@ -115,11 +115,46 @@ The full original T1-T12 below (lines 49+) is preserved for archival, but **curr
 - dbKey, toolName, status (pass/fail/infra/error), duration, args (截断), response excerpt, AI cognition notes
 
 **覆盖策略 — 三层**:
-- **Layer 1 (每 DB 必测,17 DBs × ~5 calls)**: connect / disconnect / execute_query(建表+插数据+查询) / get_schema / get_table_info — 验证每个 adapter 工作
-- **Layer 2 (postgres × 45 calls)**: 跑全所有 tool — 验证 tool dispatch / lazy loading / profile lifecycle / plan history / audit / export / meta tools
-- **Layer 3 (6 代表 DBs × 10 calls)**: postgres / mysql / mongodb / sqlite / **dm / oracle** — 验证 DB 行为差异(包括国产库 + Oracle,enterprise adapter 路径)
 
-总调用 ~190 calls,~30-60 min,~ $0.50-1 token 成本(详对比 vs 全跑 765 calls 见对话记录)
+### Layer 1(每 DB 必测,17 DBs × ~5 calls)
+
+每个 DB 跑以下最小集合(覆盖 **CRUD + 基础 schema**):
+- `connect_database({type, host:'localhost', port, ..., permissionMode: 'full'})`
+- `execute_query({sql: 'CREATE TABLE ...'})` — **CREATE**
+- `execute_query({sql: 'INSERT INTO ...'})` — **INSERT**(增)
+- `execute_query({sql: 'UPDATE ... SET ... WHERE ...'})` — **UPDATE**(改)
+- `execute_query({sql: 'DELETE FROM ... WHERE ...'})` — **DELETE**(删)
+- `execute_query({sql: 'SELECT ...'})` — **SELECT**(查,验证 CRUD 全过)
+- `get_schema({})` — 验证 schema 缓存 + 推理
+- `get_table_info({table: 'users'})` — 验证单表详情
+- `get_enum_values({table, column})` / `get_sample_data({table})`(任选)
+- `disconnect_database({})`
+
+→ 验证:每个 adapter 工作,**CRUD 全通**
+
+### Layer 2(postgres × 45 calls)
+
+跑全所有 tool(包括非 SQL 类),覆盖:
+- 增删改查:见 L1
+- **execute_script**:多语句 / PL-SQL 块
+- **execute_sql_file**:跑 .sql 文件(`/tmp/init.sql`,先 create 再测)
+- **execute_batch**:同 SQL 多个 params
+- **generate_sample_data**:造样例数据
+- 4 个 lazy group(需 `use_tool_group` 激活):
+  - profiles:save_profile / list_profiles / use_profile / 各种 lifecycle / export / import
+  - query-experience:save_template / list_templates / get_template / delete_template / lint_sql / explain_query / get_query_history
+  - data-governance:export_backup / audit_log / get_pii_config / set_pii_config
+  - index-advisor:explain_query_with_advice / compare_query_plans / list_query_plans
+- meta:`use_tool_group` / `use_tool_schema`
+- stateful:`get_metrics` / `use_profile` / `execute_template`
+
+→ 验证:tool dispatch / lazy loading / profile lifecycle / plan history / audit / export 全路径
+
+### Layer 3(6 代表 DBs × 10 calls)
+
+postgres / mysql / mongodb / sqlite / **dm / oracle** — 重跑 L1 关键 tool + 几个 DB-specific(如 mongo 的 `find` / oracle 的 `BEGIN ... END`),验证 DB 行为差异。
+
+总调用 ~190 calls,~30-60 min,~ $0.50-1
 
 **17 DB 顺序**(从小到大):
 1. sqlite (本机,no docker) — 跳过 docker run,用 `:memory:`
