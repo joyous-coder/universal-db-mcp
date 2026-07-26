@@ -34,3 +34,66 @@ export function quoteField(value: unknown): string {
 export function rowToCsv(row: Record<string, unknown>, columns: string[]): string {
   return columns.map((col) => quoteField(row[col])).join(',');
 }
+
+/**
+ * 解析 schema.table 格式。
+ * 返回 {schema: string|null, name: string}。
+ */
+function parseTableName(table: string): { schema: string | null; name: string } {
+  if (table.includes('.')) {
+    const dotIdx = table.indexOf('.');
+    return { schema: table.substring(0, dotIdx), name: table.substring(dotIdx + 1) };
+  }
+  return { schema: null, name: table };
+}
+
+/**
+ * 拼接标识符为双引号包裹。
+ * 只允许 [a-zA-Z_][a-zA-Z0-9_]* — 不允许多语句 / 注入。
+ */
+function quoteIdent(ident: string): string {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(ident)) {
+    throw new Error(`invalid_identifier: ${ident}`);
+  }
+  return `"${ident}"`;
+}
+
+/**
+ * 拼 SELECT SQL (含 LIMIT/OFFSET 分页)。
+ *
+ * - columns=['*'] 直接用 *,否则逐个 quoteIdent 拼出 "col1","col2",...
+ * - table 接受 "schema.table" 或 "table",前者 schema 与 name 都 quote
+ * - where / orderBy 是字符串 SQL 片段(trusted path,只在白名单内用)
+ *   含 ';' 视为注入,拒绝
+ */
+export function buildSelectSql(opts: {
+  table: string;
+  columns: string[];
+  where?: string;
+  orderBy?: string;
+  limit: number;
+  offset: number;
+}): string {
+  const { schema, name } = parseTableName(opts.table);
+  const cols =
+    opts.columns.length === 1 && opts.columns[0] === '*'
+      ? '*'
+      : opts.columns.map(quoteIdent).join(', ');
+  // v3.3: 当 schema 存在时双 quote schema 与 name;无 schema 时 name 保留原样
+  // (向后兼容 — CH/DM 适配器对未 quote 表名大小写不敏感,统一表名处理在 adapter 层)
+  const tbl = schema ? `${quoteIdent(schema)}.${quoteIdent(name)}` : name;
+
+  if (opts.where && /;/.test(opts.where)) {
+    throw new Error('injection_blocked: where contains ";"');
+  }
+  if (opts.orderBy && /;/.test(opts.orderBy)) {
+    throw new Error('injection_blocked: orderBy contains ";"');
+  }
+
+  const parts: string[] = [`SELECT ${cols} FROM ${tbl}`];
+  if (opts.where) parts.push(`WHERE ${opts.where}`);
+  if (opts.orderBy) parts.push(`ORDER BY ${opts.orderBy}`);
+  if (opts.limit > 0) parts.push(`LIMIT ${opts.limit}`);
+  parts.push(`OFFSET ${opts.offset}`);
+  return parts.join(' ');
+}

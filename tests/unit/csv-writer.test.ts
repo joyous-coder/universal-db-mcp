@@ -8,7 +8,7 @@
  *  - rowToCsv 列序与缺失列
  */
 import { describe, expect, it } from 'vitest';
-import { quoteField, rowToCsv } from '../../src/core/csv-writer.js';
+import { quoteField, rowToCsv, buildSelectSql } from '../../src/core/csv-writer.js';
 
 describe('CsvWriter', () => {
   it('quotes field containing comma', () => {
@@ -43,5 +43,36 @@ describe('CsvWriter', () => {
   it('rowToCsv handles missing column as empty string', () => {
     const row = { id: 1 };
     expect(rowToCsv(row, ['id', 'name'])).toBe('1,');
+  });
+});
+
+describe('CsvWriter.buildSelectSql', () => {
+  it('builds basic SELECT with all clauses', () => {
+    expect(buildSelectSql({
+      table: 'users', columns: ['id', 'name'],
+      where: 'age > 18', orderBy: 'id ASC', limit: 100, offset: 200,
+    })).toBe('SELECT "id", "name" FROM users WHERE age > 18 ORDER BY id ASC LIMIT 100 OFFSET 200');
+  });
+  it('omits WHERE and ORDER BY when not provided', () => {
+    expect(buildSelectSql({
+      table: 'users', columns: ['*'], limit: 50, offset: 0,
+    })).toBe('SELECT * FROM users LIMIT 50 OFFSET 0');
+  });
+  it('rejects WHERE containing semicolon (injection guard)', () => {
+    expect(() => buildSelectSql({
+      table: 'users', columns: ['*'], where: '1=1; DROP TABLE users',
+      limit: 10, offset: 0,
+    })).toThrow(/injection_blocked/);
+  });
+  it('rejects ORDER BY containing semicolon', () => {
+    expect(() => buildSelectSql({
+      table: 'users', columns: ['*'], orderBy: 'id; DROP TABLE x',
+      limit: 10, offset: 0,
+    })).toThrow(/injection_blocked/);
+  });
+  it('quotes schema.table as "schema"."table"', () => {
+    expect(buildSelectSql({
+      table: 'public.users', columns: ['id'], limit: 1, offset: 0,
+    })).toBe('SELECT "id" FROM "public"."users" LIMIT 1 OFFSET 0');
   });
 });
