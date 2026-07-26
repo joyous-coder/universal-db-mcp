@@ -9,7 +9,7 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { parseCsvLine, streamCsvRows, importCsv } from '../../src/core/csv-reader.js';
 import { Readable } from 'node:stream';
-import { writeFileSync, rmSync, createReadStream } from 'node:fs';
+import { writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -65,5 +65,60 @@ describe('CsvReader.streamCsvRows', () => {
     const stream = Readable.from([csv]);
     const rows = await collect(streamCsvRows(stream));
     expect(rows).toEqual([{ id: '1', name: 'A' }, { id: '2', name: 'B' }]);
+  });
+});
+
+class StubAdapter {
+  executed: Array<{ sql: string; paramsList: unknown[][] }> = [];
+  async executeBatch(sql: string, paramsList: unknown[][], _options?: any) {
+    this.executed.push({ sql, paramsList });
+    return { affectedRowsPerStatement: paramsList.map(() => 1), totalAffectedRows: paramsList.length };
+  }
+  async executeQuery(_sql: string) { return { rows: [], executionTime: 0 }; }
+  async getTableInfo(_name: string) {
+    return { name: 'users', schema: null, columns: [
+      { name: 'id', type: 'UInt32', nullable: false },
+      { name: 'name', type: 'String', nullable: true },
+    ]};
+  }
+}
+
+describe('CsvReader.importCsv', () => {
+  const tmp = path.join(tmpdir(), 'import-test.csv');
+  beforeEach(() => { writeFileSync(tmp, 'id,name\r\n1,Alice\r\n2,Bob\r\n3,,NULL\r\n'); });
+  afterEach(() => { try { rmSync(tmp); } catch {} });
+
+  it('imports with batchSize=2 (2 batches)', async () => {
+    const a = new StubAdapter() as any;
+    const r = await importCsv({
+      adapter: a, table: 'users', filePath: tmp, batchSize: 2,
+    });
+    expect(r.totalRows).toBe(3);
+    expect(r.batches).toBe(2);
+    expect(a.executed[0].paramsList.length).toBe(2);
+    expect(a.executed[1].paramsList.length).toBe(1);
+    // Bug #54 已修:对象数组 [{c1:v1,c2:v2}]
+    expect(a.executed[0].paramsList[0]).toEqual({ id: '1', name: 'Alice' });
+    expect(a.executed[0].paramsList[1]).toEqual({ id: '2', name: 'Bob' });
+  });
+
+  it('dryRun=true does not call executeBatch', async () => {
+    const a = new StubAdapter() as any;
+    const r = await importCsv({
+      adapter: a, table: 'users', filePath: tmp, dryRun: true,
+    });
+    expect(r.totalRows).toBe(3);
+    expect(r.batches).toBe(0);
+    expect(a.executed.length).toBe(0);
+    expect(r.sample).toBeDefined();
+    expect(r.sample.length).toBeGreaterThan(0);
+  });
+
+  it('throws column_mismatch when CSV has unknown column', async () => {
+    writeFileSync(tmp, 'id,name,unknown_col\r\n1,Alice,x\r\n');
+    const a = new StubAdapter() as any;
+    await expect(importCsv({
+      adapter: a, table: 'users', filePath: tmp,
+    })).rejects.toThrow(/column_mismatch/);
   });
 });
