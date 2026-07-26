@@ -19,7 +19,7 @@ describe('buildToolDefinitions', () => {
     expect(t.groups['index-advisor']?.length ?? 0).toBe(0);
   });
 
-  it('returns 25 lazy tool definitions when all deps provided (stateful tools kept in fallback switch)', () => {
+  it('returns 27 lazy tool definitions when all deps provided (stateful tools kept in fallback switch)', () => {
     const t = buildToolDefinitions({
       queryAnalyzer: {} as any,
       profileManager: {} as any,
@@ -27,10 +27,11 @@ describe('buildToolDefinitions', () => {
       config: null,
       planHistory: {} as any,
     });
+    // v3.3: +2 CSV tools (export_table_csv / import_csv) → 25+2 = 27
     // query-experience 7 (minus execute_template) + profiles 10 (minus use_profile)
-    // + data-governance 5 + index-advisor 3 = 25
+    // + data-governance 7 + index-advisor 3 = 27
     const groupCount = Object.values(t.groups).reduce((a, g) => a + (g?.length ?? 0), 0);
-    expect(groupCount).toBe(25);
+    expect(groupCount).toBe(27);
     expect(t.meta.length).toBe(2);
     expect(t.infoLazy.length).toBe(1);
   });
