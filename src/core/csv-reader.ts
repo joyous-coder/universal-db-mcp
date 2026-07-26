@@ -60,3 +60,36 @@ export function parseCsvLine(
   }
   return out;
 }
+/**
+ * 流式 CSV 行迭代器:输入 ReadableStream,产出 header + rows。
+ *
+ * 用 node:readline 一次读一行(crlfDelay: Infinity 让 readline 正确处理 CRLF/LF/CR)。
+ * 多 chunk 流由 readline 内部 buffer 重组,跨 chunk 的 quoted field 正确处理。
+ * 首行作为 header(可 hasHeader=false 跳过,列名用 col1, col2, ... 占位)。
+ *
+ * 流结束时若 readline 已读到 EOF 但 quote 未闭合 → 由 parseCsvLine 检测报 csv_parse_error。
+ */
+export async function* streamCsvRows(
+  input: NodeJS.ReadableStream,
+  opts: { hasHeader?: boolean; nullStrings?: Set<string> } = {}
+): AsyncIterableIterator<Record<string, string | null>> {
+  const hasHeader = opts.hasHeader ?? true;
+  const nullStrings = opts.nullStrings ?? DEFAULT_NULL_STRINGS;
+  const rl = require('node:readline').createInterface({ input, crlfDelay: Infinity });
+  let header: string[] | null = null;
+  for await (const line of rl) {
+    const fields = parseCsvLine(line, nullStrings);
+    if (header === null) {
+      if (hasHeader) {
+        header = fields.map((f) => f ?? '');
+        continue;
+      }
+      header = fields.map((_, i) => `col${i + 1}`);
+    }
+    const row: Record<string, string | null> = {};
+    for (let i = 0; i < header.length; i++) {
+      row[header[i]] = fields[i] ?? null;
+    }
+    yield row;
+  }
+}

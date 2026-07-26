@@ -33,3 +33,37 @@ describe('CsvReader.parseCsvLine', () => {
     expect(parseCsvLine('a,b\n')).toEqual(['a', 'b']);
   });
 });
+
+async function collect(aiter: AsyncIterableIterator<Record<string, string | null>>) {
+  const out: Array<Record<string, string | null>> = [];
+  for await (const row of aiter) out.push(row);
+  return out;
+}
+
+describe('CsvReader.streamCsvRows', () => {
+  it('parses header + rows from stream', async () => {
+    const csv = 'id,name,note\r\n1,Alice,hello\r\n2,Bob,"a,b"\r\n3,,NULL\r\n';
+    const stream = Readable.from([csv]);
+    const rows = await collect(streamCsvRows(stream));
+    expect(rows).toEqual([
+      { id: '1', name: 'Alice', note: 'hello' },
+      { id: '2', name: 'Bob', note: 'a,b' },
+      { id: '3', name: null, note: null },
+    ]);
+  });
+
+  it('handles multi-line CRLF chunked stream', async () => {
+    const chunks = ['id,name\r\n1,A\r\n2,B\r', '\n3,C\r\n4,D\r\n'];
+    const stream = Readable.from(chunks);
+    const rows = await collect(streamCsvRows(stream));
+    expect(rows.length).toBe(4);
+    expect(rows[3]).toEqual({ id: '4', name: 'D' });
+  });
+
+  it('skips trailing empty line without throwing', async () => {
+    const csv = 'id,name\r\n1,A\r\n2,B\r\n';
+    const stream = Readable.from([csv]);
+    const rows = await collect(streamCsvRows(stream));
+    expect(rows).toEqual([{ id: '1', name: 'A' }, { id: '2', name: 'B' }]);
+  });
+});
