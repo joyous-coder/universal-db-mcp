@@ -2,6 +2,57 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.3.0] - 2026-07-26
+
+### 新增 (CSV 导入/导出)
+
+把 MCP 工具集的数据迁移能力从 SQL 扩展到 CSV,新增 2 个 data-governance tool:
+
+- **export_table_csv**: 流式导出单表到 CSV 文件
+  - 支持 WHERE / ORDER BY / LIMIT / OFFSET 分页
+  - 自动 RFC 4180 序列化 (逗号 / 双引号 / 换行符 escape)
+  - 类型转换:Date → ISO 8601, BigInt/Decimal → 字符串保留精度, NULL → 空字符串
+  - 路径白名单复用 `DB_ALLOWED_FILE_PATHS`
+- **import_csv**: 从 CSV 文件导入数据到已存在的表 (APPEND 模式)
+  - 流式 readline 解析, 默认 batchSize=1000 走 adapter.executeBatch
+  - SQLite 适配 `?` 顺序 placeholder; CH/DM/MySQL/PG 等用 named `{col:Type}` (Bug #54 兼容)
+  - dryRun=true 时只 parse + 返回前 5 行 sample, 不真写
+  - nullStrings 配置 (默认 `['', 'NULL', '\N']`)
+
+### 适配器
+
+17 个 DB 全部支持 (走 `BaseAdapter.executeQuery` 分页 export + `BaseAdapter.executeBatch` 流式 import)。
+CH / DM 自动适配 (Bug #44 #53 #54 修复后)。
+
+### 新增 / 改动文件
+
+| File                                  | Action | LOC   |
+| ------------------------------------- | ------ | ----- |
+| src/core/csv-writer.ts                | new    | +180  |
+| src/core/csv-reader.ts                | new    | +220  |
+| src/mcp/tools/csv-tools.ts            | new    | +60   |
+| src/mcp/tool-definitions.ts           | edit   | +30   |
+| src/adapters/sqlite/index.ts         | edit   | +2    |
+| tests/unit/csv-writer.test.ts         | new    | +120  |
+| tests/unit/csv-reader.test.ts         | new    | +140  |
+| tests/unit/csv-tools.test.ts          | new    | +50   |
+| tests/unit/tool-definitions.test.ts   | edit   | +3    |
+| tmp-e2e/csv-e2e.cjs                   | new    | +100  |
+
+### 测试
+
+`npm run test:unit`: **54 个 test files / 514 tests PASS** (新增 3 个 csv-* file + 1 个测试期望更新)
+`tmp-e2e/csv-e2e.cjs`: sqlite export → drop → import → verify roundtrip → **PASS** (3 行, 含逗号/双引号/NULL 特殊字符)
+
+### 兼容性
+
+- **不破坏 v3.2.9 API**: 新 tool 注册到 `data-governance` lazy group, 需 `use_tool_group('data-governance')` 激活
+- **路径安全**: 沿用 `DB_ALLOWED_FILE_PATHS`, 未配此环境变量的部署无法用 import_csv / export_table_csv (会抛 path_not_allowed)
+- **权限**: 与 `execute_batch` 同级 (`write` permission, 需 `readwrite` / `full` mode)
+- **WHERE / ORDER BY 风险**: 字符串拼接 SQL 片段, **仅 trusted path 安全**; 生产场景如需 untrusted 客户端请通过 MCP server ACL 限制调用方
+
+---
+
 ## [3.2.9] - 2026-07-26
 
 ### 修复 (ClickHouse 全量 e2e — 5 个 bug)
