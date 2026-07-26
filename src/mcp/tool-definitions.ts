@@ -55,6 +55,11 @@ import {
   DATA_GOVERNANCE_TOOL_DESCRIPTIONS,
 } from './tools/data-governance.js';
 import {
+  buildExportTableCsvHandler,
+  buildImportCsvHandler,
+  CSV_TOOL_DESCRIPTIONS,
+} from './tools/csv-tools.js';
+import {
   buildExplainQueryWithAdviceHandler,
   buildCompareQueryPlansHandler,
   buildListQueryPlansHandler,
@@ -125,6 +130,8 @@ export function buildToolDefinitions(deps: ToolDeps): ToolDefinitions {
     dataGovernance.push(
       tool('compare_profile_schemas', DATA_GOVERNANCE_TOOL_DESCRIPTIONS.compare_profile_schemas, { type: 'object', properties: { nameA: { type: 'string' }, nameB: { type: 'string' } }, required: ['nameA', 'nameB'] }, buildCompareProfileSchemasHandler(pm) as any, 'data-governance'),
       tool('export_backup', DATA_GOVERNANCE_TOOL_DESCRIPTIONS.export_backup, { type: 'object', properties: { profileName: { type: 'string' }, schemaOnly: { type: 'boolean' }, tables: { type: 'array', items: { type: 'string' } }, outputPath: { type: 'string' } }, required: ['profileName'] }, buildExportBackupHandler(pm) as any, 'data-governance'),
+      tool('export_table_csv', CSV_TOOL_DESCRIPTIONS.export_table_csv, { type: 'object', properties: { profileName: { type: 'string' }, table: { type: 'string' }, columns: { type: 'array', items: { type: 'string' } }, where: { type: 'string' }, orderBy: { type: 'string' }, limit: { type: 'integer', default: 0 }, offset: { type: 'integer', default: 0 }, outputPath: { type: 'string' }, batchSize: { type: 'integer', default: 5000 } }, required: ['profileName', 'table', 'outputPath'] }, buildExportTableCsvHandler(pm) as any, 'data-governance'),
+      tool('import_csv', CSV_TOOL_DESCRIPTIONS.import_csv, { type: 'object', properties: { profileName: { type: 'string' }, table: { type: 'string' }, filePath: { type: 'string' }, columns: { type: 'array', items: { type: 'string' } }, dryRun: { type: 'boolean', default: false }, batchSize: { type: 'integer', default: 1000 }, hasHeader: { type: 'boolean', default: true }, nullStrings: { type: 'array', items: { type: 'string' } } }, required: ['profileName', 'table', 'filePath'] }, buildImportCsvHandler(pm) as any, 'data-governance'),
     );
   }
   if (deps.queryAnalyzer) {
