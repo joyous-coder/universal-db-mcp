@@ -12,10 +12,11 @@
 | `data-governance.md` | ✅ | ✅ | v3.0 — schema diff / backup / audit / PII |
 | `index-advisor.md` | ✅ | ✅ | v3.1 — EXPLAIN + 索引建议 + plan diff |
 | `lazy-loading.md` | ✅ | ✅ | v3.2 — 4 group lazy load + meta-tool |
+| `data-migration.md` | ✅ | ✅ | v3.3.0 — CSV import/export + streaming |
 
 ## 推荐阅读顺序
 
-按版本号顺序（v2.16 → v3.2）了解渐进式能力。
+按版本号顺序（v2.16 → v3.3.0）了解渐进式能力。
 
 ## 相关
 

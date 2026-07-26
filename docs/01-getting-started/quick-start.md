@@ -148,6 +148,8 @@ curl -X POST http://localhost:3000/api/query \
 
 ## 下一步
 
-- [配置说明](./configuration.md) - 详细配置选项
-- [使用示例](./examples.md) - 各数据库使用示例
-- [部署指南](../deployment/README.md) - 生产环境部署
+- [配置说明](./configuration.md) — 详细配置选项
+- [使用示例](./examples.md) — 各数据库使用示例
+- [部署指南](../06-deployment/README.md) — 生产环境部署
+- [特性索引](../03-features/README.md) — v2.16 → v3.3.0 全部能力
+- [数据迁移 (v3.3.0 新增)](../03-features/data-migration.md) — CSV 导入导出

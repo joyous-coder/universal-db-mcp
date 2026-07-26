@@ -33,6 +33,17 @@
 
 ---
 
+## 🆕 v3.3.0 最新动态
+
+- **CSV 导入 / 导出** (`export_table_csv` + `import_csv`) — 流式导出单表为 CSV，支持 `WHERE` / `ORDER BY` / `LIMIT` / `OFFSET` 过滤；批量入库到已存在表。RFC 4180 序列化，路径白名单复用 `DB_ALLOWED_FILE_PATHS`。
+- **11 种数据库 × 43 个 tool × 2 个 CSV tool** = **45 个 tool × 11 DB** 全链路 e2e 覆盖，514 个 unit tests PASS。
+- **ClickHouse 协议 bug 修复 (v3.2.9)** — 修复 5 个生产级 bug：`format:JSONEachRow` 影响 INSERT、命名参数重写、UInt64→Number 转换、`execute_script`/`execute_batch` BEGIN 路径、`execute_batch` 对象数组处理。
+- **达梦 (DM) export_backup (v3.2.8)** — 用 `ALL_TABLES` + `ALL_TAB_COLUMNS` 替代 `INFORMATION_SCHEMA`；`generate_sample_data` 不再为 `id` 列返回 NULL。
+- **MongoDB 认证 (v3.2.7)** — 自动注入 `authSource=admin`；多参 `db.collection.method(args)` 解析修复。
+- **17 种 adapter, 11 种 e2e 验证** — sqlite / redis / mongodb / postgres / mysql / oracle / sqlserver / tidb / dm / clickhouse。详见 [e2e 报告](docs/09-reference/e2e-stdio-report.md)。
+
+---
+
 ## 为什么选择 Universal DB MCP？
 
 想象一下，你问 AI 助手：*"帮我查一下这个月订单金额最高的 10 个客户"*，然后立即从数据库获得结果——无需编写 SQL。Universal DB MCP 通过模型上下文协议（MCP）和 HTTP API 将 AI 助手与你的数据库连接起来，让这一切成为可能。
@@ -59,9 +70,11 @@ AI: 让我帮你查询一下...
 - **批量查询优化** - 大型数据库的 Schema 获取速度提升高达 100 倍
 - **Schema 增强** - 表注释、隐式关系推断，提升 Text2SQL 准确性
 - **多 Schema 支持** - 自动发现所有用户 Schema（PostgreSQL、SQL Server、Oracle、达梦等）
+- **数据迁移** - SQL 备份 (`export_backup`) + **CSV 导入导出 (v3.3.0)** RFC 4180 序列化,分页读 + 批量写（[文档](docs/03-features/data-migration.md)）
 - **数据脱敏** - 自动保护敏感数据（手机号、邮箱、身份证、银行卡等）
 - **连接稳定性** - 连接池、TCP Keep-Alive、断线自动重试，保障长时间会话稳定运行
-- **生产可观测性** - Prometheus `/metrics` 端点 + MCP `get_metrics` 工具 + 慢查询环形 buffer，零新依赖（[文档](docs/observability.md)）
+- **生产可观测性** - Prometheus `/metrics` 端点 + MCP `get_metrics` 工具 + 慢查询环形 buffer，零新依赖（[文档](docs/03-features/observability.md)）
+- **数据治理** - Profile 备份恢复 (`export_profiles` / `import_profiles`)、Schema diff、PII 脱敏、审计日志（[文档](docs/03-features/data-governance.md)）
 
 ### 性能提升
 
@@ -158,7 +171,7 @@ POST http://localhost:3000/mcp
 | `/mcp` | GET | Streamable HTTP 的 SSE 流 |
 | `/mcp` | DELETE | 关闭会话 |
 
-详细配置说明请参阅 [Dify 集成指南](./docs/integrations/DIFY.zh-CN.md)。
+详细配置说明请参阅 [Dify 集成指南](./docs/04-integrations/DIFY.zh-CN.md)。
 
 ## 📊 支持的数据库
 
@@ -310,186 +323,195 @@ Universal DB MCP 可与任何支持 MCP 协议或 REST API 的平台配合使用
 
 | 平台 | 接入方式 | 说明 | 集成指南 |
 |------|----------|------|----------|
-| [Cursor](https://cursor.sh/) | MCP stdio | 内置 MCP 支持的 AI 代码编辑器 | [EN](./docs/integrations/CURSOR.md) / [中文](./docs/integrations/CURSOR.zh-CN.md) |
-| [Windsurf](https://codeium.com/windsurf) | MCP stdio | Codeium 的 AI IDE，带 Cascade 智能体 | [EN](./docs/integrations/WINDSURF.md) / [中文](./docs/integrations/WINDSURF.zh-CN.md) |
-| [VS Code](https://code.visualstudio.com/) | MCP stdio / REST API | 通过 GitHub Copilot 代理模式或 Cline/Continue 扩展 | [EN](./docs/integrations/VSCODE.md) / [中文](./docs/integrations/VSCODE.zh-CN.md) |
-| [Zed](https://zed.dev/) | MCP stdio | 高性能开源代码编辑器 | [EN](./docs/integrations/ZED.md) / [中文](./docs/integrations/ZED.zh-CN.md) |
-| [IntelliJ IDEA](https://www.jetbrains.com/idea/) | MCP stdio | JetBrains IDE，支持 MCP（2025.1+） | [EN](./docs/integrations/JETBRAINS.md) / [中文](./docs/integrations/JETBRAINS.zh-CN.md) |
-| [PyCharm](https://www.jetbrains.com/pycharm/) | MCP stdio | JetBrains Python IDE | [EN](./docs/integrations/JETBRAINS.md) / [中文](./docs/integrations/JETBRAINS.zh-CN.md) |
-| [WebStorm](https://www.jetbrains.com/webstorm/) | MCP stdio | JetBrains JavaScript IDE | [EN](./docs/integrations/JETBRAINS.md) / [中文](./docs/integrations/JETBRAINS.zh-CN.md) |
-| [Android Studio](https://developer.android.com/studio) | MCP stdio | 通过 JetBrains MCP 插件 | [EN](./docs/integrations/JETBRAINS.md) / [中文](./docs/integrations/JETBRAINS.zh-CN.md) |
-| [Neovim](https://neovim.io/) | MCP stdio | 通过 MCPHub.nvim 插件 | [EN](./docs/integrations/NEOVIM.md) / [中文](./docs/integrations/NEOVIM.zh-CN.md) |
-| [Emacs](https://www.gnu.org/software/emacs/) | MCP stdio | 通过 mcp.el 包 | [EN](./docs/integrations/EMACS.md) / [中文](./docs/integrations/EMACS.zh-CN.md) |
+| [Cursor](https://cursor.sh/) | MCP stdio | 内置 MCP 支持的 AI 代码编辑器 | [EN](./docs/04-integrations/CURSOR.md) / [中文](./docs/04-integrations/CURSOR.zh-CN.md) |
+| [Windsurf](https://codeium.com/windsurf) | MCP stdio | Codeium 的 AI IDE，带 Cascade 智能体 | [EN](./docs/04-integrations/WINDSURF.md) / [中文](./docs/04-integrations/WINDSURF.zh-CN.md) |
+| [VS Code](https://code.visualstudio.com/) | MCP stdio / REST API | 通过 GitHub Copilot 代理模式或 Cline/Continue 扩展 | [EN](./docs/04-integrations/VSCODE.md) / [中文](./docs/04-integrations/VSCODE.zh-CN.md) |
+| [Zed](https://zed.dev/) | MCP stdio | 高性能开源代码编辑器 | [EN](./docs/04-integrations/ZED.md) / [中文](./docs/04-integrations/ZED.zh-CN.md) |
+| [IntelliJ IDEA](https://www.jetbrains.com/idea/) | MCP stdio | JetBrains IDE，支持 MCP（2025.1+） | [EN](./docs/04-integrations/JETBRAINS.md) / [中文](./docs/04-integrations/JETBRAINS.zh-CN.md) |
+| [PyCharm](https://www.jetbrains.com/pycharm/) | MCP stdio | JetBrains Python IDE | [EN](./docs/04-integrations/JETBRAINS.md) / [中文](./docs/04-integrations/JETBRAINS.zh-CN.md) |
+| [WebStorm](https://www.jetbrains.com/webstorm/) | MCP stdio | JetBrains JavaScript IDE | [EN](./docs/04-integrations/JETBRAINS.md) / [中文](./docs/04-integrations/JETBRAINS.zh-CN.md) |
+| [Android Studio](https://developer.android.com/studio) | MCP stdio | 通过 JetBrains MCP 插件 | [EN](./docs/04-integrations/JETBRAINS.md) / [中文](./docs/04-integrations/JETBRAINS.zh-CN.md) |
+| [Neovim](https://neovim.io/) | MCP stdio | 通过 MCPHub.nvim 插件 | [EN](./docs/04-integrations/NEOVIM.md) / [中文](./docs/04-integrations/NEOVIM.zh-CN.md) |
+| [Emacs](https://www.gnu.org/software/emacs/) | MCP stdio | 通过 mcp.el 包 | [EN](./docs/04-integrations/EMACS.md) / [中文](./docs/04-integrations/EMACS.zh-CN.md) |
 
 ### AI 编程助手
 
 | 平台 | 接入方式 | 说明 | 集成指南 |
 |------|----------|------|----------|
-| [Claude Code](https://claude.ai/code) | MCP stdio | Anthropic 的智能编程工具 | [EN](./docs/integrations/CLAUDE-CODE.md) / [中文](./docs/integrations/CLAUDE-CODE.zh-CN.md) |
-| [GitHub Copilot](https://github.com/features/copilot) | MCP stdio | VS Code/JetBrains 中的代理模式 | [EN](./docs/integrations/GITHUB-COPILOT.md) / [中文](./docs/integrations/GITHUB-COPILOT.zh-CN.md) |
-| [Cline](https://github.com/cline/cline) | MCP stdio / REST API | VS Code 自主编程智能体 | [EN](./docs/integrations/CLINE.md) / [中文](./docs/integrations/CLINE.zh-CN.md) |
-| [Continue](https://continue.dev/) | MCP stdio | 开源 AI 代码助手 | [EN](./docs/integrations/CONTINUE.md) / [中文](./docs/integrations/CONTINUE.zh-CN.md) |
-| [Roo Code](https://github.com/roovet/roo-code) | MCP stdio | Cline 的 VS Code 分支 | [EN](./docs/integrations/ROO-CODE.md) / [中文](./docs/integrations/ROO-CODE.zh-CN.md) |
-| [Sourcegraph Cody](https://sourcegraph.com/cody) | MCP stdio | AI 编程助手 | [EN](./docs/integrations/SOURCEGRAPH-CODY.md) / [中文](./docs/integrations/SOURCEGRAPH-CODY.zh-CN.md) |
-| [Amazon Q Developer](https://aws.amazon.com/q/developer/) | MCP stdio | AWS AI 编程助手 | [EN](./docs/integrations/AMAZON-Q-DEVELOPER.md) / [中文](./docs/integrations/AMAZON-Q-DEVELOPER.zh-CN.md) |
-| [Devin](https://devin.ai/) | MCP stdio | AI 软件工程师 | [EN](./docs/integrations/DEVIN.md) / [中文](./docs/integrations/DEVIN.zh-CN.md) |
-| [Goose](https://github.com/block/goose) | MCP stdio | Block 的 AI 编程智能体 | [EN](./docs/integrations/GOOSE.md) / [中文](./docs/integrations/GOOSE.zh-CN.md) |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | MCP stdio | Google 命令行 AI 工具 | [EN](./docs/integrations/GEMINI-CLI.md) / [中文](./docs/integrations/GEMINI-CLI.zh-CN.md) |
+| [Claude Code](https://claude.ai/code) | MCP stdio | Anthropic 的智能编程工具 | [EN](./docs/04-integrations/CLAUDE-CODE.md) / [中文](./docs/04-integrations/CLAUDE-CODE.zh-CN.md) |
+| [GitHub Copilot](https://github.com/features/copilot) | MCP stdio | VS Code/JetBrains 中的代理模式 | [EN](./docs/04-integrations/GITHUB-COPILOT.md) / [中文](./docs/04-integrations/GITHUB-COPILOT.zh-CN.md) |
+| [Cline](https://github.com/cline/cline) | MCP stdio / REST API | VS Code 自主编程智能体 | [EN](./docs/04-integrations/CLINE.md) / [中文](./docs/04-integrations/CLINE.zh-CN.md) |
+| [Continue](https://continue.dev/) | MCP stdio | 开源 AI 代码助手 | [EN](./docs/04-integrations/CONTINUE.md) / [中文](./docs/04-integrations/CONTINUE.zh-CN.md) |
+| [Roo Code](https://github.com/roovet/roo-code) | MCP stdio | Cline 的 VS Code 分支 | [EN](./docs/04-integrations/ROO-CODE.md) / [中文](./docs/04-integrations/ROO-CODE.zh-CN.md) |
+| [Sourcegraph Cody](https://sourcegraph.com/cody) | MCP stdio | AI 编程助手 | [EN](./docs/04-integrations/SOURCEGRAPH-CODY.md) / [中文](./docs/04-integrations/SOURCEGRAPH-CODY.zh-CN.md) |
+| [Amazon Q Developer](https://aws.amazon.com/q/developer/) | MCP stdio | AWS AI 编程助手 | [EN](./docs/04-integrations/AMAZON-Q-DEVELOPER.md) / [中文](./docs/04-integrations/AMAZON-Q-DEVELOPER.zh-CN.md) |
+| [Devin](https://devin.ai/) | MCP stdio | AI 软件工程师 | [EN](./docs/04-integrations/DEVIN.md) / [中文](./docs/04-integrations/DEVIN.zh-CN.md) |
+| [Goose](https://github.com/block/goose) | MCP stdio | Block 的 AI 编程智能体 | [EN](./docs/04-integrations/GOOSE.md) / [中文](./docs/04-integrations/GOOSE.zh-CN.md) |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | MCP stdio | Google 命令行 AI 工具 | [EN](./docs/04-integrations/GEMINI-CLI.md) / [中文](./docs/04-integrations/GEMINI-CLI.zh-CN.md) |
 
 ### 桌面 AI 聊天应用
 
 | 平台 | 接入方式 | 说明 | 集成指南 |
 |------|----------|------|----------|
-| [Claude Desktop](https://claude.ai/download) | MCP stdio | Anthropic 官方桌面应用 | [EN](./docs/integrations/CLAUDE-DESKTOP.md) / [中文](./docs/integrations/CLAUDE-DESKTOP.zh-CN.md) |
-| [ChatGPT Desktop](https://openai.com/chatgpt/desktop/) | MCP SSE/Streamable HTTP | OpenAI 桌面应用，支持 MCP 连接器 | [EN](./docs/integrations/CHATGPT.md) / [中文](./docs/integrations/CHATGPT.zh-CN.md) |
-| [Cherry Studio](https://github.com/kangfenmao/cherry-studio) | MCP stdio | 多模型桌面聊天应用 | [EN](./docs/integrations/CHERRY-STUDIO.md) / [中文](./docs/integrations/CHERRY-STUDIO.zh-CN.md) |
-| [LM Studio](https://lmstudio.ai/) | MCP stdio | 本地运行 LLM，支持 MCP | [EN](./docs/integrations/LM-STUDIO.md) / [中文](./docs/integrations/LM-STUDIO.zh-CN.md) |
-| [Jan](https://jan.ai/) | MCP stdio | 开源 ChatGPT 替代品 | [EN](./docs/integrations/JAN.md) / [中文](./docs/integrations/JAN.zh-CN.md) |
-| [Msty](https://msty.app/) | MCP stdio | 桌面 AI 聊天应用 | [EN](./docs/integrations/MSTY.md) / [中文](./docs/integrations/MSTY.zh-CN.md) |
-| [LibreChat](https://github.com/danny-avila/LibreChat) | MCP stdio | 开源聊天界面 | [EN](./docs/integrations/LIBRECHAT.md) / [中文](./docs/integrations/LIBRECHAT.zh-CN.md) |
-| [Witsy](https://witsy.app/) | MCP stdio | 桌面 AI 助手 | [EN](./docs/integrations/WITSY.md) / [中文](./docs/integrations/WITSY.zh-CN.md) |
-| [5ire](https://github.com/5ire-tech/5ire) | MCP stdio | 跨平台 AI 聊天 | [EN](./docs/integrations/5IRE.md) / [中文](./docs/integrations/5IRE.zh-CN.md) |
-| [ChatMCP](https://github.com/daodao97/chatmcp) | MCP stdio | MCP 专用聊天界面 | [EN](./docs/integrations/CHATMCP.md) / [中文](./docs/integrations/CHATMCP.zh-CN.md) |
-| [HyperChat](https://github.com/BigSweetPotatoStudio/HyperChat) | MCP stdio | 多平台聊天应用 | [EN](./docs/integrations/HYPERCHAT.md) / [中文](./docs/integrations/HYPERCHAT.zh-CN.md) |
-| [Tome](https://github.com/runebook/tome) | MCP stdio | macOS 本地 LLM 应用 | [EN](./docs/integrations/TOME.md) / [中文](./docs/integrations/TOME.zh-CN.md) |
+| [Claude Desktop](https://claude.ai/download) | MCP stdio | Anthropic 官方桌面应用 | [EN](./docs/04-integrations/CLAUDE-DESKTOP.md) / [中文](./docs/04-integrations/CLAUDE-DESKTOP.zh-CN.md) |
+| [ChatGPT Desktop](https://openai.com/chatgpt/desktop/) | MCP SSE/Streamable HTTP | OpenAI 桌面应用，支持 MCP 连接器 | [EN](./docs/04-integrations/CHATGPT.md) / [中文](./docs/04-integrations/CHATGPT.zh-CN.md) |
+| [Cherry Studio](https://github.com/kangfenmao/cherry-studio) | MCP stdio | 多模型桌面聊天应用 | [EN](./docs/04-integrations/CHERRY-STUDIO.md) / [中文](./docs/04-integrations/CHERRY-STUDIO.zh-CN.md) |
+| [LM Studio](https://lmstudio.ai/) | MCP stdio | 本地运行 LLM，支持 MCP | [EN](./docs/04-integrations/LM-STUDIO.md) / [中文](./docs/04-integrations/LM-STUDIO.zh-CN.md) |
+| [Jan](https://jan.ai/) | MCP stdio | 开源 ChatGPT 替代品 | [EN](./docs/04-integrations/JAN.md) / [中文](./docs/04-integrations/JAN.zh-CN.md) |
+| [Msty](https://msty.app/) | MCP stdio | 桌面 AI 聊天应用 | [EN](./docs/04-integrations/MSTY.md) / [中文](./docs/04-integrations/MSTY.zh-CN.md) |
+| [LibreChat](https://github.com/danny-avila/LibreChat) | MCP stdio | 开源聊天界面 | [EN](./docs/04-integrations/LIBRECHAT.md) / [中文](./docs/04-integrations/LIBRECHAT.zh-CN.md) |
+| [Witsy](https://witsy.app/) | MCP stdio | 桌面 AI 助手 | [EN](./docs/04-integrations/WITSY.md) / [中文](./docs/04-integrations/WITSY.zh-CN.md) |
+| [5ire](https://github.com/5ire-tech/5ire) | MCP stdio | 跨平台 AI 聊天 | [EN](./docs/04-integrations/5IRE.md) / [中文](./docs/04-integrations/5IRE.zh-CN.md) |
+| [ChatMCP](https://github.com/daodao97/chatmcp) | MCP stdio | MCP 专用聊天界面 | [EN](./docs/04-integrations/CHATMCP.md) / [中文](./docs/04-integrations/CHATMCP.zh-CN.md) |
+| [HyperChat](https://github.com/BigSweetPotatoStudio/HyperChat) | MCP stdio | 多平台聊天应用 | [EN](./docs/04-integrations/HYPERCHAT.md) / [中文](./docs/04-integrations/HYPERCHAT.zh-CN.md) |
+| [Tome](https://github.com/runebook/tome) | MCP stdio | macOS 本地 LLM 应用 | [EN](./docs/04-integrations/TOME.md) / [中文](./docs/04-integrations/TOME.zh-CN.md) |
 
 ### Web AI 平台
 
 | 平台 | 接入方式 | 说明 | 集成指南 |
 |------|----------|------|----------|
-| [Claude.ai](https://claude.ai/) | MCP SSE/Streamable HTTP | Anthropic 网页界面 | [EN](./docs/integrations/CLAUDE-AI.md) / [中文](./docs/integrations/CLAUDE-AI.zh-CN.md) |
-| [ChatGPT](https://chat.openai.com/) | MCP SSE/Streamable HTTP | 通过自定义连接器 | [EN](./docs/integrations/CHATGPT.md) / [中文](./docs/integrations/CHATGPT.zh-CN.md) |
-| [Dify](https://dify.ai/) | MCP SSE/Streamable HTTP | LLM 应用开发平台 | [EN](./docs/integrations/DIFY.md) / [中文](./docs/integrations/DIFY.zh-CN.md) |
-| [Coze](https://www.coze.com/) | REST API | 字节跳动 AI 机器人平台 | [EN](./docs/integrations/COZE.md) / [中文](./docs/integrations/COZE.zh-CN.md) |
-| [n8n](https://n8n.io/) | REST API / MCP | 工作流自动化平台 | [EN](./docs/integrations/N8N.md) / [中文](./docs/integrations/N8N.zh-CN.md) |
-| [Replit](https://replit.com/) | MCP stdio | 在线 IDE，带 AI 智能体 | [EN](./docs/integrations/REPLIT.md) / [中文](./docs/integrations/REPLIT.zh-CN.md) |
-| [MindPal](https://mindpal.io/) | MCP SSE/Streamable HTTP | 无代码 AI 智能体构建器 | [EN](./docs/integrations/MINDPAL.md) / [中文](./docs/integrations/MINDPAL.zh-CN.md) |
+| [Claude.ai](https://claude.ai/) | MCP SSE/Streamable HTTP | Anthropic 网页界面 | [EN](./docs/04-integrations/CLAUDE-AI.md) / [中文](./docs/04-integrations/CLAUDE-AI.zh-CN.md) |
+| [ChatGPT](https://chat.openai.com/) | MCP SSE/Streamable HTTP | 通过自定义连接器 | [EN](./docs/04-integrations/CHATGPT.md) / [中文](./docs/04-integrations/CHATGPT.zh-CN.md) |
+| [Dify](https://dify.ai/) | MCP SSE/Streamable HTTP | LLM 应用开发平台 | [EN](./docs/04-integrations/DIFY.md) / [中文](./docs/04-integrations/DIFY.zh-CN.md) |
+| [Coze](https://www.coze.com/) | REST API | 字节跳动 AI 机器人平台 | [EN](./docs/04-integrations/COZE.md) / [中文](./docs/04-integrations/COZE.zh-CN.md) |
+| [n8n](https://n8n.io/) | REST API / MCP | 工作流自动化平台 | [EN](./docs/04-integrations/N8N.md) / [中文](./docs/04-integrations/N8N.zh-CN.md) |
+| [Replit](https://replit.com/) | MCP stdio | 在线 IDE，带 AI 智能体 | [EN](./docs/04-integrations/REPLIT.md) / [中文](./docs/04-integrations/REPLIT.zh-CN.md) |
+| [MindPal](https://mindpal.io/) | MCP SSE/Streamable HTTP | 无代码 AI 智能体构建器 | [EN](./docs/04-integrations/MINDPAL.md) / [中文](./docs/04-integrations/MINDPAL.zh-CN.md) |
 
 ### 智能体框架 & SDK
 
 | 平台 | 接入方式 | 说明 | 集成指南 |
 |------|----------|------|----------|
-| [LangChain](https://langchain.com/) | MCP stdio | 流行的 LLM 框架 | [EN](./docs/integrations/LANGCHAIN.md) / [中文](./docs/integrations/LANGCHAIN.zh-CN.md) |
-| [Smolagents](https://github.com/huggingface/smolagents) | MCP stdio | Hugging Face 智能体库 | [EN](./docs/integrations/SMOLAGENTS.md) / [中文](./docs/integrations/SMOLAGENTS.zh-CN.md) |
-| [OpenAI Agents SDK](https://platform.openai.com/) | MCP SSE/Streamable HTTP | OpenAI 智能体框架 | [EN](./docs/integrations/OPENAI-AGENTS-SDK.md) / [中文](./docs/integrations/OPENAI-AGENTS-SDK.zh-CN.md) |
-| [Amazon Bedrock Agents](https://aws.amazon.com/bedrock/) | MCP SSE/Streamable HTTP | AWS AI 智能体服务 | [EN](./docs/integrations/AMAZON-BEDROCK-AGENTS.md) / [中文](./docs/integrations/AMAZON-BEDROCK-AGENTS.zh-CN.md) |
-| [Google ADK](https://cloud.google.com/) | MCP stdio | Google 智能体开发套件 | [EN](./docs/integrations/GOOGLE-ADK.md) / [中文](./docs/integrations/GOOGLE-ADK.zh-CN.md) |
-| [Vercel AI SDK](https://sdk.vercel.ai/) | MCP stdio | Vercel AI 开发套件 | [EN](./docs/integrations/VERCEL-AI-SDK.md) / [中文](./docs/integrations/VERCEL-AI-SDK.zh-CN.md) |
-| [Spring AI](https://spring.io/projects/spring-ai) | MCP stdio | Java/Spring AI 框架 | [EN](./docs/integrations/SPRING-AI.md) / [中文](./docs/integrations/SPRING-AI.zh-CN.md) |
+| [LangChain](https://langchain.com/) | MCP stdio | 流行的 LLM 框架 | [EN](./docs/04-integrations/LANGCHAIN.md) / [中文](./docs/04-integrations/LANGCHAIN.zh-CN.md) |
+| [Smolagents](https://github.com/huggingface/smolagents) | MCP stdio | Hugging Face 智能体库 | [EN](./docs/04-integrations/SMOLAGENTS.md) / [中文](./docs/04-integrations/SMOLAGENTS.zh-CN.md) |
+| [OpenAI Agents SDK](https://platform.openai.com/) | MCP SSE/Streamable HTTP | OpenAI 智能体框架 | [EN](./docs/04-integrations/OPENAI-AGENTS-SDK.md) / [中文](./docs/04-integrations/OPENAI-AGENTS-SDK.zh-CN.md) |
+| [Amazon Bedrock Agents](https://aws.amazon.com/bedrock/) | MCP SSE/Streamable HTTP | AWS AI 智能体服务 | [EN](./docs/04-integrations/AMAZON-BEDROCK-AGENTS.md) / [中文](./docs/04-integrations/AMAZON-BEDROCK-AGENTS.zh-CN.md) |
+| [Google ADK](https://cloud.google.com/) | MCP stdio | Google 智能体开发套件 | [EN](./docs/04-integrations/GOOGLE-ADK.md) / [中文](./docs/04-integrations/GOOGLE-ADK.zh-CN.md) |
+| [Vercel AI SDK](https://sdk.vercel.ai/) | MCP stdio | Vercel AI 开发套件 | [EN](./docs/04-integrations/VERCEL-AI-SDK.md) / [中文](./docs/04-integrations/VERCEL-AI-SDK.zh-CN.md) |
+| [Spring AI](https://spring.io/projects/spring-ai) | MCP stdio | Java/Spring AI 框架 | [EN](./docs/04-integrations/SPRING-AI.md) / [中文](./docs/04-integrations/SPRING-AI.zh-CN.md) |
 
 ### CLI 工具 & 终端
 
 | 平台 | 接入方式 | 说明 | 集成指南 |
 |------|----------|------|----------|
-| [Claude Code CLI](https://claude.ai/code) | MCP stdio | 终端编程智能体 | [EN](./docs/integrations/CLAUDE-CODE.md) / [中文](./docs/integrations/CLAUDE-CODE.zh-CN.md) |
-| [Warp](https://www.warp.dev/) | MCP stdio | AI 驱动的终端 | [EN](./docs/integrations/WARP.md) / [中文](./docs/integrations/WARP.zh-CN.md) |
-| [Oterm](https://github.com/ggozad/oterm) | MCP stdio | 通过 CLI 与 Ollama 聊天 | [EN](./docs/integrations/OTERM.md) / [中文](./docs/integrations/OTERM.zh-CN.md) |
-| [MCPHost](https://github.com/mark3labs/mcphost) | MCP stdio | CLI LLM 聊天工具 | [EN](./docs/integrations/MCPHOST.md) / [中文](./docs/integrations/MCPHOST.zh-CN.md) |
+| [Claude Code CLI](https://claude.ai/code) | MCP stdio | 终端编程智能体 | [EN](./docs/04-integrations/CLAUDE-CODE.md) / [中文](./docs/04-integrations/CLAUDE-CODE.zh-CN.md) |
+| [Warp](https://www.warp.dev/) | MCP stdio | AI 驱动的终端 | [EN](./docs/04-integrations/WARP.md) / [中文](./docs/04-integrations/WARP.zh-CN.md) |
+| [Oterm](https://github.com/ggozad/oterm) | MCP stdio | 通过 CLI 与 Ollama 聊天 | [EN](./docs/04-integrations/OTERM.md) / [中文](./docs/04-integrations/OTERM.zh-CN.md) |
+| [MCPHost](https://github.com/mark3labs/mcphost) | MCP stdio | CLI LLM 聊天工具 | [EN](./docs/04-integrations/MCPHOST.md) / [中文](./docs/04-integrations/MCPHOST.zh-CN.md) |
 
 ### 效率 & 自动化工具
 
 | 平台 | 接入方式 | 说明 | 集成指南 |
 |------|----------|------|----------|
-| [Raycast](https://raycast.com/) | MCP stdio | macOS 效率启动器 | [EN](./docs/integrations/RAYCAST.md) / [中文](./docs/integrations/RAYCAST.zh-CN.md) |
-| [Notion](https://notion.so/) | MCP SSE/Streamable HTTP | 带 AI 集成的工作空间 | [EN](./docs/integrations/NOTION.md) / [中文](./docs/integrations/NOTION.zh-CN.md) |
-| [Obsidian](https://obsidian.md/) | MCP stdio | 通过 MCP Tools 插件 | [EN](./docs/integrations/OBSIDIAN.md) / [中文](./docs/integrations/OBSIDIAN.zh-CN.md) |
-| [Home Assistant](https://www.home-assistant.io/) | MCP stdio | 智能家居平台 | [EN](./docs/integrations/HOME-ASSISTANT.md) / [中文](./docs/integrations/HOME-ASSISTANT.zh-CN.md) |
+| [Raycast](https://raycast.com/) | MCP stdio | macOS 效率启动器 | [EN](./docs/04-integrations/RAYCAST.md) / [中文](./docs/04-integrations/RAYCAST.zh-CN.md) |
+| [Notion](https://notion.so/) | MCP SSE/Streamable HTTP | 带 AI 集成的工作空间 | [EN](./docs/04-integrations/NOTION.md) / [中文](./docs/04-integrations/NOTION.zh-CN.md) |
+| [Obsidian](https://obsidian.md/) | MCP stdio | 通过 MCP Tools 插件 | [EN](./docs/04-integrations/OBSIDIAN.md) / [中文](./docs/04-integrations/OBSIDIAN.zh-CN.md) |
+| [Home Assistant](https://www.home-assistant.io/) | MCP stdio | 智能家居平台 | [EN](./docs/04-integrations/HOME-ASSISTANT.md) / [中文](./docs/04-integrations/HOME-ASSISTANT.zh-CN.md) |
 
 ### 即时通讯平台集成
 
 | 平台 | 接入方式 | 说明 | 集成指南 |
 |------|----------|------|----------|
-| [Slack](https://slack.com/) | MCP stdio / REST API | 通过 Slack MCP 机器人 | [EN](./docs/integrations/SLACK.md) / [中文](./docs/integrations/SLACK.zh-CN.md) |
-| [Discord](https://discord.com/) | MCP stdio / REST API | 通过 Discord MCP 机器人 | [EN](./docs/integrations/DISCORD.md) / [中文](./docs/integrations/DISCORD.zh-CN.md) |
-| [Mattermost](https://mattermost.com/) | MCP stdio | 开源即时通讯 | [EN](./docs/integrations/MATTERMOST.md) / [中文](./docs/integrations/MATTERMOST.zh-CN.md) |
+| [Slack](https://slack.com/) | MCP stdio / REST API | 通过 Slack MCP 机器人 | [EN](./docs/04-integrations/SLACK.md) / [中文](./docs/04-integrations/SLACK.zh-CN.md) |
+| [Discord](https://discord.com/) | MCP stdio / REST API | 通过 Discord MCP 机器人 | [EN](./docs/04-integrations/DISCORD.md) / [中文](./docs/04-integrations/DISCORD.zh-CN.md) |
+| [Mattermost](https://mattermost.com/) | MCP stdio | 开源即时通讯 | [EN](./docs/04-integrations/MATTERMOST.md) / [中文](./docs/04-integrations/MATTERMOST.zh-CN.md) |
 
 ### 本地 LLM 运行器
 
 | 平台 | 接入方式 | 说明 | 集成指南 |
 |------|----------|------|----------|
-| [Ollama](https://ollama.ai/) | MCP stdio | 本地运行 LLM | [EN](./docs/integrations/OLLAMA.md) / [中文](./docs/integrations/OLLAMA.zh-CN.md) |
-| [LM Studio](https://lmstudio.ai/) | MCP stdio | 本地 LLM 桌面应用 | [EN](./docs/integrations/LM-STUDIO.md) / [中文](./docs/integrations/LM-STUDIO.zh-CN.md) |
-| [Jan](https://jan.ai/) | MCP stdio | 离线 ChatGPT 替代品 | [EN](./docs/integrations/JAN.md) / [中文](./docs/integrations/JAN.zh-CN.md) |
+| [Ollama](https://ollama.ai/) | MCP stdio | 本地运行 LLM | [EN](./docs/04-integrations/OLLAMA.md) / [中文](./docs/04-integrations/OLLAMA.zh-CN.md) |
+| [LM Studio](https://lmstudio.ai/) | MCP stdio | 本地 LLM 桌面应用 | [EN](./docs/04-integrations/LM-STUDIO.md) / [中文](./docs/04-integrations/LM-STUDIO.zh-CN.md) |
+| [Jan](https://jan.ai/) | MCP stdio | 离线 ChatGPT 替代品 | [EN](./docs/04-integrations/JAN.md) / [中文](./docs/04-integrations/JAN.zh-CN.md) |
 
 ### 开发 & 测试工具
 
 | 平台 | 接入方式 | 说明 | 集成指南 |
 |------|----------|------|----------|
-| [MCP Inspector](https://github.com/modelcontextprotocol/inspector) | MCP stdio | 官方 MCP 调试工具 | [EN](./docs/integrations/MCP-INSPECTOR.md) / [中文](./docs/integrations/MCP-INSPECTOR.zh-CN.md) |
-| [Postman](https://postman.com/) | REST API / MCP | API 测试平台 | [EN](./docs/integrations/POSTMAN.md) / [中文](./docs/integrations/POSTMAN.zh-CN.md) |
+| [MCP Inspector](https://github.com/modelcontextprotocol/inspector) | MCP stdio | 官方 MCP 调试工具 | [EN](./docs/04-integrations/MCP-INSPECTOR.md) / [中文](./docs/04-integrations/MCP-INSPECTOR.zh-CN.md) |
+| [Postman](https://postman.com/) | REST API / MCP | API 测试平台 | [EN](./docs/04-integrations/POSTMAN.md) / [中文](./docs/04-integrations/POSTMAN.zh-CN.md) |
 
 > **提示**：任何 MCP 兼容客户端都可以通过 stdio（本地）或 SSE/Streamable HTTP（远程）连接。任何 HTTP 客户端都可以使用 REST API。
 
 ## 📚 文档
 
 ### 快速开始
-- [安装指南](./docs/getting-started/installation.md)
-- [快速开始](./docs/getting-started/quick-start.md)
-- [配置说明](./docs/getting-started/configuration.md)
-- [使用示例](./docs/getting-started/examples.md)
+- [安装指南](./docs/01-getting-started/installation.md)
+- [快速开始](./docs/01-getting-started/quick-start.md)
+- [配置说明](./docs/01-getting-started/configuration.md)
+- [使用示例](./docs/01-getting-started/examples.md)
 
 ### 部署
-- [部署概览](./docs/deployment/README.md)
-- [本地部署](./docs/deployment/local.md)
-- [Docker 部署](./docs/deployment/docker.md)
-- [云服务部署](./docs/deployment/cloud/)
+- [部署概览](./docs/06-deployment/README.md)
+- [本地部署](./docs/06-deployment/local.md)
+- [Docker 部署](./docs/06-deployment/docker.md)
+- [云服务部署](./docs/06-deployment/cloud/)
 
 ### 数据库指南
-- [数据库支持概览](./docs/databases/README.md)
-- [MySQL](./docs/databases/mysql.md)
-- [PostgreSQL](./docs/databases/postgresql.md)
-- [更多数据库...](./docs/databases/)
+- [数据库支持概览](./docs/02-databases/README.md)
+- [MySQL](./docs/02-databases/mysql.md)
+- [PostgreSQL](./docs/02-databases/postgresql.md)
+- [ClickHouse](./docs/02-databases/clickhouse.md)（v3.2.9 — 修复 5 个协议 bug）
+- [达梦 (DM)](./docs/02-databases/dameng.md)（v3.2.8 — 备份 + 样例数据修复）
+- [MongoDB](./docs/02-databases/mongodb.md)（v3.2.7 — authSource + 多参解析）
+- [更多数据库...](./docs/02-databases/)
+
+### 功能特性
+- [数据治理](./docs/03-features/data-governance.md) — Profile 备份、Schema diff、PII、审计
+- [数据迁移](./docs/03-features/data-migration.md) — **CSV 导入导出 (v3.3.0)** + SQL 备份
+- [多 Profile](./docs/03-features/multi-profile.md) — 多 DB 路由、Schema 聚合
+- [可观测性](./docs/03-features/observability.md) — Prometheus + 慢查询环形 buffer
 
 ### HTTP API
-- [API 参考](./docs/http-api/API_REFERENCE.md)
-- [部署指南](./docs/http-api/DEPLOYMENT.md)
+- [API 参考](./docs/05-http-api/API_REFERENCE.md)
+- [部署指南](./docs/05-http-api/DEPLOYMENT.md)
 
 ### 集成
 
 **AI 编辑器 & IDE：**
-[Cursor](./docs/integrations/CURSOR.zh-CN.md) |
-[VS Code](./docs/integrations/VSCODE.zh-CN.md) |
-[JetBrains](./docs/integrations/JETBRAINS.zh-CN.md) |
-[Windsurf](./docs/integrations/WINDSURF.zh-CN.md) |
-[Zed](./docs/integrations/ZED.zh-CN.md) |
-[Neovim](./docs/integrations/NEOVIM.zh-CN.md) |
-[Emacs](./docs/integrations/EMACS.zh-CN.md)
+[Cursor](./docs/04-integrations/CURSOR.zh-CN.md) |
+[VS Code](./docs/04-integrations/VSCODE.zh-CN.md) |
+[JetBrains](./docs/04-integrations/JETBRAINS.zh-CN.md) |
+[Windsurf](./docs/04-integrations/WINDSURF.zh-CN.md) |
+[Zed](./docs/04-integrations/ZED.zh-CN.md) |
+[Neovim](./docs/04-integrations/NEOVIM.zh-CN.md) |
+[Emacs](./docs/04-integrations/EMACS.zh-CN.md)
 
 **AI 助手：**
-[Claude Desktop](./docs/integrations/CLAUDE-DESKTOP.zh-CN.md) |
-[Claude Code](./docs/integrations/CLAUDE-CODE.zh-CN.md) |
-[GitHub Copilot](./docs/integrations/GITHUB-COPILOT.zh-CN.md) |
-[Cline](./docs/integrations/CLINE.zh-CN.md) |
-[Continue](./docs/integrations/CONTINUE.zh-CN.md)
+[Claude Desktop](./docs/04-integrations/CLAUDE-DESKTOP.zh-CN.md) |
+[Claude Code](./docs/04-integrations/CLAUDE-CODE.zh-CN.md) |
+[GitHub Copilot](./docs/04-integrations/GITHUB-COPILOT.zh-CN.md) |
+[Cline](./docs/04-integrations/CLINE.zh-CN.md) |
+[Continue](./docs/04-integrations/CONTINUE.zh-CN.md)
 
 **AI 平台：**
-[Dify](./docs/integrations/DIFY.zh-CN.md) |
-[Coze](./docs/integrations/COZE.zh-CN.md) |
-[n8n](./docs/integrations/N8N.zh-CN.md) |
-[ChatGPT](./docs/integrations/CHATGPT.zh-CN.md) |
-[LangChain](./docs/integrations/LANGCHAIN.zh-CN.md)
+[Dify](./docs/04-integrations/DIFY.zh-CN.md) |
+[Coze](./docs/04-integrations/COZE.zh-CN.md) |
+[n8n](./docs/04-integrations/N8N.zh-CN.md) |
+[ChatGPT](./docs/04-integrations/CHATGPT.zh-CN.md) |
+[LangChain](./docs/04-integrations/LANGCHAIN.zh-CN.md)
 
 **桌面应用：**
-[Cherry Studio](./docs/integrations/CHERRY-STUDIO.zh-CN.md) |
-[LM Studio](./docs/integrations/LM-STUDIO.zh-CN.md) |
-[Jan](./docs/integrations/JAN.zh-CN.md) |
-[Ollama](./docs/integrations/OLLAMA.zh-CN.md)
+[Cherry Studio](./docs/04-integrations/CHERRY-STUDIO.zh-CN.md) |
+[LM Studio](./docs/04-integrations/LM-STUDIO.zh-CN.md) |
+[Jan](./docs/04-integrations/JAN.zh-CN.md) |
+[Ollama](./docs/04-integrations/OLLAMA.zh-CN.md)
 
 **即时通讯：**
-[Slack](./docs/integrations/SLACK.zh-CN.md) |
-[Discord](./docs/integrations/DISCORD.zh-CN.md)
+[Slack](./docs/04-integrations/SLACK.zh-CN.md) |
+[Discord](./docs/04-integrations/DISCORD.zh-CN.md)
 
 **工具：**
-[MCP Inspector](./docs/integrations/MCP-INSPECTOR.zh-CN.md) |
-[Postman](./docs/integrations/POSTMAN.zh-CN.md)
+[MCP Inspector](./docs/04-integrations/MCP-INSPECTOR.zh-CN.md) |
+[Postman](./docs/04-integrations/POSTMAN.zh-CN.md)
 
-> 📁 [查看全部 55 个集成指南](./docs/integrations/) | English version: remove `.zh-CN` from filename
+> 📁 [查看全部 55+ 个集成指南](./docs/04-integrations/) | English version: remove `.zh-CN` from filename
 
 ### 进阶
-- [安全指南](./docs/guides/security.md)
-- [多租户指南](./docs/guides/multi-tenant.md)
-- [架构说明](./docs/development/architecture.md)
-- [故障排查](./docs/operations/troubleshooting.md)
+- [安全指南](./docs/08-operations/multi-tenant.md) (security section)
+- [多租户指南](./docs/08-operations/multi-tenant.md)
+- [架构说明](./docs/07-development/architecture.md)
+- [故障排查](./docs/08-operations/troubleshooting.md)
 
 ## 🤝 贡献
 

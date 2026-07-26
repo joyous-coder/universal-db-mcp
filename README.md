@@ -34,6 +34,17 @@
 
 ---
 
+## 🆕 What's New in v3.3.0 (latest)
+
+- **CSV Import / Export** (`export_table_csv` + `import_csv`) — stream single tables to CSV with `WHERE` / `ORDER BY` / `LIMIT` / `OFFSET` filtering; import back to existing tables in batches. RFC 4180 serialization, `DB_ALLOWED_FILE_PATHS` whitelist.
+- **11 databases × 43 tools × 2 CSV tools** = **45 tool × 11 DB** e2e coverage, 514 unit tests pass.
+- **ClickHouse protocol fixes (v3.2.9)** — fixed 5 production bugs: `format:JSONEachRow` breaking INSERT, named-param rewriting, UInt64→Number coercion, `execute_script`/`execute_batch` BEGIN path, `execute_batch` object-array handling.
+- **DM (达梦) export_backup (v3.2.8)** — uses `ALL_TABLES` + `ALL_TAB_COLUMNS` (replaces `INFORMATION_SCHEMA`); `generate_sample_data` no longer returns NULL for `id` columns.
+- **MongoDB auth (v3.2.7)** — auto-injects `authSource=admin`; multi-arg `db.collection.method(args)` parses.
+- **17 adapters, 11 e2e-verified** — sqlite / redis / mongodb / postgres / mysql / oracle / sqlserver / tidb / dm / clickhouse. See [e2e report](docs/09-reference/e2e-stdio-report.md).
+
+---
+
 ## Why Universal DB MCP?
 
 Imagine asking your AI assistant: *"Show me the top 10 customers by order value this month"* and getting instant results from your database - no SQL writing required. Universal DB MCP makes this possible by bridging AI assistants with your databases through the Model Context Protocol (MCP) and HTTP API.
@@ -60,9 +71,11 @@ AI: Let me query that for you...
 - **Batch Query Optimization** - Up to 100x faster schema retrieval for large databases
 - **Schema Enhancement** - Table comments, implicit relationship inference for better Text2SQL accuracy
 - **Multi-Schema Support** - Automatic discovery of all user schemas (PostgreSQL, SQL Server, Oracle, DM, and more)
+- **Data Migration** - SQL backup (`export_backup`) + **CSV import/export (v3.3.0)** with RFC 4180 serialization, partitioned reads, batched writes ([docs](docs/03-features/data-migration.md))
 - **Data Masking** - Automatic sensitive data protection (phone, email, ID card, bank card, etc.)
 - **Connection Stability** - Connection pooling, TCP Keep-Alive, and automatic reconnection for long-running sessions
-- **Production Observability** - Prometheus `/metrics` endpoint + MCP `get_metrics` tool + slow-query ring buffer, zero new dependencies ([docs](docs/observability.md))
+- **Production Observability** - Prometheus `/metrics` endpoint + MCP `get_metrics` tool + slow-query ring buffer, zero new dependencies ([docs](docs/03-features/observability.md))
+- **Data Governance** - Profile backup/restore (`export_profiles` / `import_profiles`), schema diff, PII masking, audit log ([docs](docs/03-features/data-governance.md))
 
 ### Performance Improvements
 
@@ -159,7 +172,7 @@ Body: MCP JSON-RPC request
 | `/mcp` | GET | SSE stream for Streamable HTTP |
 | `/mcp` | DELETE | Close session |
 
-See [Dify Integration Guide](./docs/integrations/DIFY.md) for detailed setup instructions.
+See [Dify Integration Guide](./docs/04-integrations/DIFY.md) for detailed setup instructions.
 
 ## 📊 Supported Databases
 
@@ -311,186 +324,195 @@ Universal DB MCP works with any platform that supports the MCP protocol or REST 
 
 | Platform | Access Method | Description | Guide |
 |----------|---------------|-------------|-------|
-| [Cursor](https://cursor.sh/) | MCP stdio | AI-powered code editor with built-in MCP support | [EN](./docs/integrations/CURSOR.md) / [中文](./docs/integrations/CURSOR.zh-CN.md) |
-| [Windsurf](https://codeium.com/windsurf) | MCP stdio | Codeium's AI IDE with Cascade agent | [EN](./docs/integrations/WINDSURF.md) / [中文](./docs/integrations/WINDSURF.zh-CN.md) |
-| [VS Code](https://code.visualstudio.com/) | MCP stdio / REST API | Via GitHub Copilot agent mode or Cline/Continue extensions | [EN](./docs/integrations/VSCODE.md) / [中文](./docs/integrations/VSCODE.zh-CN.md) |
-| [Zed](https://zed.dev/) | MCP stdio | High-performance open-source code editor | [EN](./docs/integrations/ZED.md) / [中文](./docs/integrations/ZED.zh-CN.md) |
-| [IntelliJ IDEA](https://www.jetbrains.com/idea/) | MCP stdio | JetBrains IDE with MCP support (2025.1+) | [EN](./docs/integrations/JETBRAINS.md) / [中文](./docs/integrations/JETBRAINS.zh-CN.md) |
-| [PyCharm](https://www.jetbrains.com/pycharm/) | MCP stdio | JetBrains Python IDE | [EN](./docs/integrations/JETBRAINS.md) / [中文](./docs/integrations/JETBRAINS.zh-CN.md) |
-| [WebStorm](https://www.jetbrains.com/webstorm/) | MCP stdio | JetBrains JavaScript IDE | [EN](./docs/integrations/JETBRAINS.md) / [中文](./docs/integrations/JETBRAINS.zh-CN.md) |
-| [Android Studio](https://developer.android.com/studio) | MCP stdio | Via JetBrains MCP plugin | [EN](./docs/integrations/JETBRAINS.md) / [中文](./docs/integrations/JETBRAINS.zh-CN.md) |
-| [Neovim](https://neovim.io/) | MCP stdio | Via MCPHub.nvim plugin | [EN](./docs/integrations/NEOVIM.md) / [中文](./docs/integrations/NEOVIM.zh-CN.md) |
-| [Emacs](https://www.gnu.org/software/emacs/) | MCP stdio | Via mcp.el package | [EN](./docs/integrations/EMACS.md) / [中文](./docs/integrations/EMACS.zh-CN.md) |
+| [Cursor](https://cursor.sh/) | MCP stdio | AI-powered code editor with built-in MCP support | [EN](./docs/04-integrations/CURSOR.md) / [中文](./docs/04-integrations/CURSOR.zh-CN.md) |
+| [Windsurf](https://codeium.com/windsurf) | MCP stdio | Codeium's AI IDE with Cascade agent | [EN](./docs/04-integrations/WINDSURF.md) / [中文](./docs/04-integrations/WINDSURF.zh-CN.md) |
+| [VS Code](https://code.visualstudio.com/) | MCP stdio / REST API | Via GitHub Copilot agent mode or Cline/Continue extensions | [EN](./docs/04-integrations/VSCODE.md) / [中文](./docs/04-integrations/VSCODE.zh-CN.md) |
+| [Zed](https://zed.dev/) | MCP stdio | High-performance open-source code editor | [EN](./docs/04-integrations/ZED.md) / [中文](./docs/04-integrations/ZED.zh-CN.md) |
+| [IntelliJ IDEA](https://www.jetbrains.com/idea/) | MCP stdio | JetBrains IDE with MCP support (2025.1+) | [EN](./docs/04-integrations/JETBRAINS.md) / [中文](./docs/04-integrations/JETBRAINS.zh-CN.md) |
+| [PyCharm](https://www.jetbrains.com/pycharm/) | MCP stdio | JetBrains Python IDE | [EN](./docs/04-integrations/JETBRAINS.md) / [中文](./docs/04-integrations/JETBRAINS.zh-CN.md) |
+| [WebStorm](https://www.jetbrains.com/webstorm/) | MCP stdio | JetBrains JavaScript IDE | [EN](./docs/04-integrations/JETBRAINS.md) / [中文](./docs/04-integrations/JETBRAINS.zh-CN.md) |
+| [Android Studio](https://developer.android.com/studio) | MCP stdio | Via JetBrains MCP plugin | [EN](./docs/04-integrations/JETBRAINS.md) / [中文](./docs/04-integrations/JETBRAINS.zh-CN.md) |
+| [Neovim](https://neovim.io/) | MCP stdio | Via MCPHub.nvim plugin | [EN](./docs/04-integrations/NEOVIM.md) / [中文](./docs/04-integrations/NEOVIM.zh-CN.md) |
+| [Emacs](https://www.gnu.org/software/emacs/) | MCP stdio | Via mcp.el package | [EN](./docs/04-integrations/EMACS.md) / [中文](./docs/04-integrations/EMACS.zh-CN.md) |
 
 ### AI Coding Assistants
 
 | Platform | Access Method | Description | Guide |
 |----------|---------------|-------------|-------|
-| [Claude Code](https://claude.ai/code) | MCP stdio | Anthropic's agentic coding tool | [EN](./docs/integrations/CLAUDE-CODE.md) / [中文](./docs/integrations/CLAUDE-CODE.zh-CN.md) |
-| [GitHub Copilot](https://github.com/features/copilot) | MCP stdio | Agent mode in VS Code/JetBrains | [EN](./docs/integrations/GITHUB-COPILOT.md) / [中文](./docs/integrations/GITHUB-COPILOT.zh-CN.md) |
-| [Cline](https://github.com/cline/cline) | MCP stdio / REST API | Autonomous coding agent for VS Code | [EN](./docs/integrations/CLINE.md) / [中文](./docs/integrations/CLINE.zh-CN.md) |
-| [Continue](https://continue.dev/) | MCP stdio | Open-source AI code assistant | [EN](./docs/integrations/CONTINUE.md) / [中文](./docs/integrations/CONTINUE.zh-CN.md) |
-| [Roo Code](https://github.com/roovet/roo-code) | MCP stdio | Fork of Cline for VS Code | [EN](./docs/integrations/ROO-CODE.md) / [中文](./docs/integrations/ROO-CODE.zh-CN.md) |
-| [Sourcegraph Cody](https://sourcegraph.com/cody) | MCP stdio | AI coding assistant | [EN](./docs/integrations/SOURCEGRAPH-CODY.md) / [中文](./docs/integrations/SOURCEGRAPH-CODY.zh-CN.md) |
-| [Amazon Q Developer](https://aws.amazon.com/q/developer/) | MCP stdio | AWS AI coding assistant | [EN](./docs/integrations/AMAZON-Q-DEVELOPER.md) / [中文](./docs/integrations/AMAZON-Q-DEVELOPER.zh-CN.md) |
-| [Devin](https://devin.ai/) | MCP stdio | AI software engineer | [EN](./docs/integrations/DEVIN.md) / [中文](./docs/integrations/DEVIN.zh-CN.md) |
-| [Goose](https://github.com/block/goose) | MCP stdio | Block's AI coding agent | [EN](./docs/integrations/GOOSE.md) / [中文](./docs/integrations/GOOSE.zh-CN.md) |
-| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | MCP stdio | Google's command-line AI tool | [EN](./docs/integrations/GEMINI-CLI.md) / [中文](./docs/integrations/GEMINI-CLI.zh-CN.md) |
+| [Claude Code](https://claude.ai/code) | MCP stdio | Anthropic's agentic coding tool | [EN](./docs/04-integrations/CLAUDE-CODE.md) / [中文](./docs/04-integrations/CLAUDE-CODE.zh-CN.md) |
+| [GitHub Copilot](https://github.com/features/copilot) | MCP stdio | Agent mode in VS Code/JetBrains | [EN](./docs/04-integrations/GITHUB-COPILOT.md) / [中文](./docs/04-integrations/GITHUB-COPILOT.zh-CN.md) |
+| [Cline](https://github.com/cline/cline) | MCP stdio / REST API | Autonomous coding agent for VS Code | [EN](./docs/04-integrations/CLINE.md) / [中文](./docs/04-integrations/CLINE.zh-CN.md) |
+| [Continue](https://continue.dev/) | MCP stdio | Open-source AI code assistant | [EN](./docs/04-integrations/CONTINUE.md) / [中文](./docs/04-integrations/CONTINUE.zh-CN.md) |
+| [Roo Code](https://github.com/roovet/roo-code) | MCP stdio | Fork of Cline for VS Code | [EN](./docs/04-integrations/ROO-CODE.md) / [中文](./docs/04-integrations/ROO-CODE.zh-CN.md) |
+| [Sourcegraph Cody](https://sourcegraph.com/cody) | MCP stdio | AI coding assistant | [EN](./docs/04-integrations/SOURCEGRAPH-CODY.md) / [中文](./docs/04-integrations/SOURCEGRAPH-CODY.zh-CN.md) |
+| [Amazon Q Developer](https://aws.amazon.com/q/developer/) | MCP stdio | AWS AI coding assistant | [EN](./docs/04-integrations/AMAZON-Q-DEVELOPER.md) / [中文](./docs/04-integrations/AMAZON-Q-DEVELOPER.zh-CN.md) |
+| [Devin](https://devin.ai/) | MCP stdio | AI software engineer | [EN](./docs/04-integrations/DEVIN.md) / [中文](./docs/04-integrations/DEVIN.zh-CN.md) |
+| [Goose](https://github.com/block/goose) | MCP stdio | Block's AI coding agent | [EN](./docs/04-integrations/GOOSE.md) / [中文](./docs/04-integrations/GOOSE.zh-CN.md) |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | MCP stdio | Google's command-line AI tool | [EN](./docs/04-integrations/GEMINI-CLI.md) / [中文](./docs/04-integrations/GEMINI-CLI.zh-CN.md) |
 
 ### Desktop AI Chat Applications
 
 | Platform | Access Method | Description | Guide |
 |----------|---------------|-------------|-------|
-| [Claude Desktop](https://claude.ai/download) | MCP stdio | Anthropic's official desktop app | [EN](./docs/integrations/CLAUDE-DESKTOP.md) / [中文](./docs/integrations/CLAUDE-DESKTOP.zh-CN.md) |
-| [ChatGPT Desktop](https://openai.com/chatgpt/desktop/) | MCP SSE/Streamable HTTP | OpenAI's desktop app with MCP connectors | [EN](./docs/integrations/CHATGPT.md) / [中文](./docs/integrations/CHATGPT.zh-CN.md) |
-| [Cherry Studio](https://github.com/kangfenmao/cherry-studio) | MCP stdio | Multi-model desktop chat app | [EN](./docs/integrations/CHERRY-STUDIO.md) / [中文](./docs/integrations/CHERRY-STUDIO.zh-CN.md) |
-| [LM Studio](https://lmstudio.ai/) | MCP stdio | Run local LLMs with MCP support | [EN](./docs/integrations/LM-STUDIO.md) / [中文](./docs/integrations/LM-STUDIO.zh-CN.md) |
-| [Jan](https://jan.ai/) | MCP stdio | Open-source ChatGPT alternative | [EN](./docs/integrations/JAN.md) / [中文](./docs/integrations/JAN.zh-CN.md) |
-| [Msty](https://msty.app/) | MCP stdio | Desktop AI chat application | [EN](./docs/integrations/MSTY.md) / [中文](./docs/integrations/MSTY.zh-CN.md) |
-| [LibreChat](https://github.com/danny-avila/LibreChat) | MCP stdio | Open-source chat interface | [EN](./docs/integrations/LIBRECHAT.md) / [中文](./docs/integrations/LIBRECHAT.zh-CN.md) |
-| [Witsy](https://witsy.app/) | MCP stdio | Desktop AI assistant | [EN](./docs/integrations/WITSY.md) / [中文](./docs/integrations/WITSY.zh-CN.md) |
-| [5ire](https://github.com/5ire-tech/5ire) | MCP stdio | Cross-platform AI chat | [EN](./docs/integrations/5IRE.md) / [中文](./docs/integrations/5IRE.zh-CN.md) |
-| [ChatMCP](https://github.com/daodao97/chatmcp) | MCP stdio | MCP-focused chat UI | [EN](./docs/integrations/CHATMCP.md) / [中文](./docs/integrations/CHATMCP.zh-CN.md) |
-| [HyperChat](https://github.com/BigSweetPotatoStudio/HyperChat) | MCP stdio | Multi-platform chat app | [EN](./docs/integrations/HYPERCHAT.md) / [中文](./docs/integrations/HYPERCHAT.zh-CN.md) |
-| [Tome](https://github.com/runebook/tome) | MCP stdio | macOS app for local LLMs | [EN](./docs/integrations/TOME.md) / [中文](./docs/integrations/TOME.zh-CN.md) |
+| [Claude Desktop](https://claude.ai/download) | MCP stdio | Anthropic's official desktop app | [EN](./docs/04-integrations/CLAUDE-DESKTOP.md) / [中文](./docs/04-integrations/CLAUDE-DESKTOP.zh-CN.md) |
+| [ChatGPT Desktop](https://openai.com/chatgpt/desktop/) | MCP SSE/Streamable HTTP | OpenAI's desktop app with MCP connectors | [EN](./docs/04-integrations/CHATGPT.md) / [中文](./docs/04-integrations/CHATGPT.zh-CN.md) |
+| [Cherry Studio](https://github.com/kangfenmao/cherry-studio) | MCP stdio | Multi-model desktop chat app | [EN](./docs/04-integrations/CHERRY-STUDIO.md) / [中文](./docs/04-integrations/CHERRY-STUDIO.zh-CN.md) |
+| [LM Studio](https://lmstudio.ai/) | MCP stdio | Run local LLMs with MCP support | [EN](./docs/04-integrations/LM-STUDIO.md) / [中文](./docs/04-integrations/LM-STUDIO.zh-CN.md) |
+| [Jan](https://jan.ai/) | MCP stdio | Open-source ChatGPT alternative | [EN](./docs/04-integrations/JAN.md) / [中文](./docs/04-integrations/JAN.zh-CN.md) |
+| [Msty](https://msty.app/) | MCP stdio | Desktop AI chat application | [EN](./docs/04-integrations/MSTY.md) / [中文](./docs/04-integrations/MSTY.zh-CN.md) |
+| [LibreChat](https://github.com/danny-avila/LibreChat) | MCP stdio | Open-source chat interface | [EN](./docs/04-integrations/LIBRECHAT.md) / [中文](./docs/04-integrations/LIBRECHAT.zh-CN.md) |
+| [Witsy](https://witsy.app/) | MCP stdio | Desktop AI assistant | [EN](./docs/04-integrations/WITSY.md) / [中文](./docs/04-integrations/WITSY.zh-CN.md) |
+| [5ire](https://github.com/5ire-tech/5ire) | MCP stdio | Cross-platform AI chat | [EN](./docs/04-integrations/5IRE.md) / [中文](./docs/04-integrations/5IRE.zh-CN.md) |
+| [ChatMCP](https://github.com/daodao97/chatmcp) | MCP stdio | MCP-focused chat UI | [EN](./docs/04-integrations/CHATMCP.md) / [中文](./docs/04-integrations/CHATMCP.zh-CN.md) |
+| [HyperChat](https://github.com/BigSweetPotatoStudio/HyperChat) | MCP stdio | Multi-platform chat app | [EN](./docs/04-integrations/HYPERCHAT.md) / [中文](./docs/04-integrations/HYPERCHAT.zh-CN.md) |
+| [Tome](https://github.com/runebook/tome) | MCP stdio | macOS app for local LLMs | [EN](./docs/04-integrations/TOME.md) / [中文](./docs/04-integrations/TOME.zh-CN.md) |
 
 ### Web-Based AI Platforms
 
 | Platform | Access Method | Description | Guide |
 |----------|---------------|-------------|-------|
-| [Claude.ai](https://claude.ai/) | MCP SSE/Streamable HTTP | Anthropic's web interface | [EN](./docs/integrations/CLAUDE-AI.md) / [中文](./docs/integrations/CLAUDE-AI.zh-CN.md) |
-| [ChatGPT](https://chat.openai.com/) | MCP SSE/Streamable HTTP | Via custom connectors | [EN](./docs/integrations/CHATGPT.md) / [中文](./docs/integrations/CHATGPT.zh-CN.md) |
-| [Dify](https://dify.ai/) | MCP SSE/Streamable HTTP | LLM app development platform | [EN](./docs/integrations/DIFY.md) / [中文](./docs/integrations/DIFY.zh-CN.md) |
-| [Coze](https://www.coze.com/) | REST API | ByteDance's AI bot platform | [EN](./docs/integrations/COZE.md) / [中文](./docs/integrations/COZE.zh-CN.md) |
-| [n8n](https://n8n.io/) | REST API / MCP | Workflow automation platform | [EN](./docs/integrations/N8N.md) / [中文](./docs/integrations/N8N.zh-CN.md) |
-| [Replit](https://replit.com/) | MCP stdio | Online IDE with AI agent | [EN](./docs/integrations/REPLIT.md) / [中文](./docs/integrations/REPLIT.zh-CN.md) |
-| [MindPal](https://mindpal.io/) | MCP SSE/Streamable HTTP | No-code AI agent builder | [EN](./docs/integrations/MINDPAL.md) / [中文](./docs/integrations/MINDPAL.zh-CN.md) |
+| [Claude.ai](https://claude.ai/) | MCP SSE/Streamable HTTP | Anthropic's web interface | [EN](./docs/04-integrations/CLAUDE-AI.md) / [中文](./docs/04-integrations/CLAUDE-AI.zh-CN.md) |
+| [ChatGPT](https://chat.openai.com/) | MCP SSE/Streamable HTTP | Via custom connectors | [EN](./docs/04-integrations/CHATGPT.md) / [中文](./docs/04-integrations/CHATGPT.zh-CN.md) |
+| [Dify](https://dify.ai/) | MCP SSE/Streamable HTTP | LLM app development platform | [EN](./docs/04-integrations/DIFY.md) / [中文](./docs/04-integrations/DIFY.zh-CN.md) |
+| [Coze](https://www.coze.com/) | REST API | ByteDance's AI bot platform | [EN](./docs/04-integrations/COZE.md) / [中文](./docs/04-integrations/COZE.zh-CN.md) |
+| [n8n](https://n8n.io/) | REST API / MCP | Workflow automation platform | [EN](./docs/04-integrations/N8N.md) / [中文](./docs/04-integrations/N8N.zh-CN.md) |
+| [Replit](https://replit.com/) | MCP stdio | Online IDE with AI agent | [EN](./docs/04-integrations/REPLIT.md) / [中文](./docs/04-integrations/REPLIT.zh-CN.md) |
+| [MindPal](https://mindpal.io/) | MCP SSE/Streamable HTTP | No-code AI agent builder | [EN](./docs/04-integrations/MINDPAL.md) / [中文](./docs/04-integrations/MINDPAL.zh-CN.md) |
 
 ### Agent Frameworks & SDKs
 
 | Platform | Access Method | Description | Guide |
 |----------|---------------|-------------|-------|
-| [LangChain](https://langchain.com/) | MCP stdio | Popular LLM framework | [EN](./docs/integrations/LANGCHAIN.md) / [中文](./docs/integrations/LANGCHAIN.zh-CN.md) |
-| [Smolagents](https://github.com/huggingface/smolagents) | MCP stdio | Hugging Face agent library | [EN](./docs/integrations/SMOLAGENTS.md) / [中文](./docs/integrations/SMOLAGENTS.zh-CN.md) |
-| [OpenAI Agents SDK](https://platform.openai.com/) | MCP SSE/Streamable HTTP | OpenAI's agent framework | [EN](./docs/integrations/OPENAI-AGENTS-SDK.md) / [中文](./docs/integrations/OPENAI-AGENTS-SDK.zh-CN.md) |
-| [Amazon Bedrock Agents](https://aws.amazon.com/bedrock/) | MCP SSE/Streamable HTTP | AWS AI agent service | [EN](./docs/integrations/AMAZON-BEDROCK-AGENTS.md) / [中文](./docs/integrations/AMAZON-BEDROCK-AGENTS.zh-CN.md) |
-| [Google ADK](https://cloud.google.com/) | MCP stdio | Google's Agent Development Kit | [EN](./docs/integrations/GOOGLE-ADK.md) / [中文](./docs/integrations/GOOGLE-ADK.zh-CN.md) |
-| [Vercel AI SDK](https://sdk.vercel.ai/) | MCP stdio | Vercel's AI development kit | [EN](./docs/integrations/VERCEL-AI-SDK.md) / [中文](./docs/integrations/VERCEL-AI-SDK.zh-CN.md) |
-| [Spring AI](https://spring.io/projects/spring-ai) | MCP stdio | Java/Spring AI framework | [EN](./docs/integrations/SPRING-AI.md) / [中文](./docs/integrations/SPRING-AI.zh-CN.md) |
+| [LangChain](https://langchain.com/) | MCP stdio | Popular LLM framework | [EN](./docs/04-integrations/LANGCHAIN.md) / [中文](./docs/04-integrations/LANGCHAIN.zh-CN.md) |
+| [Smolagents](https://github.com/huggingface/smolagents) | MCP stdio | Hugging Face agent library | [EN](./docs/04-integrations/SMOLAGENTS.md) / [中文](./docs/04-integrations/SMOLAGENTS.zh-CN.md) |
+| [OpenAI Agents SDK](https://platform.openai.com/) | MCP SSE/Streamable HTTP | OpenAI's agent framework | [EN](./docs/04-integrations/OPENAI-AGENTS-SDK.md) / [中文](./docs/04-integrations/OPENAI-AGENTS-SDK.zh-CN.md) |
+| [Amazon Bedrock Agents](https://aws.amazon.com/bedrock/) | MCP SSE/Streamable HTTP | AWS AI agent service | [EN](./docs/04-integrations/AMAZON-BEDROCK-AGENTS.md) / [中文](./docs/04-integrations/AMAZON-BEDROCK-AGENTS.zh-CN.md) |
+| [Google ADK](https://cloud.google.com/) | MCP stdio | Google's Agent Development Kit | [EN](./docs/04-integrations/GOOGLE-ADK.md) / [中文](./docs/04-integrations/GOOGLE-ADK.zh-CN.md) |
+| [Vercel AI SDK](https://sdk.vercel.ai/) | MCP stdio | Vercel's AI development kit | [EN](./docs/04-integrations/VERCEL-AI-SDK.md) / [中文](./docs/04-integrations/VERCEL-AI-SDK.zh-CN.md) |
+| [Spring AI](https://spring.io/projects/spring-ai) | MCP stdio | Java/Spring AI framework | [EN](./docs/04-integrations/SPRING-AI.md) / [中文](./docs/04-integrations/SPRING-AI.zh-CN.md) |
 
 ### CLI Tools & Terminal
 
 | Platform | Access Method | Description | Guide |
 |----------|---------------|-------------|-------|
-| [Claude Code CLI](https://claude.ai/code) | MCP stdio | Terminal-based coding agent | [EN](./docs/integrations/CLAUDE-CODE.md) / [中文](./docs/integrations/CLAUDE-CODE.zh-CN.md) |
-| [Warp](https://www.warp.dev/) | MCP stdio | AI-powered terminal | [EN](./docs/integrations/WARP.md) / [中文](./docs/integrations/WARP.zh-CN.md) |
-| [Oterm](https://github.com/ggozad/oterm) | MCP stdio | Chat with Ollama via CLI | [EN](./docs/integrations/OTERM.md) / [中文](./docs/integrations/OTERM.zh-CN.md) |
-| [MCPHost](https://github.com/mark3labs/mcphost) | MCP stdio | CLI chat with LLMs | [EN](./docs/integrations/MCPHOST.md) / [中文](./docs/integrations/MCPHOST.zh-CN.md) |
+| [Claude Code CLI](https://claude.ai/code) | MCP stdio | Terminal-based coding agent | [EN](./docs/04-integrations/CLAUDE-CODE.md) / [中文](./docs/04-integrations/CLAUDE-CODE.zh-CN.md) |
+| [Warp](https://www.warp.dev/) | MCP stdio | AI-powered terminal | [EN](./docs/04-integrations/WARP.md) / [中文](./docs/04-integrations/WARP.zh-CN.md) |
+| [Oterm](https://github.com/ggozad/oterm) | MCP stdio | Chat with Ollama via CLI | [EN](./docs/04-integrations/OTERM.md) / [中文](./docs/04-integrations/OTERM.zh-CN.md) |
+| [MCPHost](https://github.com/mark3labs/mcphost) | MCP stdio | CLI chat with LLMs | [EN](./docs/04-integrations/MCPHOST.md) / [中文](./docs/04-integrations/MCPHOST.zh-CN.md) |
 
 ### Productivity & Automation
 
 | Platform | Access Method | Description | Guide |
 |----------|---------------|-------------|-------|
-| [Raycast](https://raycast.com/) | MCP stdio | macOS productivity launcher | [EN](./docs/integrations/RAYCAST.md) / [中文](./docs/integrations/RAYCAST.zh-CN.md) |
-| [Notion](https://notion.so/) | MCP SSE/Streamable HTTP | Workspace with AI integration | [EN](./docs/integrations/NOTION.md) / [中文](./docs/integrations/NOTION.zh-CN.md) |
-| [Obsidian](https://obsidian.md/) | MCP stdio | Via MCP Tools plugin | [EN](./docs/integrations/OBSIDIAN.md) / [中文](./docs/integrations/OBSIDIAN.zh-CN.md) |
-| [Home Assistant](https://www.home-assistant.io/) | MCP stdio | Home automation platform | [EN](./docs/integrations/HOME-ASSISTANT.md) / [中文](./docs/integrations/HOME-ASSISTANT.zh-CN.md) |
+| [Raycast](https://raycast.com/) | MCP stdio | macOS productivity launcher | [EN](./docs/04-integrations/RAYCAST.md) / [中文](./docs/04-integrations/RAYCAST.zh-CN.md) |
+| [Notion](https://notion.so/) | MCP SSE/Streamable HTTP | Workspace with AI integration | [EN](./docs/04-integrations/NOTION.md) / [中文](./docs/04-integrations/NOTION.zh-CN.md) |
+| [Obsidian](https://obsidian.md/) | MCP stdio | Via MCP Tools plugin | [EN](./docs/04-integrations/OBSIDIAN.md) / [中文](./docs/04-integrations/OBSIDIAN.zh-CN.md) |
+| [Home Assistant](https://www.home-assistant.io/) | MCP stdio | Home automation platform | [EN](./docs/04-integrations/HOME-ASSISTANT.md) / [中文](./docs/04-integrations/HOME-ASSISTANT.zh-CN.md) |
 
 ### Messaging Platform Integrations
 
 | Platform | Access Method | Description | Guide |
 |----------|---------------|-------------|-------|
-| [Slack](https://slack.com/) | MCP stdio / REST API | Via Slack MCP bots | [EN](./docs/integrations/SLACK.md) / [中文](./docs/integrations/SLACK.zh-CN.md) |
-| [Discord](https://discord.com/) | MCP stdio / REST API | Via Discord MCP bots | [EN](./docs/integrations/DISCORD.md) / [中文](./docs/integrations/DISCORD.zh-CN.md) |
-| [Mattermost](https://mattermost.com/) | MCP stdio | Open-source messaging | [EN](./docs/integrations/MATTERMOST.md) / [中文](./docs/integrations/MATTERMOST.zh-CN.md) |
+| [Slack](https://slack.com/) | MCP stdio / REST API | Via Slack MCP bots | [EN](./docs/04-integrations/SLACK.md) / [中文](./docs/04-integrations/SLACK.zh-CN.md) |
+| [Discord](https://discord.com/) | MCP stdio / REST API | Via Discord MCP bots | [EN](./docs/04-integrations/DISCORD.md) / [中文](./docs/04-integrations/DISCORD.zh-CN.md) |
+| [Mattermost](https://mattermost.com/) | MCP stdio | Open-source messaging | [EN](./docs/04-integrations/MATTERMOST.md) / [中文](./docs/04-integrations/MATTERMOST.zh-CN.md) |
 
 ### Local LLM Runners
 
 | Platform | Access Method | Description | Guide |
 |----------|---------------|-------------|-------|
-| [Ollama](https://ollama.ai/) | MCP stdio | Run local LLMs | [EN](./docs/integrations/OLLAMA.md) / [中文](./docs/integrations/OLLAMA.zh-CN.md) |
-| [LM Studio](https://lmstudio.ai/) | MCP stdio | Local LLM desktop app | [EN](./docs/integrations/LM-STUDIO.md) / [中文](./docs/integrations/LM-STUDIO.zh-CN.md) |
-| [Jan](https://jan.ai/) | MCP stdio | Offline ChatGPT alternative | [EN](./docs/integrations/JAN.md) / [中文](./docs/integrations/JAN.zh-CN.md) |
+| [Ollama](https://ollama.ai/) | MCP stdio | Run local LLMs | [EN](./docs/04-integrations/OLLAMA.md) / [中文](./docs/04-integrations/OLLAMA.zh-CN.md) |
+| [LM Studio](https://lmstudio.ai/) | MCP stdio | Local LLM desktop app | [EN](./docs/04-integrations/LM-STUDIO.md) / [中文](./docs/04-integrations/LM-STUDIO.zh-CN.md) |
+| [Jan](https://jan.ai/) | MCP stdio | Offline ChatGPT alternative | [EN](./docs/04-integrations/JAN.md) / [中文](./docs/04-integrations/JAN.zh-CN.md) |
 
 ### Development & Testing Tools
 
 | Platform | Access Method | Description | Guide |
 |----------|---------------|-------------|-------|
-| [MCP Inspector](https://github.com/modelcontextprotocol/inspector) | MCP stdio | Official MCP debugging tool | [EN](./docs/integrations/MCP-INSPECTOR.md) / [中文](./docs/integrations/MCP-INSPECTOR.zh-CN.md) |
-| [Postman](https://postman.com/) | REST API / MCP | API testing platform | [EN](./docs/integrations/POSTMAN.md) / [中文](./docs/integrations/POSTMAN.zh-CN.md) |
+| [MCP Inspector](https://github.com/modelcontextprotocol/inspector) | MCP stdio | Official MCP debugging tool | [EN](./docs/04-integrations/MCP-INSPECTOR.md) / [中文](./docs/04-integrations/MCP-INSPECTOR.zh-CN.md) |
+| [Postman](https://postman.com/) | REST API / MCP | API testing platform | [EN](./docs/04-integrations/POSTMAN.md) / [中文](./docs/04-integrations/POSTMAN.zh-CN.md) |
 
 > **Note**: Any MCP-compatible client can connect via stdio (local) or SSE/Streamable HTTP (remote). Any HTTP client can use the REST API.
 
 ## 📚 Documentation
 
 ### Getting Started
-- [Installation Guide](./docs/getting-started/installation.md)
-- [Quick Start](./docs/getting-started/quick-start.md)
-- [Configuration](./docs/getting-started/configuration.md)
-- [Usage Examples](./docs/getting-started/examples.md)
+- [Installation Guide](./docs/01-getting-started/installation.md)
+- [Quick Start](./docs/01-getting-started/quick-start.md)
+- [Configuration](./docs/01-getting-started/configuration.md)
+- [Usage Examples](./docs/01-getting-started/examples.md)
 
 ### Deployment
-- [Deployment Overview](./docs/deployment/README.md)
-- [Local Deployment](./docs/deployment/local.md)
-- [Docker Deployment](./docs/deployment/docker.md)
-- [Cloud Deployment](./docs/deployment/cloud/)
+- [Deployment Overview](./docs/06-deployment/README.md)
+- [Local Deployment](./docs/06-deployment/local.md)
+- [Docker Deployment](./docs/06-deployment/docker.md)
+- [Cloud Deployment](./docs/06-deployment/cloud/)
 
 ### Database Guides
-- [Database Support Overview](./docs/databases/README.md)
-- [MySQL](./docs/databases/mysql.md)
-- [PostgreSQL](./docs/databases/postgresql.md)
-- [More databases...](./docs/databases/)
+- [Database Support Overview](./docs/02-databases/README.md)
+- [MySQL](./docs/02-databases/mysql.md)
+- [PostgreSQL](./docs/02-databases/postgresql.md)
+- [ClickHouse](./docs/02-databases/clickhouse.md) (v3.2.9 — 5 protocol bugs fixed)
+- [DM (达梦)](./docs/02-databases/dameng.md) (v3.2.8 — backup + sample-data fixes)
+- [MongoDB](./docs/02-databases/mongodb.md) (v3.2.7 — authSource + multi-arg)
+- [More databases...](./docs/02-databases/)
+
+### Features
+- [Data Governance](./docs/03-features/data-governance.md) — profile backup, schema diff, PII, audit
+- [Data Migration](./docs/03-features/data-migration.md) — **CSV import/export (v3.3.0)** + SQL backup
+- [Multi-Profile](./docs/03-features/multi-profile.md) — multi-DB routing, schema aggregation
+- [Observability](./docs/03-features/observability.md) — Prometheus + slow-query ring buffer
 
 ### HTTP API
-- [API Reference](./docs/http-api/API_REFERENCE.md)
-- [Deployment Guide](./docs/http-api/DEPLOYMENT.md)
+- [API Reference](./docs/05-http-api/API_REFERENCE.md)
+- [Deployment Guide](./docs/05-http-api/DEPLOYMENT.md)
 
 ### Integrations
 
 **AI Editors & IDEs:**
-[Cursor](./docs/integrations/CURSOR.md) |
-[VS Code](./docs/integrations/VSCODE.md) |
-[JetBrains](./docs/integrations/JETBRAINS.md) |
-[Windsurf](./docs/integrations/WINDSURF.md) |
-[Zed](./docs/integrations/ZED.md) |
-[Neovim](./docs/integrations/NEOVIM.md) |
-[Emacs](./docs/integrations/EMACS.md)
+[Cursor](./docs/04-integrations/CURSOR.md) |
+[VS Code](./docs/04-integrations/VSCODE.md) |
+[JetBrains](./docs/04-integrations/JETBRAINS.md) |
+[Windsurf](./docs/04-integrations/WINDSURF.md) |
+[Zed](./docs/04-integrations/ZED.md) |
+[Neovim](./docs/04-integrations/NEOVIM.md) |
+[Emacs](./docs/04-integrations/EMACS.md)
 
 **AI Assistants:**
-[Claude Desktop](./docs/integrations/CLAUDE-DESKTOP.md) |
-[Claude Code](./docs/integrations/CLAUDE-CODE.md) |
-[GitHub Copilot](./docs/integrations/GITHUB-COPILOT.md) |
-[Cline](./docs/integrations/CLINE.md) |
-[Continue](./docs/integrations/CONTINUE.md)
+[Claude Desktop](./docs/04-integrations/CLAUDE-DESKTOP.md) |
+[Claude Code](./docs/04-integrations/CLAUDE-CODE.md) |
+[GitHub Copilot](./docs/04-integrations/GITHUB-COPILOT.md) |
+[Cline](./docs/04-integrations/CLINE.md) |
+[Continue](./docs/04-integrations/CONTINUE.md)
 
 **AI Platforms:**
-[Dify](./docs/integrations/DIFY.md) |
-[Coze](./docs/integrations/COZE.md) |
-[n8n](./docs/integrations/N8N.md) |
-[ChatGPT](./docs/integrations/CHATGPT.md) |
-[LangChain](./docs/integrations/LANGCHAIN.md)
+[Dify](./docs/04-integrations/DIFY.md) |
+[Coze](./docs/04-integrations/COZE.md) |
+[n8n](./docs/04-integrations/N8N.md) |
+[ChatGPT](./docs/04-integrations/CHATGPT.md) |
+[LangChain](./docs/04-integrations/LANGCHAIN.md)
 
 **Desktop Apps:**
-[Cherry Studio](./docs/integrations/CHERRY-STUDIO.md) |
-[LM Studio](./docs/integrations/LM-STUDIO.md) |
-[Jan](./docs/integrations/JAN.md) |
-[Ollama](./docs/integrations/OLLAMA.md)
+[Cherry Studio](./docs/04-integrations/CHERRY-STUDIO.md) |
+[LM Studio](./docs/04-integrations/LM-STUDIO.md) |
+[Jan](./docs/04-integrations/JAN.md) |
+[Ollama](./docs/04-integrations/OLLAMA.md)
 
 **Messaging:**
-[Slack](./docs/integrations/SLACK.md) |
-[Discord](./docs/integrations/DISCORD.md)
+[Slack](./docs/04-integrations/SLACK.md) |
+[Discord](./docs/04-integrations/DISCORD.md)
 
 **Tools:**
-[MCP Inspector](./docs/integrations/MCP-INSPECTOR.md) |
-[Postman](./docs/integrations/POSTMAN.md)
+[MCP Inspector](./docs/04-integrations/MCP-INSPECTOR.md) |
+[Postman](./docs/04-integrations/POSTMAN.md)
 
-> 📁 [View all 55 integration guides](./docs/integrations/) | 中文版本请在对应文档名后加 `.zh-CN`
+> 📁 [View all 55+ integration guides](./docs/04-integrations/) | 中文版本请在对应文档名后加 `.zh-CN`
 
 ### Advanced
-- [Security Guide](./docs/guides/security.md)
-- [Multi-tenant Guide](./docs/guides/multi-tenant.md)
-- [Architecture](./docs/development/architecture.md)
-- [Troubleshooting](./docs/operations/troubleshooting.md)
+- [Security Guide](./docs/08-operations/multi-tenant.md) (security section)
+- [Multi-tenant Guide](./docs/08-operations/multi-tenant.md)
+- [Architecture](./docs/07-development/architecture.md)
+- [Troubleshooting](./docs/08-operations/troubleshooting.md)
 
 ## 🤝 Contributing
 
