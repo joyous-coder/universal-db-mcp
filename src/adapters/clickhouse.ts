@@ -81,30 +81,77 @@ export class ClickHouseAdapter extends BaseAdapter {
     }
 
     const startTime = Date.now();
-
+    const isWrite = this.isWriteOperation(query);
+    // v3.2.9 Bug #50 fix: 写操作(INSERT/UPDATE/DELETE/DDL)用 client.command(),
+    // 它不会在 SQL 末尾 append `FORMAT <fmt>`,且返回 summary.written_rows。
+    // 之前强制 format:'JSONEachRow' 让 driver 拼 `FORMAT JSONEachRow` 到 SQL 末尾
+    // → INSERT ... VALUES(...) 后跟 `FORMAT` 报 "expected '(' before FORMAT JSONEachRow"。
+    const trimmed = query.trim().replace(/;\s*$/, '');
+    // v3.2.9 Bug #51+#54 fix: CH client 只支持 named params。数组/对象参数都需要
+    // rewrite。`params && params.length` 对单对象 falsy(对象无 length 属性),
+    // 所以用通用 truthy 判断。
+    const hasParams = params !== undefined && params !== null
+      && (!(params instanceof Array) || (params as unknown[]).length > 0);
+    const { query: finalQuery, query_params: queryParams } = hasParams
+      ? this.rewriteNamedPlaceholders(trimmed, params)
+      : { query: trimmed, query_params: undefined };
+    // node @clickhouse/client v1 的 .d.ts 没列 command,但运行时继承自 BaseClickHouseClient。
+    const client = this.client as unknown as {
+      query: (p: Record<string, unknown>) => Promise<{
+        query_id: string;
+        response_headers?: Record<string, string | string[]>;
+        json: <T>() => Promise<T>;
+      }>;
+      command: (p: Record<string, unknown>) => Promise<{
+        query_id: string;
+        summary?: { written_rows?: string | number; read_rows?: string | number };
+        response_headers?: Record<string, string | string[]>;
+      }>;
+    };
     try {
-      // ClickHouse 使用命名参数或位置参数;包装在共享 retry 中
-      const client = this.client!;
+      if (isWrite) {
+        const result = await withRetry(() => client.command({
+          query: finalQuery,
+          query_params: queryParams,
+        }));
+        let affected: number | undefined;
+        if (result.summary?.written_rows !== undefined) {
+          const w = typeof result.summary.written_rows === 'string'
+            ? parseInt(result.summary.written_rows, 10)
+            : result.summary.written_rows;
+          if (!isNaN(w) && w > 0) affected = w;
+        }
+        return {
+          rows: [],
+          affectedRows: affected,
+          executionTime: Date.now() - startTime,
+          metadata: { query_id: result.query_id },
+        };
+      }
       const result = await withRetry(() => client.query({
-        query,
-        query_params: params ? this.convertParams(params) : undefined,
+        query: finalQuery,
+        query_params: queryParams,
         format: 'JSONEachRow',
       }));
-
       const data = await result.json();
-      const rows = Array.isArray(data) ? data as Record<string, unknown>[] : [];
-      const executionTime = Date.now() - startTime;
-
-      // 检查是否为写操作
-      const isWrite = this.isWriteOperation(query);
-
+      const rows = Array.isArray(data) ? data as Array<Record<string, unknown>> : [];
+      // v3.2.9 Bug #52 fix: CH JSONEachRow 默认 UInt64/Int128 输出为字符串避免
+      // JS Number 精度丢失,但 count()/sum() 等聚合结果用户期望数字。启发式:
+      // 纯数字字符串 → Number;非数字保持原样(可能是 Date/UUID 等)。
+      for (const row of rows) {
+        for (const k of Object.keys(row)) {
+          const v = row[k];
+          if (typeof v === 'string' && /^-?\d+$/.test(v)) {
+            const n = Number(v);
+            if (Number.isSafeInteger(n)) row[k] = n;
+          }
+        }
+      }
       return {
-        rows: rows || [],
-        affectedRows: isWrite ? rows?.length || 0 : undefined,
-        executionTime,
-        metadata: {
-          query_id: result.query_id,
-        },
+        rows,
+        affectedRows: undefined,
+        executionTime: Date.now() - startTime,
+        metadata: { query_id: result.query_id },
       };
     } catch (error) {
       throw new Error(
@@ -115,13 +162,44 @@ export class ClickHouseAdapter extends BaseAdapter {
 
   /**
    * 转换参数为 ClickHouse 格式
+   *
+   * v3.2.9 Bug #51 fix: ClickHouse client 只支持命名参数 ({name:Type}) + 对象
+   * query_params,不支持位置参数数组 + `?`。如果传入数组,我们生成
+   * {param1, param2, ...} 并把 query 中按出现顺序的 `{<name>:<type>}` 改写
+   * 为 `{paramN:<type>}` —— 用户用任意命名都能工作。
+   *
+   * v3.2.9 Bug #54 fix: 如果 params[0] 是对象(整个数组是对象数组,如 executeBatch),
+   * 直接把对象当 query_params 用 —— 用户传 {id: 1, name: 'a'} → query_params {id: 1, name: 'a'}。
    */
-  private convertParams(params: unknown[]): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-    params.forEach((param, index) => {
-      result[`param${index + 1}`] = param;
+  private rewriteNamedPlaceholders(query: string, params: unknown): { query: string; query_params: Record<string, unknown> } {
+    const query_params: Record<string, unknown> = {};
+    if (params === undefined || params === null) return { query, query_params };
+    // Bug #54 fix: 对象数组 (executeBatch) 或单对象 — 直接当 query_params 用
+    if (typeof params === 'object' && !Array.isArray(params)) {
+      const obj = params as Record<string, unknown>;
+      const rewritten = query.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*([a-zA-Z0-9_]+(\([^)]*\))?)\}/g, (match, name, type) => {
+        if (Object.prototype.hasOwnProperty.call(obj, name)) {
+          query_params[name] = obj[name];
+          return `{${name}:${type}}`;
+        }
+        return match;
+      });
+      return { query: rewritten, query_params };
+    }
+    // 位置数组 → 改写 {name:Type} → {paramN:Type}
+    const arr = params as unknown[];
+    if (arr.length === 0) return { query, query_params };
+    let n = 0;
+    const rewritten = query.replace(/\{([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*([a-zA-Z0-9_]+(\([^)]*\))?)\}/g, (_match, _name, type) => {
+      n += 1;
+      const key = `param${n}`;
+      query_params[key] = arr[n - 1];
+      return `{${key}:${type}}`;
     });
-    return result;
+    for (let i = n; i < arr.length; i++) {
+      query_params[`param${i + 1}`] = arr[i];
+    }
+    return { query: rewritten, query_params };
   }
 
   /**
@@ -322,6 +400,18 @@ export class ClickHouseAdapter extends BaseAdapter {
   }
   protected getDialect(): import('../utils/adapter-factory.js').DbType {
     return 'clickhouse';
+  }
+
+  /**
+   * v3.2.9 Bug #53 fix: ClickHouse driver 不支持 BEGIN/COMMIT 事务语法。
+   * BaseAdapter 默认实现用 BEGIN/COMMIT 包 execute_script/batch → 报 "Expected TRANSACTION"。
+   * 强制 useTransaction:false 走逐句 autoCommit 路径,放弃原子性保证(CH 反正没有跨语句事务)。
+   */
+  async executeScript(query: string, options: { useTransaction?: boolean; maxStatements?: number } = {}): Promise<QueryResult> {
+    return super.executeScript(query, { ...options, useTransaction: false });
+  }
+  async executeBatch(sql: string, paramsList: unknown[][], options: { useTransaction?: boolean; maxBatchSize?: number } = {}): Promise<import('./base.js').BatchResult> {
+    return super.executeBatch(sql, paramsList, { ...options, useTransaction: false });
   }
 
 }

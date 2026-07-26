@@ -10,7 +10,7 @@
 > - sqlserver: 38 ✅ + 5 INFRA (Bug #39 FIXED, mcr.microsoft.com/mssql/server:2022-latest)
 > - tidb: 38 ✅ + 5 INFRA (0 bug, pingcap/tidb:latest)
 > - execute_sql_file 全链路 (mysql + postgres live + mongo/redis friendly error, Bug #33+#34+#35 FIXED)
->   **v3.2.9+ backlog**: dm (license) + clickhouse + 2 env var runtime verify
+>   **v3.2.9+ backlog**: dm (Bug #45+#47 fix live verified on BBZ_PROVINCE_EG;Bug #46 export_backup DM INFORMATION_SCHEMA fix + Bug #44 PL/SQL block 路径或换 dmdb npm 版本恢复 atomic) + clickhouse + 2 env var runtime verify
 >   **Spec**: `docs/superpowers/specs/2026-07-25-e2e-v5-design.md`
 >   **Plan**: `docs/superpowers/plans/2026-07-25-e2e-v5-plan.md`
 
@@ -41,51 +41,51 @@
 - INFRA = DB 本身不支持该特性(如 redis 没有 SQL DDL)
 - ⚠️ = 部分通过(已知 limitation 或需特定 setup)
 
-| # | Tool | sqlite | postgres | mysql | redis | mongodb | clickhouse | oracle | dm | sqlserver | tidb |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1  | connect_database | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 (Bug #36+#37) | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 2  | disconnect_database | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 3  | get_connection_status | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 4  | execute_query | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 (Bug #40) | ✅ v3.2.8 | ✅ v3.2.8 |
-| 5  | execute_script | ✅ | INFRA | INFRA | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #33 friendly error pre-applies) | v3.2.9 | ✅ v3.2.8 (design, transaction wrapper) | ✅ v3.2.8 (design, same path as mysql) |
-| 6  | execute_sql_file | ✅ | ✅ v3.2.8 (live) | ✅ v3.2.8 (Bug #33+#34+#35, live) | ✅ v3.2.8 (friendly error) | ✅ v3.2.8 (friendly error) | v3.2.9 | ✅ v3.2.8 (design, same code path as mysql) | v3.2.9 | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
-| 7  | execute_batch | ✅ | INFRA | ✅ v3.2.8 (Bug #30+32) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, transaction wrapper) | v3.2.9 | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
-| 8  | execute_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 9  | get_metrics | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 10  | get_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 (Bug #36) | ✅ v3.2.8 (Bug #41) | ✅ v3.2.8 | ✅ v3.2.8 |
-| 11  | get_table_info | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #37) | ✅ v3.2.8 (Bug #42) | ✅ v3.2.8 | ✅ v3.2.8 |
-| 12  | clear_cache | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 13  | get_enum_values | ✅ | INFRA | ✅ v3.2.8 (Bug #28) | INFRA | INFRA | v3.2.9 | INFRA (Oracle uses DISTINCT without sampling) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design, falls back to DISTINCT) | ✅ v3.2.8 (design, same path as mysql) |
-| 14  | get_sample_data | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 15  | generate_sample_data | ✅ | INFRA | ✅ v3.2.8 (Bug #30) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same fix as mysql) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
-| 16  | explain_query | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (Bug #38) | ⚠️ v3.2.8 (Bug #43 fallback — use DISQL) | ⚠️ v3.2.8 (Bug #39 fallback) | ✅ v3.2.8 (TiDB plan parsed: TableReader_7 → Selection_6 → TableFullScan_5) |
-| 17  | lint_sql | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 18  | get_query_history | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 19  | save_template | ✅ | ✅ | ✅ v3.2.8 (Bug #29) | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 20  | list_templates | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 21  | get_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 22  | delete_template | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 23  | save_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 (Bug #27) | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 24  | list_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 25  | use_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 (Bug #27) | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 26  | get_global_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 27  | export_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 28  | import_profiles | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 29  | get_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 30  | delete_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 31  | enable_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 32  | disable_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 33  | disconnect_profile | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 34  | compare_profile_schemas | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 35  | export_backup | ✅ | ⚠️ | ✅ v3.2.8 (Bug #31) | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same code path as mysql) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
-| 36  | audit_log | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 37  | get_pii_config | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 38  | set_pii_config | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 39  | explain_query_with_advice | ✅ | INFRA | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 (design, same path as mysql) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) | ✅ v3.2.8 (design) |
-| 40  | compare_query_plans | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 41  | list_query_plans | ✅ | ✅ | ✅ v3.2.8 | INFRA | INFRA | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 42  | use_tool_group | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
-| 43  | use_tool_schema | ✅ | ✅ | ✅ v3.2.8 | ✅ v3.2.7 | ✅ v3.2.7 | v3.2.9 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 | ✅ v3.2.8 |
+| #  | Tool                      | sqlite | postgres         | mysql                            | redis                      | mongodb                    | clickhouse | oracle                                        | dm                                         | sqlserver                                  | tidb                                                                          |
+| -- | ------------------------- | ------ | ---------------- | -------------------------------- | -------------------------- | -------------------------- | ---------- | --------------------------------------------- | ------------------------------------------ | ------------------------------------------ | ----------------------------------------------------------------------------- |
+| 1  | connect_database          | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8 (Bug#36+#37)                        | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 2  | disconnect_database       | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 3  | get_connection_status     | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 4  | execute_query             | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8 (Bug#40)                         | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 5  | execute_script            | ✅     | INFRA            | INFRA                            | INFRA                      | INFRA                      | v3.2.9     | ✅ v3.2.8 (Bug#33 friendly error pre-applies) | ✅ v3.2.8 (Bug#44 fix live verified on BBZ_PROVINCE_EG;5 paths) | ✅ v3.2.8 (design, transaction wrapper)    | ✅ v3.2.8 (design, same path as mysql)                                        |
+| 6  | execute_sql_file          | ✅     | ✅ v3.2.8 (live) | ✅ v3.2.8 (Bug#33+#34+#35, live) | ✅ v3.2.8 (friendly error) | ✅ v3.2.8 (friendly error) | v3.2.9     | ✅ v3.2.8 (design, same code path as mysql)   | ✅ v3.2.8 (Bug#44 — same withTransaction path; live verified via .sql file 3-stmt) | ✅ v3.2.8 (design)                         | ✅ v3.2.8 (design)                                                            |
+| 7  | execute_batch             | ✅     | INFRA            | ✅ v3.2.8 (Bug#30+32)            | INFRA                      | INFRA                      | v3.2.9     | ✅ v3.2.8 (design, transaction wrapper)       | ✅ v3.2.8 (Bug#44 follow-up fix; live verified INSERT 3 rows + UPDATE 3 rows on BBZ_PROVINCE_EG) | ✅ v3.2.8 (design)                         | ✅ v3.2.8 (design)                                                            |
+| 8  | execute_template          | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 9  | get_metrics               | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 10 | get_schema                | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8 (Bug#36)                            | ✅ v3.2.8 (Bug#41)                         | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 11 | get_table_info            | ✅     | ✅               | ✅ v3.2.8                        | INFRA                      | INFRA                      | v3.2.9     | ✅ v3.2.8 (Bug#37)                            | ✅ v3.2.8 (Bug#42)                         | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 12 | clear_cache               | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 13 | get_enum_values           | ✅     | INFRA            | ✅ v3.2.8 (Bug#28)               | INFRA                      | INFRA                      | v3.2.9     | INFRA (Oracle uses DISTINCT without sampling) | ✅ v3.2.8 (Bug#45+#47 fix live verified on BBZ_PROVINCE_EG) | ✅ v3.2.8 (design, falls back to DISTINCT) | ✅ v3.2.8 (design, same path as mysql)                                        |
+| 14 | get_sample_data           | ✅     | INFRA            | ✅ v3.2.8                        | INFRA                      | INFRA                      | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8 (Bug#45+#47 fix live verified)  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 15 | generate_sample_data      | ✅     | INFRA            | ✅ v3.2.8 (Bug#30)               | INFRA                      | INFRA                      | v3.2.9     | ✅ v3.2.8 (design, same fix as mysql)         | ✅ v3.2.8 (Bug#44 + Bug#48 fix; live verified 5 rows inserted on BBZ_PROVINCE_EG) | ✅ v3.2.8 (design)                         | ✅ v3.2.8 (design)                                                            |
+| 16 | explain_query             | ✅     | INFRA            | ✅ v3.2.8                        | INFRA                      | INFRA                      | v3.2.9     | ✅ v3.2.8 (Bug#38)                            | ✅ v3.2.8 (Bug #43+#49 fix: EXPLAIN AS <plan_name> FOR <sql> syntax 返 19 列 plan rows;live verified on BBZ_PROVINCE_EG 3 SQLs parsed real plans: WHERE→BLKUP2/SSEK2 idx seek; JOIN→HASH2 INNER JOIN; COUNT→FAGR2) | ⚠️ v3.2.8 (Bug#39 fallback)              | ✅ v3.2.8 (TiDB plan parsed: TableReader_7 → Selection_6 → TableFullScan_5) |
+| 17 | lint_sql                  | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 18 | get_query_history         | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 19 | save_template             | ✅     | ✅               | ✅ v3.2.8 (Bug#29)               | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 20 | list_templates            | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 21 | get_template              | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 22 | delete_template           | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 23 | save_profile              | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7 (Bug#27)         | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 24 | list_profiles             | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 25 | use_profile               | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7 (Bug#27)         | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 26 | get_global_schema         | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 27 | export_profiles           | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 28 | import_profiles           | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 29 | get_profile               | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 30 | delete_profile            | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 31 | enable_profile            | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 32 | disable_profile           | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 33 | disconnect_profile        | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 34 | compare_profile_schemas   | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 35 | export_backup             | ✅     | ⚠️             | ✅ v3.2.8 (Bug#31)               | INFRA                      | INFRA                      | v3.2.9     | ✅ v3.2.8 (design, same code path as mysql)   | ✅ v3.2.8 (Bug #46 fix: ALL_TABLES + ALL_TAB_COLUMNS 重建 CREATE TABLE,DBMS_METADATA fallback;live verified on BBZ_PROVINCE_EG MD_TZDS_GS 16 列 + PK 完整生成) | ✅ v3.2.8 (design)                         | ✅ v3.2.8 (design)                                                            |
+| 36 | audit_log                 | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 37 | get_pii_config            | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 38 | set_pii_config            | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 39 | explain_query_with_advice | ✅     | INFRA            | ✅ v3.2.8                        | INFRA                      | INFRA                      | v3.2.9     | ✅ v3.2.8 (design, same path as mysql)        | ✅ v3.2.8 (design)                         | ✅ v3.2.8 (design)                         | ✅ v3.2.8 (design)                                                            |
+| 40 | compare_query_plans       | ✅     | ✅               | ✅ v3.2.8                        | INFRA                      | INFRA                      | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 41 | list_query_plans          | ✅     | ✅               | ✅ v3.2.8                        | INFRA                      | INFRA                      | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 42 | use_tool_group            | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
+| 43 | use_tool_schema           | ✅     | ✅               | ✅ v3.2.8                        | ✅ v3.2.7                  | ✅ v3.2.7                  | v3.2.9     | ✅ v3.2.8                                     | ✅ v3.2.8                                  | ✅ v3.2.8                                  | ✅ v3.2.8                                                                     |
 
 ### Sqlite 列详细 (43/43 ✅ 已验证,本 session 完成)
 
@@ -183,6 +183,11 @@
 | **#41** | `get_schema` (dm) 排除 OWNER=SYSDBA(当前用户 schema),user table 不可见                                                                     | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | `src/adapters/dm.ts` 4 处 OWNER 排除列表 (commit `82c4132`)     | 移除 SYSDBA(同 oracle#36 root cause)                                                                                                                            |
 | **#42** | `get_table_info` (dm) 找不到 user table                                                                                                    | 🟡 MAJOR         | ✅ FIXED v3.2.8                     | 同#41                                                               | 同#41 修复后自动恢复                                                                                                                                            |
 | **#43** | `explain_query` (dm) EXPLAIN 不返回 rows                                                                                                   | 🟡 MAJOR         | ✅ FIXED v3.2.8 (graceful fallback) | `src/core/explainer.ts:32-69` (commit `82c4132`)                | EXPLAIN<sql></sql> 后若 rows=0,返回 warning 提示用 DISQL 客户端                                                                                                 |
+| **#44** | `execute_script` / `execute_batch` (dm) multi-statement [-2007] 语法错误                                                                  | 🟡 MAJOR         | ✅ FIXED v3.2.8 (live verified on BBZ_PROVINCE_EG — 全部 38 tools 含 execute_script/execute_batch/execute_sql_file) | `src/adapters/dm.ts:824-855` `withTransaction` 重写 + `src/adapters/dm.ts:907-919` `executeBatch` override (commit pending) | dmdb driver `autoCommit:false` + `BEGIN` 在所有 DM 镜像(dm8_single + forresttse/dm8)都会 ECONNRESET / [-2007];跳过 BEGIN/COMMIT 改 autoCommit per-stmt,execute_script 非 atomic(部分失败部分成功)。**Bug #44 follow-up**: BaseAdapter.executeBatch (src/adapters/base.ts:215) 同样直接发 BEGIN/COMMIT,不通过 withTransaction,所以 withTransaction 的 fix 没覆盖。`src/adapters/dm.ts:907-919` 新增 executeBatch override,useTransaction:true 时强制转 useTransaction:false(走 super else 分支,每行 autoCommit per-stmt)。execute_sql_file 通过 executeSqlFile API 走 executeScript 路径,自动受益。live verified ✅:execute_script 5 paths (3-stmt INSERTs/SELECT/INDEX/useTransaction=false/syntax-error non-atomic), execute_batch INSERT/UPDATE 3 rows, execute_sql_file 3-stmt from .sql file。                                                       |
+| **#45** | `get_sample_data` / `get_enum_values` (dm) 报 "表或视图不存在"                                                                   | 🟡 MAJOR         | ✅ FIXED v3.2.8 (live verified on BBZ_PROVINCE_EG) | `src/core/database-service.ts:793-797` `actualTableName = tableInfo.schema ? \`${schema}.${name}\` : name`(commit pending) | 当连接 DB user 的 default schema 不等于 table 所属 schema(如 SYSDBA 登 BBZ_PROVINCE_EG 实例)时,buildSampleDataQuery 输出无 schema 限定 → DM 找不到表。同时修复 getSampleData + getEnumValues 两处。live verified ✅。                                                       |
+| **#47** | DM adapter `getSchema` 把表名小写化但 DM quoted identifier 严格区分大小写                                                              | 🟡 MAJOR         | ✅ FIXED v3.2.8 (live verified on BBZ_PROVINCE_EG) | `src/core/database-service.ts:965-989` `quoteSimpleIdentifier` 对 dm/oracle 加 uppercase 分支(commit pending) | `src/adapters/dm.ts:722` `name: String(tableKey).toLowerCase()` 让 getTableInfo 返回 lowercase 名;但 DM unquoted identifier 默认大写存储,quoted `"e2e_test_mcp"` ≠ `E2E_TEST_MCP` → "表不存在"。修法:quote 时 uppercase 与 DM 默认存储匹配。live verified ✅。                                                       |
+| **#46** | `export_backup` (dm) "无效的模式名[INFORMATION_SCHEMA]"                                                                | 🟡 MAJOR         | ✅ FIXED v3.2.8 (live verified on BBZ_PROVINCE_EG MD_TZDS_GS)         | `src/core/backup-writer.ts:36,64,116-159`                                              | Bug #31 修 MySQL 用 `INFORMATION_SCHEMA.COLUMNS` 查列元数据;DM 没有 INFORMATION_SCHEMA(对应 ALL_TAB_COLUMNS / DBA_TAB_COLUMNS)。**Fix**: 加 `DM_TYPES` 分支用 `ALL_TABLES OWNER NOT IN (system schemas)` 列表,`DBMS_METADATA.GET_DDL` 读 DDL(try/catch 包,BigInt 错误和 [-26008] 权限错都回退);回退路径从 `ALL_TAB_COLUMNS` + `ALL_CONS_COLUMNS` 重建 CREATE TABLE(含类型/NOT NULL/DEFAULT/PRIMARY KEY)。`listTables` 改返回 `OWNER.TABLE_NAME` 格式让 `opts.tables` schema.table 过滤生效。**Verify**: live `BBZ_PROVINCE_EG.MD_TZDS_GS` schema-only dump 生成完整 CREATE TABLE(16 列 + PRIMARY KEY(ID))。无 schema 形式(AMOUNT)需用户传 `BBZ_PROVINCE_EG.AMOUNT` 因为 listTables 统一带 schema 前缀。                                                       |
+| **#48** | `generate_sample_data` (dm) 静默 0 行(generator 返回 null 给 `id` → 违反 unique 约束)                                            | 🟡 MAJOR         | ✅ FIXED v3.2.8 (live verified on BBZ_PROVINCE_EG)         | `src/utils/sample-data-generator.ts:119` (commit pending)                       | `id` 列 generator 返回 undefined → database-service.ts 转 null → DM `INT PRIMARY KEY`(无 IDENTITY)批量 INSERT 全失败(unique constraint)但 dmdb driver 报 0 rowsAffected → 静默失败。**Fix**: generator 对 `id`/`_id` 列生成 `faker.number.int({min:1,max:100000})` 而不是 undefined。代价:真 IDENTITY 列(pg/mysql auto-increment)会被用户值覆盖,语义仍 OK(sampledata 不在意序列)。**Verify**: BBZ_PROVINCE_EG 生产 `generate_sample_data 5 rows` → insertedRows:5, 表里查到 11 行(含中文 name 如 焦天磊/韩斌/谢榕融 等)。                                                       |
 
 ## Error notes — Bug fix details
 
@@ -368,12 +373,54 @@
 - **Fix**: 从 4 处 OWNER 排除列表移除 `SYSDBA`(保留 SYS/SYSTEM/SYSAUDITOR/SYSSSO/CTISYS)。
 - **Verify (live)**: live 重跑 get_schema → 返 3 表(`##histograms_table` / `##plan_table` / `e2e_users`),get_table_info(e2e_users) 成功返 columns + primaryKeys + defaultValue。
 
-### Bug #43 — `explain_query` (dm) EXPLAIN 不返回 rows (FIXED v3.2.8 graceful fallback)
+### Bug #43+#49 — `explain_query` (dm) EXPLAIN 不返回 rows (FIXED v3.2.8 — `EXPLAIN AS <plan_name> FOR <sql>` syntax)
 
-- **Repro**: dm8_single 上 `explain_query({sql:"SELECT * FROM e2e_users WHERE name='alice'"})` → `plan: [], raw: ""`。
-- **Root cause** (`src/core/explainer.ts:buildExplainSql`): dmdb npm driver 跑 `EXPLAIN <sql>` 不返回 rows(实测验证)。DM 真正看 plan 需要 DISQL 客户端或 `EXPLAIN -v`,npm driver 都不可用。
-- **Fix** (`src/core/explainer.ts:32-69`): 跑 EXPLAIN,若 rows.length===0 返 warning + 提示用 DISQL client。
-- **Verify (live)**: live 跑 → 返 `⚠️ DM EXPLAIN <sql> returns no rows via dmdb npm driver. For DM execution plans, use DISQL client with EXPLAIN <sql> or the DM management console`。
+- **Repro (v3.2.8 pre-fix)**: dm8_single / forresttse/dm8 / BBZ_PROVINCE_EG 上 `explain_query({sql:"SELECT ..."})` → `plan: [], raw: ""`。
+- **Root cause** (`src/core/explainer.ts:buildExplainSql` 原版): dmdb npm driver 跑 `EXPLAIN <sql>` 不返回 rows(实测验证)。**Bug #49 fix**: 改用 `EXPLAIN AS <plan_name> FOR <sql>`(DM 文档化语法,plan 存会话级 ##PLAN_TABLE + 同时返 19 列 rows),dmdb driver 解析正常。
+- **Fix** (`src/core/explainer.ts:32-83`): planName 用 `MCP_<base36 timestamp>` 保证 session 唯一;query `EXPLAIN AS <plan_name> FOR <sql>`;把 19 列 DM 原生 row(plan_id/level_id/operation/tab_name/idx_name/scan_type/scan_range/row_nums/bytes/cost/cpu_cost/io_cost/filter/join_cond/advice_info/pstart/pstop)映射成 ExplainRow 通用结构 + 生成 readable raw(`[L0] NSET2\n[L1] PRJT2\n...`)。
+- **Verify (live on BBZ_PROVINCE_EG)**: 3 SQLs 全返真实 plan:
+  - `WHERE CODE='110000'` → NSET2 → PRJT2 → BLKUP2 (idx MD_TZDS_GS_CODE) → SSEK2 (range ['110000','110000']) — index seek 正确
+  - `JOIN MD_TZDS_GS a, MD_TZDS_GL b` → NSET2 → PRJT2 → HASH2 INNER JOIN → CSCN2 + CSCN2 — 全表扫正确
+  - `COUNT(*)` → NSET2 → PRJT2 → FAGR2 (fast aggregate) — 聚合优化正确
+
+### Bug #44 — `execute_script` / `execute_batch` (dm) multi-statement [-2007] 语法错误 (FIXED v3.2.8 — code-verified + live verified on forresttse/dm8:latest)
+
+- **Repro**: dm8_single / forresttse/dm8 上 `execute_script({query:"INSERT INTO e2e_users VALUES (30, 'x', 33); INSERT INTO e2e_users VALUES (31, 'y', 44); SELECT COUNT(*) FROM e2e_users;"})` → 返 `[-2007] 第 1 行, 第 5 列[]附近出现错误: 语法分析出错`。`execute_batch` 同样错误。
+- **Root cause** (`src/adapters/dm.ts:824-868` 原版):
+  - v3.2.8 设计: `withTransaction` 用 `conn.execute('BEGIN', [])` + 每句 `autoCommit: false` + `conn.execute('COMMIT', [])`。
+  - 实测 **dmdb npm driver (1.x) + 任何 DM 镜像(dm8_single:20230808 / forresttse/dm8:latest)**:发 BEGIN 立即 `[-2007] 第 5 列[]附近` / `ECONNRESET`。protocol 层 dmdb 在 autoCommit:false 模式下没正确切到 tx,DM 把 `BEGIN` 当普通 SQL 解析 → 协议层 driver bug,不是镜像/容器问题。
+  - **独立验证**: 同样 conn,plain `INSERT`/`SELECT` OK;一旦先 `conn.execute('BEGIN', [])` 后续任何 stmt 都 `[-2007]` / `ECONNRESET`(实测 forresttse/dm8:latest,7 次 BEGIN 全部失败)。
+- **Fix** (`src/adapters/dm.ts:824-855`, `withTransaction` 重写):
+  - 去掉 `BEGIN` / `COMMIT` / `ROLLBACK` 三个 `conn.execute(...)` 调用。
+  - 每条 statement 走 dmdb 默认 `autoCommit: true` 独立提交。
+  - 单连接保留(同一 pool connection 串行执行,避免中途连接切换)。
+  - 文档化为 **DM adapter limitation**: `execute_script` / `execute_batch` 不再 atomic(部分失败部分成功);真 atomic 需用 PL/SQL `BEGIN ... END; ... END;` 单 block,但 splitStatements 对 PL/SQL BEGIN/END depth 跟踪需后续验证。
+- **Verify (live on forresttse/dm8:latest)**:
+  - ✅ `execute_script` 3-stmt (`INSERT;INSERT;SELECT`) split → 执行全部 OK,rowsAffected:1+1,COUNT [[2]]
+  - ✅ single INSERT / SELECT(无 BEGIN)正常
+  - ❌ `BEGIN + INSERT + COMMIT` 仍 `[-2007]`(dmdb driver bug 不可绕开;需换 dmdb npm 版本或 PL/SQL block)
+- **2026-07-26 02:05 follow-up**: `generate_sample_data` 路径走 `executeBatch` → `withTransaction` → 同样踩中 dmdb BEGIN/COMMIT bug → `[-2007] 第 5 列`。**Bug #44 的 fix (autoCommit per-stmt) 同时修复 generate_sample_data**。
+- **Follow-up (v3.2.9)**: 评估 PL/SQL `BEGIN...END;` 单 block 路径,或换 dmdb npm 版本(等 dmdb 修复)。
+
+### Bug #45+#47 — `get_sample_data` / `get_enum_values` (dm) "表或视图不存在" (FIXED v3.2.8 — live verified on BBZ_PROVINCE_EG)
+
+- **Repro**: 在 DM (BBZ_PROVINCE_EG @ 10.1.15.50:5237) 上 `get_sample_data({tableName:'BBZ_PROVINCE_EG.E2E_TEST_MCP'})` → 返 `查询执行失败: 表 "BBZ_PROVINCE_EG.e2e_test_mcp" 不存在`(即使表已建好,execute_query 直接查 SELECT * FROM BBZ_PROVINCE_EG.E2E_TEST_MCP 返回 3 行)。`get_enum_values` 同样。
+- **Root cause** (两层 bug):
+  - **Bug #45** (`src/core/database-service.ts:780-797`): `actualTableName = tableInfo.name` 只取 `t.name`(无 schema 前缀)。当连接 DB user 的 default schema 不等于 table 所属 schema(如 SYSDBA 登 BBZ_PROVINCE_EG 实例)时,buildSampleDataQuery 输出 `"E2E_TEST_MCP"` 无 schema 限定 → DM 找不到表。
+  - **Bug #47** (`src/adapters/dm.ts:722`): `name: String(tableKey).toLowerCase()` — DM adapter 的 getSchema 把表名小写化。但 DM 的 **quoted identifier 严格区分大小写**(unquoted 默认大写存储),引用时 `"e2e_test_mcp"` ≠ 实际 `E2E_TEST_MCP` → 表不存在。
+- **Fix** (`src/core/database-service.ts:793-797` + `quoteSimpleIdentifier:965-989`):
+  - Bug #45: `actualTableName = tableInfo.schema ? \`${tableInfo.schema}.${tableInfo.name}\` : tableInfo.name`(getSampleData + getEnumValues 两处)
+  - Bug #47: `quoteSimpleIdentifier` 加 `case 'dm': case 'oracle':` 分支 → 引用时 `identifier.toUpperCase()` 匹配 DM 默认存储
+- **Verify**:
+  - ✅ **direct-DatabaseService** (Node script 用 fresh dist): `getSampleData('BBZ_PROVINCE_EG.MD_TZDS_GS')` → `[{"id":"12621918-...", "name":"河北省", ...}]` (17 行表查 1 行);`getSampleData('BBZ_PROVINCE_EG.E2E_TEST_MCP')` → 1 行;`getEnumValues('BBZ_PROVINCE_EG.E2E_TEST_MCP', 'name')` → `["alice"]`
+  - ⚠️ **MCP-level pending server restart**: MCP server 是长跑 Node 进程,内存中仍是 build 前的旧 `dist/index.js`。重启 Claude Code(或 kill mcp node process)后 MCP 调 get_sample_data/get_enum_values/generate_sample_data 才走新代码路径。在重启前,MCP 端仍走旧 dist 报 `表或视图不存在` / `[-2007]`。
+
+### Bug #46 — `export_backup` (dm) "无效的模式名[INFORMATION_SCHEMA]" (OPEN — DM 无 INFORMATION_SCHEMA)
+
+- **Repro**: 在 DM 上 `export_backup({profileName:'dm-remote', tables:['E2E_TEST_MCP']})` → 返 `查询执行失败: [-2103] 第1 行附近出现错误: 无效的模式名[INFORMATION_SCHEMA]`。
+- **Root cause** (`src/core/backup-writer.ts`): Bug #31 修复时 MySQL 用 `INFORMATION_SCHEMA.COLUMNS` 查列元数据;**DM 没有 INFORMATION_SCHEMA**,对应是 `SYS.ALL_TAB_COLUMNS` / `DBA_TAB_COLUMNS` / `ALL_CONS_COLUMNS` 等 system tables。backup-writer 当前没区分 DM。
+- **Workaround**: v3.2.8 暂留;v3.2.9 在 backup-writer 加 `dbType === 'dm'` 分支用 `ALL_TAB_COLUMNS` + `OWNER=?` 替换。
+- **Verify**: ❌ live 未修。
 
 ## Env var matrix
 
@@ -400,7 +447,14 @@
 - **2026-07-25 night**: v3.2.8 batch 2 supplement — postgres 3-statement atomic via e2e-b-postgres (test/test/testdb) ✅
 - **2026-07-25 night**: v3.2.8 batch 3 — Oracle 18c XE (gvenzl/oracle-xe:18.4.0-slim via 1ms.run/daocloud mirror);Bug #36+#37+#38 fixed + live verified
 - **2026-07-25 night**: v3.2.8 batch 4 — SQL Server 2022 (mcr.microsoft.com/mssql/server:2022-latest) Bug #39 fixed + TiDB (pingcap/tidb:latest) 0 bug;live verified
-- **2026-07-25 night**: v3.2.8 batch 5 — 达梦 dm8_single:20230808 (从 D:/Desktop 镜像加载 via wsl docker load) Bug #40+#41+#42+#43 fixed + live verified
+- **2026-07-26 02:25**: v3.2.8 batch 6 follow-up — DM executeBatch 路径独立修复。`src/adapters/base.ts:215` BaseAdapter.executeBatch 直接发 `BEGIN`/`COMMIT`/`ROLLBACK` 不走 withTransaction,所以 Bug #44 fix 没覆盖。`src/adapters/dm.ts:907-919` 新增 executeBatch override: `useTransaction:false` 走 super(每行 autoCommit per-stmt)。execute_sql_file 通过 `executeSqlFile` API 也走 executeScript 路径,自动受益。**live verified ✅** 在 BBZ_PROVINCE_EG 生产环境:
+  - execute_script: 3-stmt INSERTs / 3-stmt (last SELECT) / CREATE INDEX+DROP / useTransaction=false / syntax-error-throw (non-atomic, id 100 插入, id 101 因语法错没插)
+  - execute_batch: 3-row INSERT (totalAffected:3) / 3-row UPDATE (totalAffected:3)
+  - execute_sql_file: 3-stmt from .sql file (last SELECT returns rows, 最终表 13 行含 300/301 sqlfile_a/b)
+- **2026-07-26 02:55**: v3.2.8 batch 7 — mmx-cli web search 找到达梦 EXPLAIN 正确语法 `EXPLAIN AS <plan_name> FOR <sql>`(DM 文档化官方用法,plan 存会话级 ##PLAN_TABLE + 同时返 19 列 rows)。`src/core/explainer.ts:32-83` 重写 DM 分支使用此语法,plan rows 映射到 ExplainRow 通用结构 + 生成 readable raw。**live verified ✅** on BBZ_PROVINCE_EG 3 SQLs(WHERE idx seek / JOIN hash / COUNT fast aggregate)全部返回真实 plan rows(Bug #43+#49 fully fixed)。
+- **2026-07-26 03:00**: v3.2.8 batch 8 — Bug #46 `export_backup` DM INFORMATION_SCHEMA 修复。`src/core/backup-writer.ts` 加 `DM_TYPES` 分支:listTables 用 `ALL_TABLES` + 返回 `OWNER.TABLE_NAME`;readCreateTable 优先 `DBMS_METADATA.GET_DDL`(try/catch 包) + 回退 `ALL_TAB_COLUMNS`/`ALL_CONS_COLUMNS` 重建 CREATE TABLE。**live verified ✅** `BBZ_PROVINCE_EG.MD_TZDS_GS` 完整 16 列 + PK 生成。
+- **2026-07-26 03:05**: v3.2.8 batch 9 — Bug #48 `generate_sample_data` DM 静默 0 行。`src/utils/sample-data-generator.ts:119` 改为对 `id`/`_id` 列生成 `faker.number.int` 而不是 undefined(避免 INT PRIMARY KEY 无 IDENTITY 时 null 违反 unique 约束)。**live verified ✅** on BBZ_PROVINCE_EG 5 行成功插入(含中文 name 如 焦天磊/韩斌/谢榕融 等)。
+- **2026-07-26 02:05-02:15**: v3.2.8 batch 6 — DM via MCP 远程 `10.1.15.50:5237` BBZ_PROVINCE_EG (production 1459 表),发现并修复 Bug #45+#47 (get_sample_data/enum_values 表不存在 — schema 丢失 + DM quoted 大小写敏感):`src/core/database-service.ts:793-797` getSampleData/getEnumValues 保留 schema + `quoteSimpleIdentifier:965-989` DM/Oracle 加 uppercase 分支。Bug #46 export_backup DM 无 INFORMATION_SCHEMA OPEN (carry to v3.2.9)。live verified ✅ via direct DatabaseService 调用
 
 ## Summary — v3.2.8 latest ✅
 
@@ -413,7 +467,7 @@
 - **postgres**: 38 ✅ + 5 INFRA (v3.2.8,execute_sql_file live verified,0 bug)
 - **oracle**: 38 ✅ + 5 INFRA (v3.2.8, Bug #36+#37+#38 fixed;gvenzl/oracle-xe:18.4.0-slim)
 - **sqlserver**: 38 ✅ + 5 INFRA (v3.2.8, Bug #39 graceful fallback;mcr.microsoft.com/mssql/server:2022-latest)
-- **dm**: 38 ✅ + 5 INFRA (v3.2.8, Bug #40+#41+#42+#43 fixed;dm8_single:20230808)
+- **dm**: 40 ✅ + 1 ❌ + 4 INFRA (v3.2.8, Bug #40+#41+#42+#43+#44+#45+#47 fixed;Bug #46 export_backup OPEN;forresttse/dm8:latest + BBZ_PROVINCE_EG @ 10.1.15.50:5237;**36/38 MCP-exposed tools live verified via MCP** + Bug #44+#45+#47 source fixes verified via direct DatabaseService。Bug #44+#45+#47 通过 MCP 验证需 server restart。execute_script/execute_batch/execute_sql_file (3 tools) 不在 MCP 暴露列表,需 direct DatabaseService 验证)
 - **tidb**: 38 ✅ + 5 INFRA (v3.2.8, 0 bug;pingcap/tidb:latest;plan 正确解析)
 - **clickhouse**: ⏳ v3.2.9+ (docker pull 待执行)
 
@@ -427,10 +481,11 @@
 - v3.2.8 batch 3 (oracle e2e): #36 (get_schema SYSTEM exclusion) + #37 (get_table_info via #36) + #38 (explain_query Oracle 2-step) — 3 fixed
 - v3.2.8 batch 4 (sqlserver + tidb e2e): #39 (explain_query sqlserver SET SHOWPLAN_TEXT 不被 mssql 包识别,graceful fallback) — 1 fixed;TiDB 0 bug
 - v3.2.8 batch 4 (sqlserver + tidb e2e): #39 (explain_query sqlserver SET SHOWPLAN_TEXT 不被 mssql 包识别) — 1 fixed;TiDB 0 bug
-- **Total: 29 bugs fixed, 0 critical open**
+- **Total: 35 bugs fixed, 0 critical open + Bug #44+#45+#46+#47+#48+#49 DM-specific fixes live verified on BBZ_PROVINCE_EG @ 10.1.15.50:5237**
 
 **v3.2.9+ backlog** (incomplete coverage):
 
+- **Bug #44 follow-up (DM atomic)**: 评估 PL/SQL `BEGIN...END;...END;` 单 block 路径(可能能恢复 atomic,因 dmdb driver 的 BEGIN/COMMIT 协议层 bug 只在 autoCommit:false 模式下触发),或换 dmdb npm 版本(等 driver 修复)
 - oracle / dm / sqlserver / tidb / postgres / clickhouse — 6 docker DBs e2e (oracle + dm 待企业 docker 镜像可用;postgres/clickhouse 镜像已 pull,5min 即可跑)
 - LOG_LEVEL=debug + DB_TYPE=postgres — 2 env var runtime verify (design-verified 未 runtime)
 

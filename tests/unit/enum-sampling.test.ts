@@ -147,7 +147,8 @@ describe('DatabaseService.getEnumValues - P1 sampling', () => {
 
     // Oracle cannot use RANDOM() / LIMIT in subquery → fallback to simple DISTINCT
     expect(adapter.capturedQuery).not.toMatch(/ORDER BY RANDOM/);
-    expect(adapter.capturedQuery).toMatch(/SELECT DISTINCT "status" as value FROM "orders"/);
+    // v3.2.8 Bug #45+#47 fix: DM/Oracle quoted identifier 默认转大写
+    expect(adapter.capturedQuery).toMatch(/SELECT DISTINCT "STATUS" as value FROM "ORDERS"/);
     // appendLimit should still use Oracle's FETCH FIRST
     expect(adapter.capturedQuery).toMatch(/FETCH FIRST 51 ROWS ONLY/);
   });

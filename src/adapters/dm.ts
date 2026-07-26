@@ -9,7 +9,7 @@
  * 连接管理：使用心跳保活 + 断线自动重连 + 操作自动重试，确保长连接稳定性
  */
 
-import { BaseAdapter, ExecuteScriptOptions, TransactionContext } from './base.js';
+import { BaseAdapter, ExecuteScriptOptions, ExecuteBatchOptions, TransactionContext, BatchResult } from './base.js';
 import type {
   QueryResult,
   SchemaInfo,
@@ -817,9 +817,17 @@ export class DMAdapter extends BaseAdapter {
   }
 
   /**
-   * P0-3: Override withTransaction to pin all statements to a single physical connection.
-   * Uses a freshly-checked-out connection from the pool (NOT this.connection, which
-   * is reserved for the heartbeat / retry path).
+   * P0-3 + Bug #44: Override withTransaction to pin all statements to a single physical connection.
+   *
+   * v3.2.8 设计:用 BEGIN/COMMIT 包,期望 atomic。但 dmdb npm driver 发 BEGIN/COMMIT 时
+   * 协议层异常(connection drop / [-2007] 语法错误 第 10 列[]),实测独立 SELECT/INSERT 都 OK,
+   * 一旦 BEGIN/COMMIT 包就 ECONNRESET。原因推测 dmdb driver 在 autoCommit:false 模式下
+   * 没正确发送 BEGIN,DM 把它当普通 SQL 解析 → "BEGIN" 5 字符 第 10 列 不存在。
+   *
+   * v3.2.8 妥协方案:去掉 BEGIN/COMMIT,只保单连接。每条 statement autoCommit:true
+   * 独立提交。代价:execute_script 不再 atomic(部分失败部分成功)。
+   * 文档化为 DM adapter limitation;真 atomic 需用 PL/SQL BEGIN...END;...;END; 单 block,
+   * dmdb 协议层正常,但 splitStatements 对 PL/SQL BEGIN/END 的处理需后续验证。
    */
   async withTransaction<T>(fn: (tx: TransactionContext) => Promise<T>): Promise<T> {
     if (!this.pool) {
@@ -827,16 +835,16 @@ export class DMAdapter extends BaseAdapter {
     }
     const conn = await this.pool.getConnection();
     try {
-      await conn.execute('BEGIN', []);
       const tx: TransactionContext = {
         executeQuery: async (query: string, params?: unknown[]) => {
           const startTime = Date.now();
           let cleanQuery = query.trim();
           if (cleanQuery.endsWith(';')) cleanQuery = cleanQuery.slice(0, -1).trim();
-          const result = await conn.execute(cleanQuery, params || [], { autoCommit: false });
+          // Bug #44 fix:每个 statement 走 autoCommit:true 默认提交,
+          // 避免 dmdb BEGIN/COMMIT 协议层 ECONNRESET。
+          const result = await conn.execute(cleanQuery, params || []);
           const executionTime = Date.now() - startTime;
           if (result.rows && result.rows.length > 0) {
-            // Convert column names to lowercase to match executeQuery format
             const rows = result.rows.map((row: any) => {
               const lowerCaseRow: Record<string, unknown> = {};
               for (const [key, value] of Object.entries(row)) {
@@ -857,10 +865,8 @@ export class DMAdapter extends BaseAdapter {
         },
       };
       const result = await fn(tx);
-      await conn.execute('COMMIT', []);
       return result;
     } catch (err) {
-      try { await conn.execute('ROLLBACK', []); } catch { /* ignore */ }
       throw err;
     } finally {
       try { await conn.close(); } catch { /* ignore */ }
@@ -868,9 +874,8 @@ export class DMAdapter extends BaseAdapter {
   }
 
   /**
-   * P0-3: Override executeScript to use withTransaction.
-   * All statements run on a single connection so BEGIN/COMMIT are atomic.
-   * Non-transactional mode falls back to the BaseAdapter default.
+   * P0-3 + Bug #44 fix: Override executeScript.
+   * 使用 withTransaction(单连接 + 每句 autoCommit),multi-statement 可跑但非 atomic。
    */
   async executeScript(query: string, options: ExecuteScriptOptions = {}): Promise<QueryResult> {
     if (options.useTransaction === false) {
@@ -891,6 +896,20 @@ export class DMAdapter extends BaseAdapter {
         metadata: { statementCount: statements.length, lastResult },
       };
     });
+  }
+
+  /**
+   * Bug #44 fix follow-up: Override executeBatch.
+   * BaseAdapter.executeBatch 默认发 `BEGIN`/`COMMIT`/`ROLLBACK`(见 src/adapters/base.ts:215),
+   * dmdb driver 在 DM 上发 BEGIN 立即 [-2007]/ECONNRESET(协议层 bug,跟 withTransaction 同根)。
+   * 复用 withTransaction 的 skip-BEGIN 思路:每行 autoCommit:true 独立提交,非 atomic。
+   */
+  async executeBatch(sql: string, paramsList: unknown[][], options: ExecuteBatchOptions = {}): Promise<BatchResult> {
+    if (options.useTransaction === false) {
+      return super.executeBatch(sql, paramsList, { ...options, useTransaction: false });
+    }
+    // 强制走 autoCommit per-stmt 路径(走 super.useTransaction:false 分支 = BaseAdapter else 分支)
+    return super.executeBatch(sql, paramsList, { ...options, useTransaction: false });
   }
 
   /**

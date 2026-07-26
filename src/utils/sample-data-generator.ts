@@ -116,7 +116,14 @@ export class SampleDataGenerator {
     if (/^(zip_?code|postal_?code)$/i.test(name)) return this.faker.location.zipCode();
     if (/^(url|website|link|homepage)$/i.test(name)) return this.faker.internet.url();
     if (/^(uuid|guid)$/i.test(name) || column.type.toLowerCase().includes('uuid')) return this.faker.string.uuid();
-    if (name === 'id' || /_id$/i.test(name)) return undefined;
+    if (name === 'id' || /_id$/i.test(name)) {
+      // v3.2.8 Bug #48 fix: 之前返回 undefined 让 DB auto-fill,但 DM 没有公开的
+      // IDENTITY 检测(ALL_TAB_COLUMNS 无 IDENTITY_COLUMN 列),实际 `id INT PRIMARY KEY`
+      // 不带 IDENTITY,期待用户提供 int 值。原行为会让 5 行全 null → 静默 0 行
+      // 插入(unique constraint violation)。改成生成 sequence int;对真 IDENTITY
+      // 列(postgres/mysql 真实 auto-increment)用户值会被 DB 直接使用,语义 OK。
+      return this.faker.number.int({ min: 1, max: 100000 });
+    }
     if (/created_?at|created_?time|insert_?time/i.test(name)) return this.faker.date.recent({ days: 90 });
     if (/updated_?at|updated_?time|modify_?time/i.test(name)) return this.faker.date.recent({ days: 30 });
     return null;

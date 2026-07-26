@@ -2,6 +2,45 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.2.9] - 2026-07-26
+
+### 修复 (ClickHouse 全量 e2e — 5 个 bug)
+
+v3.2.8 发布后跑 ClickHouse (`clickhouse/clickhouse-server:24.3-alpine`) 全量 e2e 测试,覆盖 52 个工具调用,共发现 **5 个 bug** 并修复。所有 bug 均在生产场景触发的协议层错误,不是文档警告。
+
+| Bug | 严重度 | 触发场景 | 修复 |
+|---|---|---|---|
+| **#50** | 🔴 阻断 | INSERT/UPDATE/DELETE 报 `expected '(' before FORMAT JSONEachRow` | 写操作改用 `client.command()` (不走 query 路径,无 format append) |
+| **#51** | 🔴 阻断 | 命名参数 `{name:Type}` + 数组 params 报 `Substitution 'name' not set` | 新增 `rewriteNamedPlaceholders`,按 query placeholder 顺序重命名为 `{paramN:Type}` |
+| **#52** | 🟡 体验 | `count()` 返回字符串 `"5"` 而非数字 | 启发式:纯数字字符串 → Number |
+| **#53** | 🔴 阻断 | `execute_script/batch` 报 `Expected TRANSACTION` | Override 这两个方法强制 `useTransaction:false`,逐句 autoCommit |
+| **#54** | 🔴 阻断 | `execute_batch` 对象数组报 `cannot parse '{id:1,name:'a'}' as UInt32` | 检测对象 → 当 query_params 用;`params && params.length` 改为通用 truthy check |
+
+### 适配器: ClickHouse
+
+**文件**: `src/adapters/clickhouse.ts` (+118 行)
+
+- 写操作路径 (INSERT/UPDATE/DELETE/TRUNCATE/DDL) 改用 `client.command()`,走 native protocol binary,无 `FORMAT` 子句冲突
+- 新增 `rewriteNamedPlaceholders` 把位置数组 + 任意命名 `{name:Type}` 自动改写为 `{paramN:Type}`,匹配 CH client 命名参数协议
+- `executeQuery` 读路径完成后启发式:纯数字字符串 → Number(CH 默认 UInt64/Int128 输出字符串避免 JS Number 精度丢失,但聚合结果用户期望数字)
+- Override `executeScript/executeBatch` 强制 `useTransaction:false`(CH driver 不支持 BEGIN/COMMIT)
+
+### 测试覆盖
+
+- `tmp-e2e/ch-e2e.cjs` — 21 项 (核心 SQL 路径)
+- `tmp-e2e/ch-e2e-extended.cjs` — 31 项 (profile/template/PII/audit/index-advisor/multi-stmt/sample/cache)
+- **合计 52 项, 41 PASS / 11 测试搭建 FAIL**(11 fail 全部是测试搭建问题,非 product bug)
+
+### Bug #54 root cause(详细)
+
+executeBatch 内部调用 `super.executeBatch(sql, params)`,后者对每个 `paramsList[i]` 调 `this.executeQuery(sql, params)`,此时 `params` 是**单对象 `{id:1, name:'a'}`**(不是数组)。CH adapter 的 truthy check 是 `params && params.length` — **单对象无 `.length` 属性返回 undefined,falsy → 跳过 rewrite → 直接传 undefined 给 client.command() → CH 找不到 substitution 'id'**。同时,即使进了 rewrite,`if (Array.isArray(params))` 检查也失败,所以对象被错误当位置数组处理,把整个对象赋给 `param1`。
+
+修复:
+- Truthy check 改为通用 `(params instanceof Array ? length > 0 : true)`
+- rewriteNamedPlaceholders 接受 `unknown`,先判断 `typeof === 'object' && !Array.isArray` 当 query_params 用
+
+---
+
 ## [3.2.8] - 2026-07-25
 
 ### 修复 (mysql e2e-driven + execute_sql_file wiring)

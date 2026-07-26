@@ -19,12 +19,12 @@ scrape_configs:
 
 Available metric families:
 
-| Metric | Type | Labels | Meaning |
-|---|---|---|---|
-| `db_query_total` | counter | `db`, `kind`, `status` | Total queries (kind = select/insert/.../script/batch) |
-| `db_query_seconds` | histogram | `db`, `kind` | Query latency (seconds) — covers acquire + execute |
-| `db_query_errors_total` | counter | `db`, `kind`, `code` | Query errors by error code |
-| `db_slow_queries_total` | counter | `db`, `kind` | Queries above `DB_SLOW_QUERY_THRESHOLD_MS` |
+| Metric                    | Type      | Labels                       | Meaning                                               |
+| ------------------------- | --------- | ---------------------------- | ----------------------------------------------------- |
+| `db_query_total`        | counter   | `db`, `kind`, `status` | Total queries (kind = select/insert/.../script/batch) |
+| `db_query_seconds`      | histogram | `db`, `kind`             | Query latency (seconds) — covers acquire + execute   |
+| `db_query_errors_total` | counter   | `db`, `kind`, `code`   | Query errors by error code                            |
+| `db_slow_queries_total` | counter   | `db`, `kind`             | Queries above`DB_SLOW_QUERY_THRESHOLD_MS`           |
 
 Note: `db_pool_acquire_*` metrics are not yet exposed — pool acquire timing is bundled into `db_query_seconds` (acquire is typically < 5ms, query execution dominates). Proper pool-level breakdown is planned for v2.17.
 
@@ -37,6 +37,7 @@ Note: `db_pool_acquire_*` metrics are not yet exposed — pool acquire timing is
 Returns JSON. Categories: `summary` (counters + histograms + gauges), `slow_queries` (recent slow-query list, ring-buffered), `all` (everything). Does NOT require a database connection.
 
 Example response (category=slow_queries):
+
 ```json
 {
   "slow_queries": [
@@ -58,11 +59,11 @@ Response now includes additional fields: `uptime_seconds`, `active_db`, `queries
 
 ## Configuration
 
-| Env | Default | Effect |
-|---|---|---|
-| `DB_METRICS_ENABLED` | `true` | Set `false` to disable all observability (zero overhead) |
-| `DB_METRICS_IP_ALLOWLIST` | (empty) | Comma-separated IPs/CIDRs allowed to scrape `/metrics` |
-| `DB_METRICS_SLOW_BUFFER_SIZE` | `100` | Slow-query ring buffer capacity (`0` disables recording) |
+| Env                             | Default  | Effect                                                     |
+| ------------------------------- | -------- | ---------------------------------------------------------- |
+| `DB_METRICS_ENABLED`          | `true` | Set`false` to disable all observability (zero overhead)  |
+| `DB_METRICS_IP_ALLOWLIST`     | (empty)  | Comma-separated IPs/CIDRs allowed to scrape`/metrics`    |
+| `DB_METRICS_SLOW_BUFFER_SIZE` | `100`  | Slow-query ring buffer capacity (`0` disables recording) |
 
 `DB_QUERY_TIMEOUT_MS` and `DB_SLOW_QUERY_THRESHOLD_MS` (existing) — metrics reuse the same threshold for slow-query recording.
 

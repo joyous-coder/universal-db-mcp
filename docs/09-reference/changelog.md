@@ -9,6 +9,7 @@
 修复 v3.2.0 引入的 15 个 bug，分 4 个 commit group：
 
 **Group 1: core wiring（commit be046a7）**
+
 - 新增 `DatabaseMCPServer.configureFromAppConfig(appConfig)` 方法，从 mcp-index.ts 和 mcp-sse.ts entrypoint 调用，统一装配 QueryAnalyzer / ProfileManager / PlanHistory
 - 新增 `setPlanHistory(ph)` setter
 - `defaultActiveGroups` 现在读取 `appConfig.lazyLoad.defaultActiveGroups`（之前硬编码 `[]`）
@@ -16,18 +17,21 @@
 - 修复 `setQueryAnalyzer` / `setProfileManager` / `setAppConfig` 在生产代码中从未被调用的根本 bug（影响 v2.16-v3.1 所有 setter）
 
 **Group 2: handler bugs（commit ccd5f44）**
+
 - `tool()` helper 现在接受 `group` 参数（之前硬编码 `group: null`），所有 25 lazy-group tool() 调用现在正确传递 group 名
 - 3 个 stateful tool（`execute_template` / `get_metrics` / `use_profile`）从 registry 移到 v3.1 fallback switch（registry 的 handler 没有访问 adapter/appConfig/activeProfile mutation 的能力）
 - `ProfileManager.getProfileStore()` 新增 public getter，移除所有 `(pm as any).profileStore` cast
 - `generate_sample_data` 的 execution 保留在 v3.1 fallback switch（stateful）；info-lazy schema 保留供 `use_tool_schema` 使用
 
 **Group 3: state/routing（commit db38492）**
+
 - `use_tool_group` 增加 enum validation（之前接受任意 string）
 - `disable_profile` / `delete_profile` / `disconnect_profile` 现在在删除 active profile 时清空 `this.activeProfile`
 - meta-tool routing + registry dispatch 现在包在 outer try/catch 里
 - lazy-mode ListTools 现在包含 always-on stateful tools（connect_database / execute_query / get_schema / etc.）和 3 个 stateful lazy tools
 
 **Group 4: lifecycle（commit b3cc66a）**
+
 - Server capability `tools.listChanged=true`
 - `use_tool_group` 激活后调 `server.sendToolListChanged()` 通知 client
 - Streamable HTTPServerTransport `onclose` 设置为 `cleanupSession()`，释放 DB 连接和 registry state
@@ -54,15 +58,18 @@
 ### 新增 MCP tool handler（11 个）
 
 #### data-governance (4)
+
 - `export_backup` — 导出 profile 为 SQL dump
 - `audit_log` — 查询 SQL 审计日志 (actor/severity/profile)
 - `get_pii_config` — 读 PII 脱敏配置
 - `set_pii_config` — 运行时更新 PII 规则
 
 #### profile lifecycle (5)
+
 - `get_profile` / `delete_profile` / `enable_profile` / `disable_profile` / `disconnect_profile`
 
 #### profile import/export (2)
+
 - `export_profiles` — 导出 profile 为 YAML/JSON (默认 redact 密码)
 - `import_profiles` — 导入 profile (merge/replace + dryRun)
 
@@ -99,6 +106,7 @@
 ## [3.1.0] - 2026-07-24
 
 ### 新增 (Index Advisor v3.1)
+
 - **`ExplainPlanParser`** — 17 adapter 覆盖：sqlite/mysql/pg/mongodb native JSON；其它 11 adapter (oracle/dameng/mssql/clickhouse/kingbase/gaussdb/opengauss/oceanbase/tidb/polardb/vastbase/highgo/goldendb) raw passthrough；redis 'unsupported'
 - **`IndexAdvisor.analyze(plan, dbType)`** — 4 heuristic rules (seq_scan / large_estimate / no_index_join / sort_no_index)，输出 CREATE INDEX SQL + impact (low/medium/high)
 - **`PlanDiff.compare(planA, planB)`** — added/removed/changed + costDelta + rowsDelta，按 op+table 标识相同节点
@@ -106,34 +114,41 @@
 - **`SqlNormalizer`** — strip literals → "SELECT * FROM t WHERE id = ?"，hash 相同查询
 
 ### MCP tools (3 个)
+
 - `explain_query_with_advice` — EXPLAIN + IndexAdvisor advice；可选 persist 到 PlanHistory
 - `compare_query_plans` — 跨时间/同 queryHash 比较 plan，输出 costDelta
 - `list_query_plans` — recent entries 或按 queryHash 过滤
 
 ### HTTP endpoints (3 个)
+
 - `POST /api/query-explain-advice`
 - `POST /api/query-plan-diff`
 - `GET /api/query-plans` (filters: `limit`, `queryHash`)
 
 ### 文档
+
 - **新文档** `docs/index-advisor.md` — 3 capability API + adapter 覆盖表 + 安全提示
 - `docs/deferred-items.md` 更新 — 索引建议 / Query plan diff 标 v3.1 ✅
 
 ### 测试
+
 - 新增 4 测试文件 (`explain-parser` / `plan-diff` / `plan-history` / `plan-capture-e2e`)
 - 总数: 485 测试全过 (v3.0.0: 450)
 
 ### 依赖
+
 - 0 强制新增
 - 0 optional 新增
 
 ### 安全
+
 - `IndexAdvisor` 仅建议 SQL，**绝不执行** CREATE INDEX；human-in-loop 由 LLM 负责 review & apply
 - PlanHistory 存 { sqlOriginal + planJson metadata }，无 query 结果数据
 
 ## [3.0.0] - 2026-07-24
 
 ### 新增 (Data Governance)
+
 - **多 profile Schema diff** — `compare_profile_schemas` MCP tool + `GET /api/profiles/:a/compare/:b` HTTP。报告 added/removed/modified tables + column 级变更
 - **SQL dump 备份导出** — `export_backup` MCP tool + `POST /api/profiles/:name/backup` HTTP。MVP 支持 sqlite/mysql/postgresql，其他 adapter 返回 `schema-only` fallback；流式 `LIMIT/OFFSET` 分页拉数据避免大库超内存
 - **SQL audit log** — `history.db` 加 4 列 (`actor` / `client_ip` / `severity` / `audit_metadata_json`) + 3 indexes；`AuditLog` facade + `classifySeverity` heuristic (read/write/ddl)；`DB_AUDIT_MODE_ENABLED=true` 时每条 `executeQuery` 自动埋点
@@ -141,23 +156,28 @@
 - **MCP tools**: 5 个 — `compare_profile_schemas` / `export_backup` / `audit_log` / `get_pii_config` / `set_pii_config`
 
 ### 配置
+
 - 3 个新 env var: `DB_AUDIT_MODE_ENABLED` / `DB_AUDIT_RETENTION_DAYS` / `DB_PII_CONFIG_PATH`
 - 全部默认关闭 — 不配置与 v2.20 完全一致
 
 ### 文档
+
 - **新文档** `docs/data-governance.md` — 4 能力 API + pii.config.json schema + 注意事项
 - `docs/deferred-items.md` 更新 — 4 项 v3.0 ✅ 加进 ledger
 
 ### 测试
+
 - 新增 4 测试文件 (`schema-diff` / `backup-writer` / `audit-log` / `pii-masker`)
 - 总数: 450 测试全过 (v2.20.0: 413)
 
 ### 依赖
+
 - 0 强制新增
 - 0 optional 新增
 - SQL dump 用现有 adapter 的 `executeQuery` 接口，不需引入 mysqldump/pg_dump shell 依赖
 
 ### 安全
+
 - `pii.config.json` 启动显式校验 — strategy 必须在 enum 内
 - backup dump 输出不加密；建议写到加密卷或管道过 gpg
 - audit log 记录 actor + IP 用于合规追溯；输出侧仍可用 PiiMasker
@@ -165,33 +185,40 @@
 ## [2.20.0] - 2026-07-24
 
 ### 新增 (Profile Hardening)
+
 - **`templates.db` / `history.db` SQLCipher 加密** — v2.19 占位兑现，`DB_TEMPLATES_DB_KEY` / `DB_HISTORY_DB_KEY` 现在真生效。cipher 错误抛清晰错误不 silent fallback
 - **Profile YAML / JSON 导入导出** — `exportProfiles(format)` / `importProfiles(input, opts)` 方法，默认 redact 密码 (`REDACTED`)，`--include-secrets` flag 输出明文；`merge` / `replace` 两种 import 模式；`dryRun` 预览；未知 type + 非法 role 自动拒绝
 - **Key rotation (3 个 DB 都支持)** — `ProfileStore.rotateKey` / `TemplateStore.rotateKey` / `HistoryStore.rotateKey`；原子替换 (`.rotating.tmp` + `rename()`)；环境变量 `*_KEY_OLD` / `*_KEY` 一对用于 startup 期迁移
 - **`HistoryStore.query({ q })` FTS5 全文搜索** — SQLite 内置 FTS5 virtual table `history_fts` + 同步 trigger (INSERT/DELETE/UPDATE)；init 自动 backfill；支持自然语言 / 短语 / boolean / prefix 查询；与 `db` / `kind` / `profileName` 等过滤组合
 
 ### 配置
+
 - 6 个 env var (3 对 cipher + rotation)，全为空值时保持 v2.17-v2.19 行为
 
 ### 文档
+
 - **新文档** `docs/deferred-items.md` — 全 v2.x deferred items 清算 ledger（三态：delivered / pending / abandoned）
 - `docs/multi-profile.md` 增加 v2.20 sections
 
 ### 测试
+
 - 新增 5 测试文件 (`template-store-cipher` / `profile-serializer` / `key-rotator` / `history-store-fts` / `profile-import-export` integration)
 - 总数: 413 测试全过 (v2.19.0: 375)
 
 ### 依赖
+
 - 0 强制新增
 - 0 optional 新增（仍沿用 v2.19 `better-sqlite3-multiple-ciphers`）
 
 ### 安全
+
 - profiles.db / templates.db / history.db 全部支持 SQLCipher；rotation 在 atomic rename 下不会产生半写状态
 - YAML 导出默认 redact 密码字段（password / passwd / secret / token / key）
 
 ## [2.19.0] - 2026-07-24
 
 ### 新增 (Multi-Profile v2)
+
 - **Profile 加密 (SQLCipher)** — `DB_PROFILE_ENCRYPTION_KEY` env 加密 `profiles.db`（依赖 `better-sqlite3-multiple-ciphers`，`optionalDependencies`）。缺失 dep 抛清晰错误，错误 key 抛清晰错误，**不 silent fall back**
 - **跨 profile 模板** — `save_template` 支持可选 `profile_name`，`list_templates` 支持 `profileName: null` (全局) / `'name'` (本地) / 省略 (全部) 三态过滤
 - **跨 profile 历史** — `get_query_history` 增加 `profileName` + `groupBy: 'profile'` 聚合，返回 `{profileName, count, errors, avg_ms}[]`
@@ -200,28 +227,34 @@
 - **`ProfileManager.setQueryAnalyzer(qa)` + `routeQuery`** — 自动给 `routeQuery` 调用的 query 在 history 填 `profile_name`
 
 ### 配置
+
 - 3 个新 env var: `DB_PROFILE_ENCRYPTION_KEY`（激活）/ `DB_TEMPLATES_DB_KEY`（占位）/ `DB_HISTORY_DB_KEY`（占位）
 - 缺失/空值 → fallback 明文（v2.18 兼容），启动 warn 一次
 
 ### 文档
+
 - 重命名 `docs/multi-db.md` → `docs/multi-profile.md`（覆盖 v2.18+v2.19）
 - 新增 Profile 加密 + 跨 profile 模板/历史章节
 
 ### 测试
+
 - 新增 7 测试文件 (`encrypted-sqlite` / `profile-store-cipher` / `template-store-v2.19` / `history-store-v2.19` / `cross-profile-history` integration + extensions)
 - 总数: 375 测试全过 (v2.18.0: 337)
 
 ### 依赖
+
 - 0 强制新增
 - 1 个 optional dep: `better-sqlite3-multiple-ciphers ^11.8.1`（~5MB，仅 SQLCipher 启用时加载）
 
 ### 安全
+
 - `profiles.db` 走 SQLCipher 后整文件加密（key 来自 env `DB_PROFILE_ENCRYPTION_KEY`）
 - README 仍强提示未加密场景下 `.gitignore` profiles.db
 
 ## [2.18.0] - 2026-07-24
 
 ### 新增 (Multi-DB)
+
 - **Profile 管理** — `save_profile` / `list_profiles` MCP tool + `/api/profiles` CRUD 端点，SQLite `profiles.db` 持久化
 - **运行时切换** — `use_profile` MCP tool + `POST /api/profiles/:name/connect`，支持 named profile 切换
 - **连接分组** — `profile.role = primary | replica | analytics`，读 round-robin 走同 role group，写固定 primary
@@ -231,24 +264,30 @@
 - **get_metrics 扩展** — 新增 `multi_db` category 返回 profile 状态
 
 ### 配置
+
 - 5 个新 env var: `DB_MULTI_DB_ENABLED` / `DB_PROFILES_DB_PATH` / `DB_PROFILES_MAX` / `DB_DEFAULT_PROFILE_ROLE` / `DB_READ_ROUTING`
 
 ### 测试
+
 - 新增 8 测试文件 (~600 行)
 - 总数: 337 测试全过 (v2.17.0: 305)
 
 ### 文档
+
 - 新增 `docs/multi-db.md`
 
 ### 依赖
+
 - 0 新增（复用 v2.16 multi-backend SQLite）
 
 ### 安全
+
 - `profiles.db` 含明文密码 — 强提示 `.gitignore`，v2.19+ SQLCipher
 
 ## [2.17.0] - 2026-07-24
 
 ### 新增 (Query Experience)
+
 - **Explain Plan** — `explain_query` MCP tool + `POST /api/explain` 端点，per-DB EXPLAIN + 解析 `plan` 数组 + 保留 raw 输出
 - **SQL Lint** — `lint_sql` MCP tool + `POST /api/lint`，10 条规则 (select-star / no-where-update / in-thousand / leading-wildcard-like 等)，纯 advisory 不阻止执行
 - **查询历史** — `get_query_history` MCP tool + `GET /api/query-history`，SQLite 持久化 + 30 天 TTL + 10000 行 LRU + WAL
@@ -257,24 +296,30 @@
 - **QueryAnalyzer 单例** — `src/core/query-analyzer.ts` 统一入口，DatabaseService 旁路
 
 ### 配置
+
 - 6 个新 env var: `DB_QUERY_ANALYZER_ENABLED` / `DB_TEMPLATES_DB_PATH` / `DB_HISTORY_DB_PATH` / `DB_HISTORY_TTL_DAYS` / `DB_HISTORY_MAX_ROWS` / `DB_EXPLAIN_TIMEOUT_MS`
 
 ### 测试
+
 - 新增 6 测试文件 (~400 行)
 - 总数: 305 测试全过 (v2.16.0: 258)
 
 ### 文档
+
 - 新增 `docs/query-experience.md`
 
 ### 依赖
+
 - 0 新增（复用 v2.16 multi-backend SQLite）
 
 ### 修复
+
 - SQLiteAdapter 现在识别 `EXPLAIN` 开头的语句为查询（之前误归为写操作，rows 为空）
 
 ## [2.16.0] - 2026-07-24
 
 ### 新增 (Observability)
+
 - **HTTP `/metrics` 端点**: Prometheus 文本格式（exposition format 0.0.4），匿名 + `DB_METRICS_IP_ALLOWLIST` 控制访问
 - **MCP `get_metrics` tool**: 返回 `summary` / `slow_queries` / `all` 三类 JSON（不需数据库连接）
 - **MetricsRegistry**: `Counter` / `Histogram` / `Gauge` / `RingBuffer<T>` 单例，手写 Prometheus format
@@ -284,6 +329,7 @@
 - **0 新增 npm 依赖**: 全部手写
 
 ### 测试
+
 - 新增 `tests/unit/metrics.test.ts` (18 cases)
 - 新增 `tests/unit/mcp-metrics-tool.test.ts` (4 cases)
 - 新增 `tests/unit/metrics-adapter-instrumentation.test.ts` (3 cases)
@@ -292,31 +338,37 @@
 - 总数: **258** 测试全过 (v2.15.4: 224)
 
 ### 文档
+
 - 新增 `docs/observability.md` (Prometheus scrape + MCP tool + env vars + use cases)
 
 ### 已知局限
+
 - `db_pool_acquire_*` 指标未独立暴露（pool acquire 时间包含在 `db_query_seconds` 中），完整 pool 维度分解计划 v2.17
 - Pool acquire 计时当前在 DatabaseService 层（query 总时间 = acquire + execute），13 个 adapter 无侵入
 
 ## [2.15.4] - 2026-07-24
 
 ### 修复
+
 - **mcp-mode 测试**: 更新 import 路径为 `src/adapters/sqlite/index.js`(适配 v2.15.3 目录化重构)；`should require adapter before starting` 改为验证 v2.14 引入的"零配置 / 无连接模式"行为
 - **CORS 测试**: OPTIONS 预检现在带 `Origin` 头模拟跨域请求
 
 ### 测试
+
 - **新增测试**: `tests/unit/adapter-factory.test.ts`(131 行)、`config-loader.test.ts`(42 行)、`sample-data-generator.test.ts`
 - **总测试数**: 224(原 221),75 个 suite 全过,`success=true`
 
 ## [2.15.3] - 2026-07-24
 
 ### 改进
+
 - **SQLite multi-backend**: SQLiteAdapter 现在支持 `node:sqlite`(Node 22.5+ 内置,零依赖)和 `better-sqlite3` 双 backend,运行时自动选择。解决了 Node 24 下 better-sqlite3 native binding 缺失的测试问题
 - **vitest config**: SQLite 测试现在能在 Node 24 下跑通(用 `node:sqlite`),不需要 native binding rebuild
 
 ## [2.15.2] - 2026-07-24
 
 ### 修复
+
 - **Pooled adapter 事务语义 (Phase 2)**: kingbase/gaussdb/vastbase/highgo (pg 系) 和 oceanbase/tidb/polardb/goldendb (mysql 系) 现在 `executeScript` 也保证 all-or-nothing 事务。覆盖所有 13 个 pool-backed adapter
 - **TRUNCATE keyword 分类**: 移到 ddl bucket(语义上更准确,修复预存测试)
 - **vitest config**: better-sqlite3 native binding 不可用时自动排除 sqlite-adapter.test.ts,避免阻塞测试套件
@@ -324,6 +376,7 @@
 ## [2.15.1] - 2026-07-24
 
 ### 修复
+
 - **env vars 接入**:`DB_QUERY_TIMEOUT_MS` 和 `DB_SLOW_QUERY_THRESHOLD_MS` 现在能被 config-loader 解析并应用到 DatabaseService
 - **HTTP 错误状态码**: timeout 返回 504、auth 返回 401/403、not-found 返回 404(之前统一 500)
 - **Pooled adapter 事务语义** (Phase 1): mysql/postgres/oracle/dm/mssql 的 `executeScript` 现在保证 all-or-nothing 事务(单一连接)
@@ -332,6 +385,7 @@
 ## [2.15.0] - 2026-07-24
 
 ### 新增 (P2)
+
 - **execute_batch 工具**: 批量执行 DML 操作(类似 JdbcTemplate.batchUpdate),性能提升 60-100x
 - **execute_script 工具**: 多语句脚本和 PL/SQL 块执行(需要 `script` 权限)
 - **execute_sql_file 工具**: 读 .sql 文件执行(需要 `script` 权限 + `DB_ALLOWED_FILE_PATHS` 白名单)
@@ -342,6 +396,7 @@
 - **`execute_query` 自动降级**: 检测到 PL/SQL 块或多语句时,自动用 `execute_script`
 
 ### 安全 (P0)
+
 - **SQLite 注入修复**: 新增 `validateIdentifier` 白名单校验
 - **HTTP 默认鉴权**: 强制要求 API Key(可用 `ALLOW_INSECURE_NO_AUTH=true` 逃生)
 - **mcp disconnect 顺序修复**: 断开失败时仍清空状态
@@ -350,6 +405,7 @@
 - **文件路径白名单**: `DB_ALLOWED_FILE_PATHS` + `--allow-sql-file-path` CLI
 
 ### 性能 (P1)
+
 - **正则预编译**: `safety.ts` 中关键字正则缓存
 - **Schema 缓存 TTL**: 从 5 分钟降到 1 分钟
 - **查询超时**: 默认 30 秒(`DB_QUERY_TIMEOUT_MS`)
@@ -358,6 +414,7 @@
 - **SQLite Schema 缓存**: 避免重复 PRAGMA 调用
 
 ### 测试覆盖
+
 - 新增单元测试: identifier-validator, retry, sql-detector, sql-parser, path-guard, template-resolver, script-permission
 - 187+ 测试通过(2 个预先存在的失败与本次改动无关)
 
@@ -366,6 +423,7 @@
 ## [2.14.0] - 2026
 
 ### 新增
+
 - **MCP stdio 模式动态数据库连接** - 支持在对话中动态连接/切换数据库，无需写死配置
   - **新增 3 个 MCP Tool**：
     - `connect_database`：动态连接数据库，支持全部 17 种数据库类型，已有连接时自动断开旧连接
@@ -395,6 +453,7 @@
 ```
 
 然后在对话中直接告诉 AI 数据库信息：
+
 - "帮我连接 192.168.1.100 的 MySQL，用户名 root，密码 123456，数据库 order_db"
 - "切换到 10.0.0.5 的 PostgreSQL，端口 5432，数据库 analytics"
 - "断开当前数据库连接"
@@ -441,6 +500,7 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
 ## [2.12.0] - 2026
 
 ### 修复
+
 - **多 Schema 支持** - 修复 8 个适配器只能获取默认 Schema 下的表信息的问题
   - **影响的适配器**：PostgreSQL、GaussDB、KingbaseES、Vastbase、HighGo、SQL Server、Oracle、达梦
   - **问题表现**：`get_schema`、`get_table_info`、`get_enum_values`、`get_sample_data` 只返回默认 Schema（如 PostgreSQL 的 `public`、SQL Server 的 `dbo`、Oracle/达梦的当前用户）下的表
@@ -460,14 +520,15 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
 
 **现在**：调用 `get_schema` 可以看到全部四张表：`users`、`orders`、`analytics.events`、`analytics.page_views`。
 
-| 变化点 | 之前 | 现在 |
-|--------|------|------|
-| `get_schema` 返回的表 | 只有默认 Schema 的表 | 所有用户 Schema 的表 |
-| 非默认 Schema 表的命名 | 不可见 | `schema.table_name` 格式（如 `analytics.events`） |
-| 默认 Schema 表的命名 | `users` | `users`（不变） |
-| 查询非默认 Schema 的表 | 不支持 | 使用 `schema.table_name` 格式即可（如 `analytics.events`） |
+| 变化点                  | 之前                 | 现在                                                          |
+| ----------------------- | -------------------- | ------------------------------------------------------------- |
+| `get_schema` 返回的表 | 只有默认 Schema 的表 | 所有用户 Schema 的表                                          |
+| 非默认 Schema 表的命名  | 不可见               | `schema.table_name` 格式（如 `analytics.events`）         |
+| 默认 Schema 表的命名    | `users`            | `users`（不变）                                             |
+| 查询非默认 Schema 的表  | 不支持               | 使用`schema.table_name` 格式即可（如 `analytics.events`） |
 
 **新增能力**：
+
 - "查看 `analytics.events` 表的结构" → `get_table_info("analytics.events")`
 - "查看 `analytics.events` 表 `event_type` 列有哪些值" → `get_enum_values("analytics.events", "event_type")`
 - "查看 `analytics.events` 表的示例数据" → `get_sample_data("analytics.events")`
@@ -477,6 +538,7 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
 ## [2.11.0] - 2026
 
 ### 改进
+
 - **连接稳定性增强** - 全面升级数据库连接管理，彻底解决 `Can't add new command when connection is in closed state` 错误
   - **连接池化** - 12 个网络数据库适配器从单连接升级为连接池
     - MySQL 系列（MySQL、TiDB、OceanBase、PolarDB、GoldenDB）：使用 `mysql2` 连接池，配置 `enableKeepAlive` + `connectionLimit: 3`
@@ -490,6 +552,7 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
 ## [2.10.0] - 2026
 
 ### 新增
+
 - **细粒度权限控制** - 支持自定义操作权限组合，不再只有"只读"和"完全写入"两种模式
   - **权限模式** - 新增 `--permission-mode` 参数
     - `safe`（默认）：只读模式，仅允许 SELECT
@@ -506,12 +569,14 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
   - **HTTP API 支持** - REST API 和 MCP SSE/Streamable HTTP 端点同样支持新权限参数
 
 ### 改进
+
 - 更新 `DbConfig` 类型，新增 `permissionMode` 和 `permissions` 字段
 - 重构 `safety.ts`，支持细粒度权限检查
 - 更新命令行帮助信息，添加新参数说明
 - 更新 README 文档（中英文），添加权限模式说明
 
 ### 文档
+
 - **完善权限配置文档** - 添加不同传输方式的权限参数命名说明
   - STDIO 模式（Claude Desktop）：使用连字符命名 `--permission-mode`、`--permissions`
   - SSE 模式（Dify 等）：使用驼峰命名 `permissionMode`、`permissions`（URL Query）
@@ -529,6 +594,7 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
 ## [2.9.0] - 2026
 
 ### 新增
+
 - **按需增强工具** - 新增两个 MCP 工具，帮助 LLM 更好地理解数据内容
   - **`get_enum_values`** - 获取指定列的所有唯一值
     - 适用于枚举类型列、状态列等有限值集合
@@ -547,6 +613,7 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
   - `GET /api/sample-data` - 获取示例数据
 
 ### 改进
+
 - 新增 `EnumValuesResult` 和 `SampleDataResult` 类型定义
 - 更新 API 参考文档（中英文），添加新端点说明
 - 新增 20 个数据脱敏单元测试
@@ -554,6 +621,7 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
 ## [2.8.0] - 2026
 
 ### 新增
+
 - **Schema 核心增强** - 提升 LLM 对数据库结构的理解，提高 Text2SQL 准确性
   - **表注释支持** - Schema 信息现在包含表级别注释（`comment` 字段）
     - 支持的数据库：MySQL、PostgreSQL、Oracle、SQL Server、TiDB、达梦、KingbaseES、GaussDB、OceanBase、PolarDB、Vastbase、HighGo、GoldenDB、ClickHouse（14个）
@@ -566,6 +634,7 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
   - **关系来源标注** - `source` 字段区分 `foreign_key`（显式外键）和 `inferred`（推断关系）
 
 ### 改进
+
 - 新增 `SchemaEnhancer` 工具类（`src/utils/schema-enhancer.ts`）
 - 更新 `RelationshipInfo` 类型，添加 `source` 和 `confidence` 字段
 - 更新 `TableInfo` 类型，添加 `comment` 字段
@@ -574,6 +643,7 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
 ## [2.7.0] - 2026
 
 ### 新增
+
 - **外键关系支持** - Schema 信息现在包含外键和表关系数据，帮助 LLM 更好地理解数据库结构
   - `foreignKeys` - 表级别外键约束信息，包含约束名、列、引用表、引用列、ON DELETE/UPDATE 规则
   - `relationships` - 全局关系视图，展示所有表之间的关联关系
@@ -581,12 +651,14 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
   - NoSQL 数据库（Redis、MongoDB、ClickHouse）不支持传统外键，返回结果中不包含这些字段
 
 ### 改进
+
 - 更新 API 参考文档（中英文），添加外键和关系字段的示例
 - 更新数据库功能支持表，添加"外键关系"功能行
 
 ## [2.6.0] - 2026
 
 ### 新增
+
 - **MCP SSE/Streamable HTTP 传输支持** - 在 HTTP 模式下新增 MCP 协议端点
   - `/sse` - SSE 传输端点（传统方式），支持通过 URL 参数配置数据库连接
   - `/sse/message` - SSE 消息接收端点
@@ -598,80 +670,95 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
 - **统一 API Key 认证** - MCP SSE/Streamable HTTP 端点现在也支持 API Key 认证，与 REST API 保持一致
 
 ### 改进
+
 - 更新架构文档，清晰区分启动模式和接入方式
 - 更新 Dify 集成指南，添加 MCP 协议集成方式（SSE 和 Streamable HTTP）
 - 更新 API 参考文档，添加 MCP 协议端点说明
 
 ### 安全
+
 - 所有 HTTP 端点（包括 MCP SSE/Streamable HTTP）现在统一使用 API Key 认证
 - 如果未配置 `API_KEYS` 环境变量，则跳过认证（开发模式）
 
 ## [2.5.0] - 2026
 
 ### 新增
+
 - Oracle 11g 及以前老版本支持（通过 Thick 模式）
 
 ## [2.3.8] - 2026
 
 ### 修复
+
 - Oracle、达梦执行 SQL 去掉分号
 
 ## [2.3.7] - 2026
 
 ### 修复
+
 - 达梦 get_schema 问题修复
 
 ## [2.3.6] - 2026
 
 ### 修复
+
 - 达梦 get_schema 问题修复
 
 ## [2.3.5] - 2026
 
 ### 修复
+
 - 达梦 get_schema 问题修复
 
 ## [2.3.4] - 2026
 
 ### 修复
+
 - 达梦 get_schema 问题修复
 
 ## [2.3.3] - 2026
 
 ### 修复
+
 - 达梦 get_schema 问题，达梦不使用批量查询优化功能
 
 ## [2.3.2] - 2026
 
 ### 修复
+
 - 达梦 get_schema 返回 table 为空问题处理
 
 ## [2.3.1] - 2026
 
 ### 修复
+
 - 达梦适配器修复列名规范化、空值检查、类型安全
 
 ## [2.3.0] - 2026
 
 ### 性能优化
+
 - 为 Oracle、达梦增加批量查询优化功能
 
 ## [2.2.0] - 2026
 
 ### 性能优化
+
 - 批量查询优化，大幅提升 Schema 获取性能
 - 支持的数据库：MySQL、PostgreSQL、SQL Server、Oracle、达梦等 13 个适配器
 
 ### 性能提升
-| 表数量 | 优化前 | 优化后 | 提升 |
-|--------|--------|--------|------|
-| 50 张表 | ~5 秒 | ~200 毫秒 | 25x |
-| 100 张表 | ~10 秒 | ~300 毫秒 | 33x |
+
+| 表数量   | 优化前 | 优化后    | 提升 |
+| -------- | ------ | --------- | ---- |
+| 50 张表  | ~5 秒  | ~200 毫秒 | 25x  |
+| 100 张表 | ~10 秒 | ~300 毫秒 | 33x  |
 | 500 张表 | ~50 秒 | ~500 毫秒 | 100x |
 
 ## [2.1.0] - 2026
 
 ### 新增
+
 - Schema 缓存机制
 - 缓存 TTL 配置
 - 强制刷新功能
@@ -680,6 +767,7 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
 ## [2.0.0] - 2026
 
 ### 新增
+
 - HTTP API 模式
 - 双模式架构（MCP + HTTP）
 - API Key 认证
@@ -690,6 +778,7 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
 - PaaS 部署配置（Railway、Render、Fly.io）
 
 ### 文档
+
 - HTTP API 参考文档
 - 部署指南
 - 集成指南（Coze、n8n、Dify）
@@ -697,6 +786,7 @@ AI 会自动调用 `connect_database`、`disconnect_database`、`get_connection_
 ## [1.0.0] - 2026
 
 ### 新增
+
 - 支持 17 种数据库
   - MySQL、PostgreSQL、Redis、Oracle、SQL Server
   - MongoDB、SQLite、达梦、KingbaseES、GaussDB

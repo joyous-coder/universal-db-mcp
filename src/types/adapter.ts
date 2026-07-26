@@ -103,6 +103,8 @@ export interface ColumnInfo {
   defaultValue?: string;
   /** 注释说明 */
   comment?: string;
+  /** v3.2.8 Bug #48: 是否自增列(IDENTITY) — 决定 generate_sample_data 跳过该列 vs 生成 int */
+  autoIncrement?: boolean;
 }
 
 /**

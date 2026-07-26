@@ -29,30 +29,54 @@ export class Explainer {
       return { db: this.dbType, sql, plan, raw, format: 'tabular', duration_ms: Date.now() - start };
     }
 
-    // v3.2.8 Bug #43 fix: DM (达梦) `EXPLAIN <sql>` doesn't return rows in dmdb driver
-    // (verified live: raw empty, plan []). The proper DM way to get plan is via the
-    // DISQL client or `EXPLAIN` with `-v` flag, both not available via dmdb npm package.
-    // Graceful fallback: run EXPLAIN, return whatever (empty) raw + guidance to use DISQL.
+    // v3.2.8 Bug #43 fix: DM (达梦) `EXPLAIN <sql>` doesn't return rows in dmdb driver.
+    // v3.2.8 Bug #49 fix: Use `EXPLAIN AS <plan_name> FOR <sql>` syntax which DOES return rows
+    // via dmdb (verified on BBZ_PROVINCE_EG @ 10.1.15.50:5237, forresttse/dm8:latest).
+    // Returns 19 columns: plan_id, plan_name, create_time, level_id, operation, tab_name,
+    // idx_name, scan_type, scan_range, row_nums, bytes, cost, cpu_cost, io_cost,
+    // filter, join_cond, advice_info, pstart, pstop.
     if (this.dbType === 'dm') {
       const trimmed = sql.trim().replace(/;$/, '');
+      // 生成 session 唯一 plan_name(用 EXPLAIN AS 需要 plan_name 唯一)
+      const planName = `MCP_${Date.now().toString(36)}`;
+      const explainSql = `EXPLAIN AS ${planName} FOR ${trimmed}`;
       try {
-        const explainSql = `EXPLAIN ${trimmed}`;
         const result = await this.adapter.executeQuery(explainSql, params);
         const rows = (result.rows ?? []) as Array<Record<string, unknown>>;
-        const raw = rows.map(r => Object.values(r).join('|')).join('\n');
         if (rows.length === 0) {
+          // v3.2.8 Bug #43 fallback: 兜底(实测 dmdb 总返回 rows,但保留 fallback 兼容未来变化)
           return {
             db: this.dbType,
             sql,
             plan: [],
-            raw: '⚠️ DM `EXPLAIN <sql>` returns no rows via dmdb npm driver.\n' +
-                 'For DM execution plans, use DISQL client with `EXPLAIN <sql>` or\n' +
-                 'the DM management console — both bypass the driver-level row limitation.',
+            raw: `⚠️ DM \`EXPLAIN AS ${planName} FOR <sql>\` returned 0 rows.\n` +
+                 `For detailed DM plans use DISQL \`SET AUTOTRACE TRACE\` or DM Manager Studio.`,
             format: 'tabular',
             duration_ms: Date.now() - start,
           };
         }
-        const plan = this.parsePlan(rows);
+        // 把 DM 原始行转成 ExplainRow 格式(level_id 0 在底,DM 自下而上)
+        const plan = rows.map((r, i) => ({
+          id: i + 1,
+          level: Number(r.level_id ?? r.LEVEL_ID ?? 0),
+          operation: String(r.operation ?? r.OPERATION ?? ''),
+          table: String(r.tab_name ?? r.TAB_NAME ?? '') || undefined,
+          index: String(r.idx_name ?? r.IDX_NAME ?? '') || undefined,
+          scanType: String(r.scan_type ?? r.SCAN_TYPE ?? '') || undefined,
+          scanRange: String(r.scan_range ?? r.SCAN_RANGE ?? '') || undefined,
+          rows: Number(r.row_nums ?? r.ROW_NUMS ?? 0),
+          bytes: Number(r.bytes ?? r.BYTES ?? 0),
+          cost: Number(r.cost ?? r.COST ?? 0),
+          filter: String(r.filter ?? r.FILTER ?? '') || undefined,
+          joinCond: String(r.join_cond ?? r.JOIN_COND ?? '') || undefined,
+        }));
+        const raw = rows.map(r => {
+          const lvl = r.level_id ?? r.LEVEL_ID;
+          const op = r.operation ?? r.OPERATION;
+          const tab = r.tab_name ?? r.TAB_NAME;
+          const idx = r.idx_name ?? r.IDX_NAME;
+          return `[L${lvl}] ${op}${tab && tab !== 'NULL' ? ' table=' + tab : ''}${idx && idx !== 'NULL' ? ' idx=' + idx : ''}`;
+        }).join('\n');
         return { db: this.dbType, sql, plan, raw, format: 'tabular', duration_ms: Date.now() - start };
       } catch (e) {
         return {

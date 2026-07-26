@@ -43,10 +43,17 @@ describe('SampleDataGenerator', () => {
     expect(generator.generateValue(column('code'), { rule }, 1)).toBe(15);
   });
 
-  it('returns undefined for id columns without an explicit rule', () => {
+  it('returns a number for id columns without an explicit rule', () => {
+    // v3.2.8 Bug #48 fix: 之前返回 undefined 让 DB auto-fill,但 DM/Oracle 没有公开的
+    // IDENTITY 检测,普通 INT PRIMARY KEY 不带 IDENTITY,期待用户提供 int 值。
     const generator = new SampleDataGenerator({ seed: 42 });
 
-    expect(generator.generateValue(column('id', 'integer'))).toBeUndefined();
-    expect(generator.generateValue(column('customer_id', 'integer'))).toBeUndefined();
+    const idVal = generator.generateValue(column('id', 'integer'));
+    expect(typeof idVal).toBe('number');
+    expect(idVal).toBeGreaterThan(0);
+
+    const custIdVal = generator.generateValue(column('customer_id', 'integer'));
+    expect(typeof custIdVal).toBe('number');
+    expect(custIdVal).toBeGreaterThan(0);
   });
 });

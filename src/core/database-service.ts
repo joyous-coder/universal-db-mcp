@@ -732,7 +732,8 @@ export class DatabaseService {
 
     // 使用实际的列名（保持原始大小写）
     const actualColumnName = column.name;
-    const actualTableName = tableInfo.name;
+    // v3.2.8 Bug #45 fix: 保留 schema 前缀(DM/Oracle 必需,见 getSampleData 同 fix)
+    const actualTableName = tableInfo.schema ? `${tableInfo.schema}.${tableInfo.name}` : tableInfo.name;
 
     // 2. 限制返回数量（安全限制）
     const safeLimit = Math.min(Math.max(1, limit), 100);
@@ -792,7 +793,9 @@ export class DatabaseService {
 
     // 1. 验证表是否存在
     const tableInfo = await this.getTableInfo(tableName);
-    const actualTableName = tableInfo.name;
+    // v3.2.8 Bug #45 fix: 保留 schema 前缀(对 DM/Oracle 这类 current user default schema
+    // 不一定是 BBZ_PROVINCE_EG 时必须),buildSampleDataQuery 会用 quoteIdentifier 分别加引号
+    const actualTableName = tableInfo.schema ? `${tableInfo.schema}.${tableInfo.name}` : tableInfo.name;
 
     // 2. 验证并确定要查询的列
     let selectedColumns: string[];
@@ -975,8 +978,15 @@ export class DatabaseService {
         // SQL Server 使用方括号
         return `[${identifier}]`;
 
+      case 'dm':
+      case 'oracle':
+        // v3.2.8 Bug #45+#47 fix: DM/Oracle 默认 unquoted identifier 转大写存储。
+        // Bug #47 DM adapter 的 getSchema 把表名小写化了(getTableInfo 返回 lowercase),
+        // 但 quoted identifier 在 dm/oracle 严格区分大小写,所以引用时必须 uppercase。
+        return `"${identifier.toUpperCase()}"`;
+
       default:
-        // PostgreSQL, Oracle, SQLite, 达梦, KingbaseES, GaussDB, Vastbase, HighGo, ClickHouse 等使用双引号
+        // PostgreSQL, SQLite, KingbaseES, GaussDB, Vastbase, HighGo, ClickHouse 等使用双引号
         return `"${identifier}"`;
     }
   }
