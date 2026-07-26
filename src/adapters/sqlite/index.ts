@@ -39,7 +39,8 @@ export class SQLiteAdapter extends BaseAdapter {
     readonly?: boolean;
   }) {
     super();
-    this.config = config;
+    // v3.3: 注入 type 让 csv-reader 等下游能识别 SQLite
+    this.config = { ...config, type: 'sqlite' } as any;
   }
 
   /**
