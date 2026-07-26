@@ -11,6 +11,7 @@
  * 行终止符: \r\n
  * NULL: 空字符串
  */
+import { createWriteStream } from 'node:fs';
 
 /**
  * 把单个值序列化为 CSV 字段字符串。
@@ -96,4 +97,86 @@ export function buildSelectSql(opts: {
   if (opts.limit > 0) parts.push(`LIMIT ${opts.limit}`);
   parts.push(`OFFSET ${opts.offset}`);
   return parts.join(' ');
+}
+/**
+ * 流式导出单表到 CSV 文件。
+ *
+ * 翻页循环:
+ *   offset = 0; do { page = adapter.executeQuery(SELECT ... LIMIT N OFFSET offset);
+ *                    write rows; offset += page.length; } while (page.length === N)
+ *
+ * 大表内存可控(每次只持有 batchSize 行)。
+ * limit=0 → 不拼 LIMIT 子句(整表导出);否则 LIMIT = min(batchSize, limit)。
+ */
+export async function exportTableCsv(opts: {
+  adapter: {
+    executeQuery(
+      sql: string,
+      params?: unknown[]
+    ): Promise<{ rows: unknown[]; executionTime?: number }>;
+  };
+  table: string;
+  columns?: string[];
+  where?: string;
+  orderBy?: string;
+  limit?: number;
+  offset?: number;
+  outputPath: string;
+  batchSize?: number;
+}): Promise<{
+  totalRows: number;
+  bytesWritten: number;
+  durationMs: number;
+  batches: number;
+}> {
+  const start = Date.now();
+  const columns = opts.columns ?? ['*'];
+  const userLimit = opts.limit ?? 0;
+  const offset0 = opts.offset ?? 0;
+  const batchSize = opts.batchSize ?? 5000;
+  // limit=0 → 不拼 LIMIT;否则 LIMIT = min(batchSize, userLimit)
+  const pageLimit = userLimit > 0 ? Math.min(batchSize, userLimit) : batchSize;
+
+  const stream = createWriteStream(opts.outputPath, { encoding: 'utf8' });
+  let bytesWritten = 0;
+  const writeChunk = (s: string) =>
+    new Promise<void>((res, rej) => {
+      stream.write(s, 'utf8', (err) => (err ? rej(err) : res()));
+      bytesWritten += Buffer.byteLength(s, 'utf8');
+    });
+  // header
+  await writeChunk(columns.join(',') + '\r\n');
+
+  let totalRows = 0;
+  let offset = offset0;
+  let batches = 0;
+  while (true) {
+    const sql = buildSelectSql({
+      table: opts.table,
+      columns,
+      where: opts.where,
+      orderBy: opts.orderBy,
+      limit: pageLimit,
+      offset,
+    });
+    const result = await opts.adapter.executeQuery(sql);
+    batches += 1;
+    const rows = result.rows as Array<Record<string, unknown>>;
+    if (rows.length === 0) break;
+    for (const row of rows) {
+      await writeChunk(rowToCsv(row, columns) + '\r\n');
+      totalRows += 1;
+    }
+    if (rows.length < pageLimit) break;
+    if (userLimit > 0 && totalRows >= userLimit) break;
+    offset += rows.length;
+  }
+
+  await new Promise<void>((res) => stream.end(res));
+  return {
+    totalRows,
+    bytesWritten,
+    durationMs: Date.now() - start,
+    batches,
+  };
 }

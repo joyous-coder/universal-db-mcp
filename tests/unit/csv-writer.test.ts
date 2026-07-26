@@ -7,8 +7,11 @@
  *  - 类型转换 (Date → ISO, Buffer → hex)
  *  - rowToCsv 列序与缺失列
  */
-import { describe, expect, it } from 'vitest';
-import { quoteField, rowToCsv, buildSelectSql } from '../../src/core/csv-writer.js';
+import { describe, expect, it, afterEach, beforeEach } from 'vitest';
+import { quoteField, rowToCsv, buildSelectSql, exportTableCsv } from '../../src/core/csv-writer.js';
+import { writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 describe('CsvWriter', () => {
   it('quotes field containing comma', () => {
@@ -74,5 +77,55 @@ describe('CsvWriter.buildSelectSql', () => {
     expect(buildSelectSql({
       table: 'public.users', columns: ['id'], limit: 1, offset: 0,
     })).toBe('SELECT "id" FROM "public"."users" LIMIT 1 OFFSET 0');
+  });
+});
+
+class StubAdapter {
+  calls: Array<{ sql: string }> = [];
+  pages: any[][] = [];
+  callIdx = 0;
+  async executeQuery(sql: string) {
+    this.calls.push({ sql });
+    const rows = this.pages[this.callIdx] ?? [];
+    this.callIdx += 1;
+    return { rows, executionTime: 1 };
+  }
+}
+
+describe('CsvWriter.exportTableCsv', () => {
+  const tmp = path.join(tmpdir(), 'csv-writer-test.csv');
+  afterEach(() => { try { rmSync(tmp); } catch {} });
+
+  it('paginates until rows < batchSize, writes CRLF CSV with header', async () => {
+    const a = new StubAdapter() as any;
+    // batch=2: page1 (2 rows, full), page2 (2 rows, full), page3 (1 row, partial → break)
+    a.pages = [
+      [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }],
+      [{ id: 3, name: 'C' }, { id: 4, name: 'D' }],
+      [{ id: 5, name: 'E' }],
+    ];
+    const result = await exportTableCsv({
+      adapter: a, table: 'users',
+      columns: ['id', 'name'],
+      outputPath: tmp, batchSize: 2,
+    });
+    expect(result.totalRows).toBe(5);
+    expect(a.calls.length).toBe(3);
+    expect(a.calls[0].sql).toMatch(/LIMIT 2 OFFSET 0/);
+    expect(a.calls[1].sql).toMatch(/LIMIT 2 OFFSET 2/);
+    expect(a.calls[2].sql).toMatch(/LIMIT 2 OFFSET 4/);
+    const content = readFileSync(tmp, 'utf8');
+    expect(content).toBe('id,name\r\n1,Alice\r\n2,Bob\r\n3,C\r\n4,D\r\n5,E\r\n');
+  });
+
+  it('respects user-provided limit=0 (no LIMIT clause)', async () => {
+    const a = new StubAdapter() as any;
+    a.pages = [[{ x: 1 }, { x: 2 }, { x: 3 }]];
+    const result = await exportTableCsv({
+      adapter: a, table: 'big', columns: ['*'],
+      outputPath: tmp, batchSize: 10,
+    });
+    expect(result.totalRows).toBe(3);
+    expect(a.calls[0].sql).toMatch(/OFFSET 0$/);  // no LIMIT because limit=0
   });
 });
