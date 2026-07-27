@@ -10,6 +10,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  InitializeRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { DbAdapter, DbConfig } from '../types/adapter.js';
@@ -64,6 +65,11 @@ export class DatabaseMCPServer {
   private currentSessionId: string = 'stdio-default';
   // v3.2: whether lazy-loading is enabled (DB_LAZY_LOAD_ENABLED; default false = v3.1 behavior)
   private lazyLoadEnabled: boolean = false;
+  // v3.3.1: per-session client identification (mcp clientInfo from initialize)
+  // Used to detect Claude Code (which doesn't honor listChanged notifications —
+  // see GitHub issues anthropics/claude-code#79826, #78208) and auto-disable
+  // lazy loading so all tools are visible without needing session restart.
+  private sessionClientInfo: Map<string, { name: string; version?: string }> = new Map();
   // v3.1: PlanHistory instance (set via setPlanHistory from entrypoint)
   private planHistory: any = null;
 
@@ -204,6 +210,33 @@ export class DatabaseMCPServer {
    */
   setSessionId(id: string): void {
     this.currentSessionId = id;
+  }
+
+  /**
+   * v3.3.1: detect Claude Code client by clientInfo.name. Claude Code reports
+   * names like "claude-code", "Claude Code", "claude-code-ai", depending on
+   * version. We match case-insensitively on the substring "claude-code".
+   * This is the heuristic the user agreed to in v3.3.1 brainstorming.
+   */
+  private isClaudeCodeClientName(name: string): boolean {
+    if (!name) return false;
+    // Match Claude Code client reports: "claude-code", "Claude Code",
+    // "claude_code", "claude.code" (hypothetical). Be permissive but
+    // require the literal "claude" + space/underscore/hyphen/dot + "code"
+    // pattern to avoid false positives like "claude-anything-else".
+    return /claude[\s_.\-]+code/i.test(name);
+  }
+
+  /**
+   * v3.3.1: should the current session skip lazy loading even when
+   * DB_LAZY_LOAD_ENABLED=true? Currently: yes if the client is Claude Code
+   * (which doesn't honor listChanged — see anthropics/claude-code#79826).
+   * Returns true for the per-session fast path.
+   */
+  private shouldSkipLazyLoading(): boolean {
+    const info = this.sessionClientInfo.get(this.currentSessionId);
+    if (!info?.name) return false;
+    return this.isClaudeCodeClientName(info.name);
   }
 
   /**
@@ -413,11 +446,38 @@ export class DatabaseMCPServer {
    * 设置 MCP 协议处理器
    */
   private setupHandlers(): void {
+    // v3.3.1: capture clientInfo from initialize so we can detect Claude Code
+    // (which doesn't honor listChanged notifications — see GitHub issues
+    // anthropics/claude-code#79826, #78208). When Claude Code is detected
+    // and lazy loading is enabled, we treat the session as v3.1 mode
+    // (all tools visible) so users don't need to restart the client after
+    // upgrading the MCP server.
+    this.server.setRequestHandler(InitializeRequestSchema, async (req) => {
+      const clientInfo = (req.params as any)?.clientInfo;
+      if (clientInfo?.name) {
+        const info = { name: String(clientInfo.name), version: clientInfo.version ? String(clientInfo.version) : undefined };
+        this.sessionClientInfo.set(this.currentSessionId, info);
+        const isClaudeCode = this.isClaudeCodeClientName(info.name);
+        if (isClaudeCode) {
+          console.warn(
+            `[mcp-server] detected Claude Code client (name="${info.name}" version="${info.version ?? '?'}"). ` +
+            `Known to not honor notifications/tools/list_changed (anthropics/claude-code#79826). ` +
+            `Auto-disabling lazy loading for this session so all tools remain visible without restart.`
+          );
+        }
+      }
+      // Don't override the SDK's default initialize response — just observe.
+      // The SDK will return server capabilities + serverInfo automatically.
+      return {} as any;
+    });
+
     // 列出可用工具
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      // v3.2: when lazy-loading is enabled, ListToolsRequest returns core+meta+info-lazy + active groups
-      // from the registry. Otherwise, fall through to v3.1 behavior (all 22+4 conditional tools).
-      if (this.lazyLoadEnabled && this.toolRegistry) {
+      // v3.3.1: Claude Code detection — bypass lazy loading entirely for this
+      // session even if DB_LAZY_LOAD_ENABLED=true. Falls through to v3.1
+      // behavior (all tools always listed) so users don't need to restart.
+      const treatAsLazyDisabled = this.shouldSkipLazyLoading();
+      if (this.lazyLoadEnabled && this.toolRegistry && !treatAsLazyDisabled) {
         const active = this.toolRegistry.listActiveTools(this.currentSessionId);
         const tools: any[] = active.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
         // v3.2.1: append always-on stateful tools so clients can discover connect/execute_query/etc.
@@ -814,7 +874,7 @@ export class DatabaseMCPServer {
       // session start; without these the 25 lazy group + 2 meta tools are unreachable.
       // Execution is still gated by perms in CallToolRequest handler.
       const alwaysOnTools = [
-        { name: 'use_tool_group', description: '激活一个 tool group 解锁其下工具(enum: query-experience|profiles|data-governance|index-advisor)。已激活组为 no-op。激活后服务端按 MCP 协议发 notifications/tools/list_changed;若客户端不消费该通知(已知 Claude Code),需重启客户端或刷新 MCP 工具列表。', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['query-experience', 'profiles', 'data-governance', 'index-advisor'] } }, required: ['name'] } },
+        { name: 'use_tool_group', description: '激活一个 tool group 解锁其下工具(enum: query-experience|profiles|data-governance|index-advisor)。已激活组为 no-op。**v3.3.1**: Claude Code 客户端会自动跳过 lazy loading(全部 45 tool 可见),无需调用此工具;其他客户端(Cline/Dify/Continue/Cherry Studio/5ire)可正常用此工具激活新 group。', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['query-experience', 'profiles', 'data-governance', 'index-advisor'] } }, required: ['name'] } },
         { name: 'use_tool_schema', description: '加载 info-lazy 工具的完整 schema(仅 generate_sample_data 是 info-lazy)。不影响工具列表,无需刷新客户端。', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['generate_sample_data'] } }, required: ['name'] } },
         // v3.2.4 Bug #13: execute_script/sql_file/batch/generate_sample_data were gated
         // on perms at server start (config undefined → read-only) so never listed.
@@ -860,7 +920,9 @@ export class DatabaseMCPServer {
           return await this.handleUseToolSchema(args as any);
         }
         // v3.2.1: meta-tool + registry routing inside try/catch (fix finding #13)
-        if (this.lazyLoadEnabled && this.toolRegistry) {
+        // v3.3.1: Claude Code session bypasses lazy gating per session
+        const effectiveLazyEnabled = this.lazyLoadEnabled && !this.shouldSkipLazyLoading();
+        if (effectiveLazyEnabled && this.toolRegistry) {
           // route lazy/info-lazy tools through registry
           if (this.toolRegistry.isToolActive(this.currentSessionId, name)) {
             // info-lazy validation

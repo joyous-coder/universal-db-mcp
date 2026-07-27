@@ -158,7 +158,7 @@ export function buildToolDefinitions(deps: ToolDeps): ToolDefinitions {
 
   // ─── META (always-on) ───────────────────────────────────────────────
   const meta: ToolDefinition[] = [
-    tool('use_tool_group', '激活一个 tool group 解锁其下工具(group: query-experience|profiles|data-governance|index-advisor)。已激活组重复调用为 no-op。激活后服务端会按 MCP 协议发 notifications/tools/list_changed;若客户端不消费该通知(如 Claude Code 当前实现),需要重启客户端或在 MCP 客户端设置中手动刷新。', { type: 'object', properties: { name: { type: 'string', enum: ['query-experience', 'profiles', 'data-governance', 'index-advisor'] } }, required: ['name'] }, async () => ({ error: 'use_tool_group must be routed by ToolRegistry' })),
+    tool('use_tool_group', '激活一个 tool group 解锁其下工具(group: query-experience|profiles|data-governance|index-advisor)。已激活组重复调用为 no-op。**v3.3.1**: Claude Code 客户端会自动跳过 lazy loading(全部 45 tool 可见),无需调用此工具;其他客户端(Cline/Dify/Continue/Cherry Studio/5ire)可正常用此工具激活新 group。', { type: 'object', properties: { name: { type: 'string', enum: ['query-experience', 'profiles', 'data-governance', 'index-advisor'] } }, required: ['name'] }, async () => ({ error: 'use_tool_group must be routed by ToolRegistry' })),
     tool('use_tool_schema', '加载 info-lazy 工具的完整 schema(仅 generate_sample_data 是 info-lazy)。不影响工具列表,不需要刷新客户端。', { type: 'object', properties: { name: { type: 'string', enum: ['generate_sample_data'] } }, required: ['name'] }, async () => ({ error: 'use_tool_schema must be routed by ToolRegistry' })),
   ];
 

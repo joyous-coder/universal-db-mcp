@@ -2,6 +2,54 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.3.2] - 2026-07-27
+
+### 修复 (Claude Code 客户端智能默认)
+
+**核心问题**:Anthropic Claude Code MCP 客户端不消费 `notifications/tools/list_changed` 通知(已确认 GitHub issues #79826/#78208 是 regression)。用户在 Claude Code 下启用 `DB_LAZY_LOAD_ENABLED=true` 时,虽然服务端会发 listChanged,但客户端不刷新,新激活的 tool 永远不可见,必须重启 Claude Code。
+
+**v3.3.2 修复**:服务端智能检测 Claude Code 客户端,**自动绕过 lazy loading gating** — Claude Code 客户端发起的会话直接进入 v3.1 行为(全部 45 tool 可见),无需客户端重启。
+
+#### 实现 (`src/mcp/mcp-server.ts`)
+
+- 新增 `InitializeRequestSchema` handler,捕获 `clientInfo.{name,version}`
+- 新增 `sessionClientInfo: Map<sessionId, {name, version?}>` 状态
+- 新增 `isClaudeCodeClientName(name)`:regex `/claude[\s_.\-]+code/i`
+- 新增 `shouldSkipLazyLoading()`:per-session 决策
+- `ListTools` handler 增加 `treatAsLazyDisabled` 判断,Claude Code 走 v3.1 fallback
+- `CallTool` handler 同步增加 `effectiveLazyEnabled` 局部变量
+
+#### `use_tool_group` description 更新
+
+旧版:虽启用通知,客户端需重启
+新版:Claude Code 客户端自动跳过 lazy loading(无需调此工具);其他客户端正常用
+
+#### 测试 (`tests/unit/client-detection.test.ts`)
+
+33 个新测试:
+- 8 个 Claude Code 已知 clientInfo 名称(可识别)
+- 14 个非 Claude Code 客户端(Cline/Dify/Continue/Cherry Studio/5ire/HyperChat 不误识别)
+- 7 个 lazy loading 行为矩阵(DB_LAZY_LOAD_ENABLED × 客户端类型 → effective value)
+
+#### 用户影响
+
+| 客户端 | v3.3.1 → v3.3.2 |
+|---|---|
+| **Claude Code** | ✅ 自动全部 45 tool 可见(无需重启,无需手动设 `DB_LAZY_LOAD_ENABLED=false`) |
+| Cline / Continue / Dify / Cherry Studio / 5ire | 行为不变 — 真懒加载可用 |
+| HTTP / REST API | 行为不变 |
+
+#### 兼容性
+
+Patch release,无 API 变化,纯 server-side enhancement。
+
+### 参考
+
+- GitHub Issue anthropics/claude-code#79826: "MCP: tools list is not refreshed on notifications/tools/list_changed"
+- GitHub Issue anthropics/claude-code#78208: "regression from 2.1.210"
+
+---
+
 ## [3.3.1] - 2026-07-27
 
 ### 修复 (lazy loading listChanged 通知 + 文档澄清)

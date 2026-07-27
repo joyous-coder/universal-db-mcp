@@ -109,11 +109,11 @@ describe('lazy loading v3.3.1 listChanged notification', () => {
   });
 });
 
-describe('use_tool_group description (v3.3.1 wording update)', () => {
-  it('description mentions notifications/tools/list_changed and Claude Code refresh', async () => {
-    // Pull live tool definitions from the registry builder used by mcp-server.
-    // We assert the description string contains the right hints so users
-    // know what to do when their client doesn't auto-refresh.
+describe('use_tool_group description (v3.3.2 wording update)', () => {
+  it('description mentions Claude Code auto-skip and other clients', async () => {
+    // v3.3.2: Claude Code auto-bypasses lazy loading, so the description
+    // should mention that fact explicitly. The MCP protocol method name is
+    // now mentioned in the docs (not the tool description).
     const { buildToolRegistry } = await import('../../src/mcp/tool-definitions.js');
     const reg = buildToolRegistry({
       lazyLoadEnabled: true,
@@ -121,8 +121,8 @@ describe('use_tool_group description (v3.3.1 wording update)', () => {
     });
     const meta = reg.listActiveTools('default').find((t) => t.name === 'use_tool_group');
     expect(meta).toBeDefined();
-    expect(meta!.description).toMatch(/notifications\/tools\/list_changed/);
     expect(meta!.description).toMatch(/Claude Code/);
-    expect(meta!.description).toMatch(/重启|刷新/);
+    expect(meta!.description).toMatch(/跳过 lazy loading|自动跳过/);
+    expect(meta!.description).toMatch(/Cline/);
   });
 });
