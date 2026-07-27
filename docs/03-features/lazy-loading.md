@@ -11,7 +11,7 @@ v3.2 splits tools into:
 
 Default session now uses ~700 tokens (60% reduction).
 
-> **Backward compat**: lazy-loading is **opt-in** via `DB_LAZY_LOAD_ENABLED=true`. Default behavior (v3.1) is unchanged — all 26+ tools always listed.
+> **v3.4 default**: `DB_LAZY_LOAD_ENABLED` defaults to `false` (opt-in, 与 v3.1 行为一致);`DB_LAZY_DEFAULT_GROUP` 默认不激活任何 group (两个 env var 语义正交)。Claude Code 客户端通过 `shouldSkipLazyLoading()` 自动绕过,体感仍为"全 43 tool 立即可见"。显式 `DB_LAZY_LOAD_ENABLED=true` 启用懒加载后,首次 `ListTools` 只返回 14 个 tool (2 meta + 12 stateful),其余需要 `use_tool_group({ name: ... })` 按需激活。
 
 ## ⚠️ Claude Code 客户端限制 (v3.3.1)
 
@@ -72,8 +72,8 @@ Default session now uses ~700 tokens (60% reduction).
 
 | 客户端 | 推荐设置 |
 |---|---|
-| Claude Code / Claude Desktop | `DB_LAZY_LOAD_ENABLED` 不设 / 设为 `false`(默认)— 全 tool 立即可见 |
-| Cline / Continue / Dify / Cherry Studio | `DB_LAZY_LOAD_ENABLED=true` + `DB_LAZY_DEFAULT_GROUP=query-experience` — 真懒加载可用 |
+| Claude Code / Claude Desktop | 不设 / 设为 `false` — server 自动 bypass,全 43 tool 立即可见 |
+| Cline / Continue / Dify / Cherry Studio | 默认不开 lazy (同 v3.1);若 `DB_LAZY_LOAD_ENABLED=true`,启动后只能看到 14 个 stateful/meta tool;`DB_LAZY_DEFAULT_GROUP=query-experience` 启动即激活 9 tool;之后用 `use_tool_group` 按需扩展 group |
 | 自研 HTTP MCP 客户端 | 同上 — `use_tool_group` 后能 refresh |
 
 ## Groups
@@ -134,8 +134,8 @@ When LLM calls `generate_sample_data` with missing fields:
 
 | Var | Default | Effect |
 |---|---|---|
-| `DB_LAZY_LOAD_ENABLED` | `false` | `true` = activate lazy-loading. `false` = v3.1 behavior (all tools always listed) |
-| `DB_LAZY_DEFAULT_GROUP` | empty | Comma-separated groups to pre-activate at session start (e.g. `query-experience,profiles`) |
+| `DB_LAZY_LOAD_ENABLED` | `false` | `true` = 启用懒加载;`false` = v3.1 行为(全部 43 tool 始终列出,不走 registry)。Claude Code 客户端无论此值都会被服务端自动 bypass。 |
+| `DB_LAZY_DEFAULT_GROUP` | unset (空) | 启动时预激活的 group 列表,如 `query-experience,profiles`。未设置 = 不预激活任何 group(真正的懒加载)。 |
 
 ## Transport mode
 

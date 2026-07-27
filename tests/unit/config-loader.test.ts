@@ -270,11 +270,26 @@ describe('Configuration Loader', () => {
   });
 
   describe('lazy-loading config (v3.2)', () => {
-    it('lazyLoad defaults to enabled=false (safe v3.1 fallback)', () => {
+    it('lazyLoad defaults to enabled=false (v3.4: SAFE opt-in, no behavior change from v3.1)', () => {
       delete process.env.DB_LAZY_LOAD_ENABLED;
       delete process.env.DB_LAZY_DEFAULT_GROUP;
       const cfg = mergeConfigs({}, loadFromEnv());
       expect(cfg.lazyLoad?.enabled).toBe(false);
+      expect(cfg.lazyLoad?.defaultActiveGroups).toEqual([]);
+    });
+
+    it('DB_LAZY_LOAD_ENABLED unset but DB_LAZY_DEFAULT_GROUP set → enabled=true, groups from env', () => {
+      delete process.env.DB_LAZY_LOAD_ENABLED;
+      process.env.DB_LAZY_DEFAULT_GROUP = 'query-experience';
+      const cfg = mergeConfigs({}, loadFromEnv());
+      expect(cfg.lazyLoad?.enabled).toBe(true);
+      expect(cfg.lazyLoad?.defaultActiveGroups).toEqual(['query-experience']);
+    });
+
+    it('DB_LAZY_DEFAULT_GROUP="" (explicit empty, with enabled=true) → no groups active', () => {
+      process.env.DB_LAZY_LOAD_ENABLED = 'true';
+      process.env.DB_LAZY_DEFAULT_GROUP = '';
+      const cfg = mergeConfigs({}, loadFromEnv());
       expect(cfg.lazyLoad?.defaultActiveGroups).toEqual([]);
     });
 

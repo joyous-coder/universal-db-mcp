@@ -2,6 +2,25 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.3.4] - 2026-07-27
+
+### 修复: `DB_LAZY_DEFAULT_GROUP` 未设时不再隐式激活全部 group
+
+**问题**: v3.2.4 引入 Bug #8 修复时,为了绕开 Claude Code `listChanged` 通知不消费的回归,在 `config-loader.ts` 加了"未设 = 激活全部 4 个 group"的隐式行为。该 workaround 与 `DB_LAZY_LOAD_ENABLED` 语义耦合,两个本应正交的 env var 互相影响。
+
+**修复**: `src/utils/config-loader.ts:218-237` 删除三表达式 workaround,简化为 `[...defaultGroups]`。两个 env var 现在完全独立:`DB_LAZY_DEFAULT_GROUP` 未设 = 不预激活任何 group。Claude Code 已通过 `shouldSkipLazyLoading()` 自动 bypass,无需此 workaround。
+
+**对用户影响**:
+- 默认配置 / 未设 `DB_LAZY_LOAD_ENABLED` 时:行为完全等同 v3.3.3(全部 43 tool 始终列出)
+- 显式 `DB_LAZY_LOAD_ENABLED=true` 时:首次 `ListTools` 只返回 14 个 tool(2 meta + 12 stateful),其余 29 个需 `use_tool_group({ name: <group> })` 激活
+
+**改动文件**:
+- `src/utils/config-loader.ts:218-237` — 删除 Bug #8 workaround
+- `tests/unit/config-loader.test.ts:272-296` — 默认测试断言 + 新增 2 个 case (隐式 + 显式空)
+- `docs/03-features/lazy-loading.md` — 同步文档
+
+---
+
 ## [3.3.3] - 2026-07-27
 
 ### 修复 (v3.3.2 发布后 MCP 不工作)

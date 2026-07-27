@@ -20,3 +20,6 @@ history.db
 .e2e-plan-history.db
 
 tmp-e2e/
+# Local harness config (e.g. opencode.json for OpenCode CLI users)
+opencode.json
+release-notes-*.md

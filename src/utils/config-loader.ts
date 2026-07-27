@@ -220,20 +220,13 @@ export function loadFromEnv(): Partial<AppConfig> {
   const lazyDefaultGroups = process.env.DB_LAZY_DEFAULT_GROUP;
   if (lazyEnabled !== undefined || lazyDefaultGroups !== undefined) {
     const allGroups = ['query-experience', 'profiles', 'data-governance', 'index-advisor'] as const;
-    // v3.2.4 Bug #8 fix: when DB_LAZY_LOAD_ENABLED=true and DB_LAZY_DEFAULT_GROUP is unset,
-    // default to ALL groups active. Claude Code MCP client doesn't refresh on listChanged
-    // notification, so without pre-activating all groups, 25 tools + meta remain invisible.
-    // Users who explicitly want opt-in lazy behavior can set DB_LAZY_DEFAULT_GROUP explicitly.
     const defaultGroups: ReadonlyArray<typeof allGroups[number]> = (lazyDefaultGroups ?? '')
       .split(',')
       .map(s => s.trim())
       .filter((s): s is typeof allGroups[number] => allGroups.includes(s as typeof allGroups[number]));
-    const activeGroups: Array<typeof allGroups[number]> = defaultGroups.length === 0
-      ? (lazyDefaultGroups === undefined ? [...allGroups] : [])  // unset → all active; explicit empty → none
-      : [...defaultGroups];
     config.lazyLoad = {
       enabled: lazyEnabled === undefined ? true : /^(true|1|yes)$/i.test(lazyEnabled),
-      defaultActiveGroups: activeGroups,
+      defaultActiveGroups: [...defaultGroups],
     };
   }
 
@@ -259,7 +252,7 @@ export function mergeConfigs(...configs: Partial<AppConfig>[]): AppConfig {
     metrics: { enabled: true, ipAllowList: [], slowBufferSize: 100 }, // v2.16 default
     queryAnalyzer: { enabled: true, historyTtlDays: 30, historyMaxRows: 10000, explainTimeoutMs: 10000 }, // v2.17 default
     profileManager: { enabled: true, maxProfiles: 50, defaultRole: 'primary', readRouting: 'round-robin' }, // v2.18 default
-    lazyLoad: { enabled: false, defaultActiveGroups: [] }, // v3.2 default: SAFE = disabled (no behavior change from v3.1)
+    lazyLoad: { enabled: false, defaultActiveGroups: [] }, // v3.4 default: SAFE = opt-in (no behavior change from v3.1 unless DB_LAZY_LOAD_ENABLED=true)
   };
 
   for (const config of configs) {

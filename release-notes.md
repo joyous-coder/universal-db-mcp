@@ -1,75 +1,53 @@
-# v3.2.7 — MongoDB e2e-driven 2 critical bug fixes
+# v3.3.4 — 修复 DB_LAZY_DEFAULT_GROUP 隐式激活全部 group 的语义耦合
 
-## What's in this release
+## 问题
 
-Continuation of v3.2.7 backlog — Redis + MongoDB e2e testing found 2 critical bugs. Both verified working in live Claude Code session.
+v3.2.4 引入 Bug #8 修复时，为了绕开 Claude Code `listChanged` 通知不消费的回归，在 `config-loader.ts` 加了"未设 = 激活全部 4 个 group"的隐式行为。该 workaround 与 `DB_LAZY_LOAD_ENABLED` 语义耦合，两个本应正交的 env var 互相影响：
 
-## Fixes
+- `DB_LAZY_LOAD_ENABLED=true` + `DB_LAZY_DEFAULT_GROUP` unset → 自动激活全部 4 个 group（非 Claude Code 客户端实际看到 43 tool，懒加载失效）
+- `DB_LAZY_DEFAULT_GROUP` 是否设置意外决定了"懒加载是真懒还是假懒"
 
-### Bug #26 — MongoDB `execute_query` multi-arg parse failure
+## 修复
 
-**Repro**:
-```js
-execute_query({sql: 'db.users.insertOne({name: "alice", age: 30})'})  // ✅ works
-execute_query({sql: 'db.users.updateOne({name: "alice"}, {$set: {age: 31}})'})
-// ❌ "无效的查询参数格式"
+`src/utils/config-loader.ts:218-237` 删除三表达式 workaround，env var 解析简化为 `[...defaultGroups]`：
+
+```diff
+- const activeGroups: Array<typeof allGroups[number]> = defaultGroups.length === 0
+-   ? (lazyDefaultGroups === undefined ? [...allGroups] : [])
+-   : [...defaultGroups];
++ config.lazyLoad = {
++   enabled: ...,
++   defaultActiveGroups: [...defaultGroups],
++ };
 ```
 
-**Root cause**: Initial v3.2.6 fix handled single-arg correctly (regex + JSON.parse + JS-literal normalize). But multi-arg calls like `updateOne(filter, update)` failed because:
-- Greedy regex `(.*)` captured across commas: `a}, b` as one chunk
-- JSON.parse failed on non-JSON content
-- Normalize couldn't fix because there were multiple top-level literals
+两个 env var 现在完全独立。Claude Code 已通过 `shouldSkipLazyLoading()` 自动 bypass，不需要这个 workaround。
 
-**Fix** (`src/adapters/mongodb.ts:165-220`):
-- Split args on top-level commas (tracking brace/bracket depth + inside-string state)
-- Parse each part independently (JSON first, then JS-literal normalize)
-- Distribute multi-args by operation type:
-  - `update/updateOne/updateMany` → (filter, update, options?)
-  - `find/findOne/distinct/count/countDocuments` → (query, options?)
-  - `aggregate` → pipeline
-  - `insert/insertOne` → doc
-- Better error message with JSON example
+## 对用户影响
 
-**Verify** (live Claude Code session): 5-step lifecycle:
-```js
-insertOne({name:'verify26v2', age:30})   → insertedId returned
-updateOne({name:'verify26v2'}, {$set:{age:31}})  → matchedCount:1, modifiedCount:1
-find({name:'verify26v2'})   → age:31 verified
-deleteOne({name:'verify26v2'})  → deletedCount:1
-```
+| 配置 | v3.3.3 行为 | v3.3.4 行为 |
+|---|---|---|
+| 未设 `DB_LAZY_LOAD_ENABLED` | 全 43 tool (v3.1 fallback) | 全 43 tool (v3.1 fallback) — **不变** |
+| `DB_LAZY_LOAD_ENABLED=true` + `DB_LAZY_DEFAULT_GROUP` 未设 | **43 tool** (隐式全激活) | **14 tool** (2 meta + 12 stateful)，其余需 `use_tool_group` |
+| `DB_LAZY_LOAD_ENABLED=true` + `DB_LAZY_DEFAULT_GROUP=query-experience` | 23 tool | 23 tool — **不变** |
 
-### Bug #27 — MongoDB `use_profile` authentication failed
+## 兼容性
 
-**Repro**:
-```js
-save_profile({name:'m', type:'mongodb', config:{host, port, user, password, database}})
-// saved without authSource
-use_profile({name:'m'})  // ❌ "Authentication failed"
-```
+Patch release。`DB_LAZY_LOAD_ENABLED` 默认仍是 `false`（opt-in，与 v3.1 行为一致），所以**默认配置下完全无破坏性**。
 
-**Root cause**: MongoDB SCRAM auth requires `authSource` (default 'admin' for MONGO_INITDB_ROOT_USERNAME user). Save handler didn't inject default.
+仅在显式启用懒加载 + 未设 `DB_LAZY_DEFAULT_GROUP` 时，体感从"假懒加载（全可见）"变成"真懒加载（需 `use_tool_group`）"。这是**正确的语义**，也符合用户预期。
 
-**Fix** (`src/mcp/tools/profile-tools.ts:16-26`): `buildSaveProfileHandler` now auto-injects `authSource: 'admin'` for mongodb config when missing.
+## 验证
 
-**Verify**: Saved profile shows `"authSource": "admin"` in config; `use_profile` connects successfully.
+- `npm run test:unit`: **56 test files / 554 tests PASS**（新增 2 个 case）
+- `npm run build`: tsc 退出码 0
 
-## Coverage Update
-
-| DB | Status |
-|---|---|
-| sqlite | 43/43 ✅ (v3.2.4) |
-| redis | 35 ✅ + 7 INFRA + 1 ⚠️ (v3.2.7) |
-| mongodb | 26 ✅ + 4 INFRA + ⚠️→✅ (Bug #26 fixed) (v3.2.7) |
-| postgres / mysql / clickhouse / dm | Backlog v3.2.8 |
-
-## Tests
-
-- `npm test`: 533/533 ✅
-- Live e2e: Bug #26 + #27 verified in current Claude Code session
-
-## Upgrade
+## 升级方式
 
 ```bash
-npm install -g @joyous-coder/universal-db-mcp@latest
-# Backwards-compatible with v3.2.6
+npm update -g @joyous-coder/universal-db-mcp
+# 或
+npx -y @joyous-coder/universal-db-mcp@3.3.4 --type mysql --host ...
 ```
+
+无破坏性变更，无需修改 `.mcp.json`。

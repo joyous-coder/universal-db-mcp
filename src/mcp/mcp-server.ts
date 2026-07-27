@@ -64,7 +64,7 @@ export class DatabaseMCPServer {
   private toolRegistry: ToolRegistry | null = null;
   // v3.2: per-session MCP sessionId (stdio uses 'stdio-default'; HTTP/SSE uses transport sessionId)
   private currentSessionId: string = 'stdio-default';
-  // v3.2: whether lazy-loading is enabled (DB_LAZY_LOAD_ENABLED; default false = v3.1 behavior)
+  // v3.2: whether lazy-loading is enabled (DB_LAZY_LOAD_ENABLED; default false = v3.1 behavior). Claude Code sessions bypass via shouldSkipLazyLoading().
   private lazyLoadEnabled: boolean = false;
   // v3.3.1: per-session client identification (mcp clientInfo from initialize)
   // Used to detect Claude Code (which doesn't honor listChanged notifications —
