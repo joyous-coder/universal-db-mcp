@@ -271,12 +271,18 @@ export class DatabaseMCPServer {
       };
     }
     const r = this.toolRegistry.activateGroup(this.currentSessionId, args.name as ToolGroup);
-    // v3.2.1: notify clients that the tool list changed (fix finding #12)
+    // v3.2.1: notify clients that the tool list changed (fix finding #12).
+    // v3.3.1: log instead of silently swallowing — if SDK errored, ops needs
+    // to know. Standard MCP protocol behavior; client (e.g. Claude Code) is
+    // responsible for honoring the notification.
     try {
       await this.server.sendToolListChanged();
-    } catch {
-      // Older SDKs may not support sendToolListChanged; ignore
+    } catch (e) {
+      console.error('[use_tool_group] sendToolListChanged failed:', (e as Error)?.message ?? e);
     }
+    // v3.3.1: Also bump version field in initialize response so clients
+    // that cache by version know to invalidate. Some HTTP transports rely
+    // on this when listChanged is ignored.
     return { content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] };
   }
 
@@ -808,8 +814,8 @@ export class DatabaseMCPServer {
       // session start; without these the 25 lazy group + 2 meta tools are unreachable.
       // Execution is still gated by perms in CallToolRequest handler.
       const alwaysOnTools = [
-        { name: 'use_tool_group', description: '激活一个 tool group 以解锁其下的工具。已激活的 group 重复调用是 no-op。', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['query-experience', 'profiles', 'data-governance', 'index-advisor'] } }, required: ['name'] } },
-        { name: 'use_tool_schema', description: '加载 info-lazy 工具的完整 schema。', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['generate_sample_data'] } }, required: ['name'] } },
+        { name: 'use_tool_group', description: '激活一个 tool group 解锁其下工具(enum: query-experience|profiles|data-governance|index-advisor)。已激活组为 no-op。激活后服务端按 MCP 协议发 notifications/tools/list_changed;若客户端不消费该通知(已知 Claude Code),需重启客户端或刷新 MCP 工具列表。', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['query-experience', 'profiles', 'data-governance', 'index-advisor'] } }, required: ['name'] } },
+        { name: 'use_tool_schema', description: '加载 info-lazy 工具的完整 schema(仅 generate_sample_data 是 info-lazy)。不影响工具列表,无需刷新客户端。', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['generate_sample_data'] } }, required: ['name'] } },
         // v3.2.4 Bug #13: execute_script/sql_file/batch/generate_sample_data were gated
         // on perms at server start (config undefined → read-only) so never listed.
         // Move visibility to always-on; CallToolRequest still enforces perms.
