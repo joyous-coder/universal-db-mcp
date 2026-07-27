@@ -1,6 +1,6 @@
 # Deferred Items Ledger
 
-**Last updated:** 2026-07-24 (v3.1.0 release)
+**Last updated:** 2026-07-27 (v3.3.2 release — Claude Code listChanged workaround)
 
 This document is the **single source of truth** for items that have been
 deferred in past versions. It exists to prevent the same item from being
@@ -25,6 +25,7 @@ When a new spec is written, the author should:
 
 | Item | State | Last touched | See |
 |---|---|---|---|
+| **Claude Code listChanged workaround cleanup (v3.3.2)** | 🟡 pending | 2026-07-27 | [see below](#claude-code-listchanged-client-bug-workaround) |
 | Profile 加密 (SQLCipher for profiles.db) | ✅ v2.19 | 2026-07-24 | [v2.19 spec](superpowers/specs/2026-07-24-v2.19-multi-profile-design.md) |
 | **SQLCipher for templates.db / history.db** | ✅ v2.20 | 2026-07-24 | [v2.20 spec](superpowers/specs/2026-07-24-v2.20-profile-hardening-design.md) |
 | 跨 profile 模板/历史 + groupBy | ✅ v2.19 | 2026-07-24 | [v2.19 spec](superpowers/specs/2026-07-24-v2.19-multi-profile-design.md) |
@@ -52,6 +53,115 @@ When a new spec is written, the author should:
 | Profile 跨 profile 事务 (XA / 2PC) | 🔴 abandoned | 2026-07-24 | complex + rarely needed; document as "not supported" |
 | 读副本延迟自动检测 | 🔴 abandoned | 2026-07-24 | replicas already have native lag metrics; agent can read them |
 | OS keyring 集成 | 🔴 abandoned | 2026-07-24 | cross-platform differences; env var documented enough |
+
+---
+
+## Claude Code listChanged client bug workaround
+
+**Status:** 🟡 pending (workaround in v3.3.2, await upstream fix)
+
+**Anthropic Claude Code MCP 客户端不消费 `notifications/tools/list_changed` 通知。**
+当 MCP server 在 session 中激活新 group 后,服务端会按协议发通知,但 Claude Code
+不刷新,新激活的 tool 永远不可见,必须重启 Claude Code。
+
+### 上游证据(2026-07-27 实测)
+
+GitHub `anthropics/claude-code` 上多个 open/closed issue 确认:
+
+- [#79826](https://github.com/anthropics/claude-code/issues/79826) — "MCP: tools list is not refreshed on notifications/tools/list_changed (stale tools until session restart)" 🔴 OPEN
+- [#78208](https://github.com/anthropics/claude-code/issues/78208) — "MCP notifications/tools/list_changed ignored over Streamable HTTP in 2.1.211 (regression from 2.1.210)" 🔴 OPEN / regression
+- [#77314](https://github.com/anthropics/claude-code/issues/77314) — "MCP client does not re-fetch tools/list on notifications/tools/list_changed — new tools unreachable until full session restart" ⚫ CLOSED
+- [#79986](https://github.com/anthropics/claude-code/issues/79986) — "Claude Desktop: external stdio MCP tools announced but never dispatched in Chat mode" 🔴 OPEN
+
+本仓库实测复现:用 `.mcp.json` 设置 `DB_LAZY_DEFAULT_GROUP=query-experience` 重启
+Claude Code,`use_tool_group({name:'data-governance'})` 立即调 `audit_log({})` 返
+回 `No such tool available`。Server 端 `activeGroups` 已更新,但客户端 tool list
+冻结。Claude Code 用户 **必须重启** 才能看到新 tool。
+
+### v3.3.2 workaround
+
+服务端智能检测 Claude Code 客户端(`clientInfo.name` 匹配 regex
+`/claude[\s_.\-]+code/i`),在 ListTools / CallTool handler 判定该 session 时
+**自动跳过 lazy loading gating** —— 等同 v3.1 行为,全部 45 tool 可见,
+无需客户端重启。
+
+**实现**:
+- `src/mcp/mcp-server.ts`: `InitializeRequest` handler 捕获 `clientInfo`,
+  新增 `sessionClientInfo: Map<sessionId, {name, version?}>`,`isClaudeCodeClientName()`,
+  `shouldSkipLazyLoading()`,`ListTools` 和 `CallTool` 路径加 `treatAsLazyDisabled` /
+  `effectiveLazyEnabled` 判定
+- `src/mcp/tool-definitions.ts` + `mcp-server.ts` 同步更新 `use_tool_group` description
+
+**测试**:
+- `tests/unit/client-detection.test.ts` — 33 个新测试(8 个 Claude Code 已知
+  clientInfo 名称可识别 + 14 个非 Claude Code 客户端不误识别 + 7 个 lazy
+  loading 行为矩阵)
+- `tests/unit/lazy-loading-notification.test.ts` — 5 个 listChanged 通知发送测试
+
+**用户影响**:
+
+| 客户端 | 行为 |
+|---|---|
+| **Claude Code** | ✅ 自动全部 45 tool 可见(无需重启,无需手动 env) |
+| Cline / Continue / Dify / Cherry Studio / 5ire | 行为不变 — 真懒加载可用 |
+| HTTP / REST API | 行为不变 |
+
+### 清理条件 (cleanup criteria)
+
+**当以下任一情况成立时,workaround 应被移除,回到真正的懒加载默认行为**:
+
+1. **Anthropic 修复 Claude Code 客户端** — 关注上面 4 个 issue,直到 `closed + state: completed`。
+   重点看 #79826 的处理(看是 #78208 regression 的 fix,还是 2.1.x → 2.2.x
+   完整修复)。
+2. **Anthropic 正式 release note 提到 listChanged 修复** — Claude Code changelog
+   有相关条目。
+3. **本仓库决定不再支持 Claude Code 作为 lazy loading 目标** — 比如所有用户
+   都迁移到 Cline / Dify 之类真支持 listChanged 的客户端。
+
+### 清理步骤(等条件满足时执行)
+
+1. **删除 v3.3.2 临时逻辑**:
+   - `src/mcp/mcp-server.ts` 删除 `InitializeRequest` handler
+   - 删除 `sessionClientInfo` / `isClaudeCodeClientName` / `shouldSkipLazyLoading`
+   - `ListTools` / `CallTool` 路径移除 `treatAsLazyDisabled` / `effectiveLazyEnabled` 分支
+2. **恢复原描述**:
+   - `use_tool_group` description 改回 v3.2.x 版本(去掉"Claude Code 自动跳过")
+3. **删除对应测试**:
+   - `tests/unit/client-detection.test.ts` 整个文件
+   - `tests/unit/lazy-loading-notification.test.ts` 删除 Claude Code 相关断言
+4. **回退 .mcp.json 默认**:
+   - `DB_LAZY_LOAD_ENABLED=true` 用户建议: 重新启用 `DB_LAZY_DEFAULT_GROUP=query-experience`
+     opt-in 行为(因为 Claude Code 已能正常响应 listChanged)
+5. **更新文档**:
+   - `docs/03-features/lazy-loading.md` 删除 ⚠️ Claude Code 限制章节
+   - `CHANGELOG.md` 加 vX.Y.Z 条目,标注"revert Claude Code workaround"
+6. **关闭本 deferred item**:
+   - 在本文件 index 表中把状态改成 ✅ vX.Y.Z
+
+### 检查频率
+
+- **每次 Anthropic Claude Code 发布新版本** — 看 release notes 是否提到
+  listChanged fix
+- **每月查一次 #79826 状态** — 直到 closed
+- **有新 MCP 客户端测试需求时** — 确认本仓库仍然支持 Claude Code 路径
+
+### 不清理的风险
+
+如果 Anthropic 修复 Claude Code listChanged 后 **不清理 workaround**:
+- 浪费检测逻辑(CPU 可忽略,主要是代码复杂度)
+- Claude Code 用户**永远用不到懒加载节省的 ~1.7k token**(因为我们强制全开)
+- Bug #8 注释永远不正确(写"Claude Code 不响应",但实际已响应)
+- 客户端行为被本仓库覆盖,长期看是技术债
+
+### 相关链接
+
+- 仓库 PR/commit 引用:
+  - `feat(v3.3.2): Claude Code 客户端智能 lazy loading 默认` (commit `3c390e3`)
+- 上游 issue:
+  - https://github.com/anthropics/claude-code/issues/79826
+  - https://github.com/anthropics/claude-code/issues/78208
+  - https://github.com/anthropics/claude-code/issues/77314
+  - https://github.com/anthropics/claude-code/issues/79986
 
 ---
 
