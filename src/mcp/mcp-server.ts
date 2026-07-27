@@ -20,6 +20,7 @@ import { createAdapter, normalizeDbType } from '../utils/adapter-factory.js';
 import { resolvePermissions } from '../utils/safety.js';
 import { ToolRegistry, type ToolGroup } from './tool-registry.js';
 import { buildToolRegistry } from './tool-definitions.js';
+// (Header note: tooling above is intentionally explicit — keep)
 import { buildGetMetricsHandler, GET_METRICS_TOOL_DESCRIPTION, type MetricsCategory } from './tools/metrics.js';
 import {
   buildExplainQueryHandler,
@@ -446,29 +447,33 @@ export class DatabaseMCPServer {
    * 设置 MCP 协议处理器
    */
   private setupHandlers(): void {
-    // v3.3.1: capture clientInfo from initialize so we can detect Claude Code
-    // (which doesn't honor listChanged notifications — see GitHub issues
-    // anthropics/claude-code#79826, #78208). When Claude Code is detected
-    // and lazy loading is enabled, we treat the session as v3.1 mode
-    // (all tools visible) so users don't need to restart the client after
-    // upgrading the MCP server.
-    this.server.setRequestHandler(InitializeRequestSchema, async (req) => {
-      const clientInfo = (req.params as any)?.clientInfo;
-      if (clientInfo?.name) {
-        const info = { name: String(clientInfo.name), version: clientInfo.version ? String(clientInfo.version) : undefined };
-        this.sessionClientInfo.set(this.currentSessionId, info);
-        const isClaudeCode = this.isClaudeCodeClientName(info.name);
-        if (isClaudeCode) {
-          console.warn(
-            `[mcp-server] detected Claude Code client (name="${info.name}" version="${info.version ?? '?'}"). ` +
-            `Known to not honor notifications/tools/list_changed (anthropics/claude-code#79826). ` +
-            `Auto-disabling lazy loading for this session so all tools remain visible without restart.`
-          );
+    // v3.3.2: capture clientInfo from initialize request.
+    // We OVERRIDE the SDK's default handler so we can capture clientInfo
+    // BEFORE delegating to the SDK's _oninitialize. The SDK's default handler
+    // is set in Server constructor; we replace it here. This is the only
+    // way to reliably read clientInfo — `oninitialized` fires AFTER initialize
+    // but reads return undefined (timing issue with private field).
+    this.server.setRequestHandler(InitializeRequestSchema, async (request) => {
+      try {
+        const params = (request.params ?? {}) as any;
+        const clientInfo = params.clientInfo;
+        if (clientInfo?.name) {
+          const info = { name: String(clientInfo.name), version: clientInfo.version ? String(clientInfo.version) : undefined };
+          this.sessionClientInfo.set(this.currentSessionId, info);
+          if (this.isClaudeCodeClientName(info.name)) {
+            console.warn(
+              `[mcp-server] detected Claude Code client (name="${info.name}" version="${info.version ?? '?'}"). ` +
+              `Known to not honor notifications/tools/list_changed (anthropics/claude-code#79826). ` +
+              `Auto-disabling lazy loading for this session so all tools remain visible without restart.`
+            );
+          }
         }
+      } catch (e) {
+        console.warn('[mcp-server] initialize handler clientInfo capture failed:', (e as Error)?.message ?? e);
       }
-      // Don't override the SDK's default initialize response — just observe.
-      // The SDK will return server capabilities + serverInfo automatically.
-      return {} as any;
+      // Delegate to the SDK's default _oninitialize to return the proper
+      // InitializeResult (protocolVersion, capabilities, serverInfo).
+      return await (this.server as any)._oninitialize(request);
     });
 
     // 列出可用工具

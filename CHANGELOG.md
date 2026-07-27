@@ -2,6 +2,36 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [3.3.3] - 2026-07-27
+
+### 修复 (v3.3.2 发布后 MCP 不工作)
+
+**问题**: v3.3.2 引入的 InitializeRequest handler override 写在 `setRequestHandler` 中,返回 `{} as any`,**破坏了 SDK 默认的 InitializeResult 响应**(`protocolVersion`/`capabilities`/`serverInfo` 全部为空)。客户端无法正常初始化,MCP 看似"不工作"。
+
+**根因诊断**: Claude Code 调用 claude-code 启动后,MCP 客户端收到空 `InitializeResult`,工具列表为空。
+
+**修复**:
+
+- 改为正确委托:`setRequestHandler(InitializeRequestSchema, async (req) => { ... capture clientInfo ...; return await (this.server as any)._oninitialize(req); })` — 保留 SDK 默认行为
+- 删除了之前 `oninitialized` 回调(`/getClientVersion` 总是返回 undefined,因为时序问题)
+- 加 smoke test (`/tmp/mcp-smoke.cjs`) 验证 `initialize` → `tools/list` 完整链路
+
+**验证** (smoke test):
+
+```
+[stderr] [mcp-server] detected Claude Code client (name="claude-code" version="2.1.215"). ...
+[stdout] {"result":{"protocolVersion":"2025-06-18","capabilities":{"tools":{"listChanged":true}},"serverInfo":{"name":"universal-db-mcp","version":"1.0.0"}},"jsonrpc":"2.0","id":1}
+[stdout] {"result":{"tools":[...] 42 个 tool ...]},"jsonrpc":"2.0","id":2}
+```
+
+`initialize` 响应正确 + `tools/list` 返回全部 42 tool + Claude Code 检测日志出现。
+
+### v3.3.2 用户的临时修复
+
+如果用户已经升级到 v3.3.2 但 MCP 不工作,可以通过重启 Claude Code 加载旧的代码路径解决(因为 dist 还是 v3.3.2)。
+
+---
+
 ## [3.3.2] - 2026-07-27
 
 ### 修复 (Claude Code 客户端智能默认)
