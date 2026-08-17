@@ -63,15 +63,8 @@ export class DatabaseMCPServer {
   private activeProfile: string | null = null;
   // v3.2: MCP tool registry for lazy-loading (built when queryAnalyzer + profileManager are set)
   private toolRegistry: ToolRegistry | null = null;
-  // v3.2: per-session MCP sessionId (stdio uses 'stdio-default'; HTTP/SSE uses transport sessionId)
-  private currentSessionId: string = 'stdio-default';
   // v4.0 G5: DB_LAZY_LOAD_ENABLED removed; tools are always visible
-  // (lazyLoadEnabled field deleted in Task 6)
-  // v3.3.1: per-session client identification (mcp clientInfo from initialize)
-  // Used to detect Claude Code (which doesn't honor listChanged notifications —
-  // see GitHub issues anthropics/claude-code#79826, #78208) and auto-disable
-  // lazy loading so all tools are visible without needing session restart.
-  private sessionClientInfo: Map<string, { name: string; version?: string }> = new Map();
+  // v4.0 G3: sessionClientInfo + currentSessionId + setSessionId removed (no longer needed)
   // v3.1: PlanHistory instance (set via setPlanHistory from entrypoint)
   private planHistory: any = null;
 
@@ -202,7 +195,7 @@ export class DatabaseMCPServer {
    * sets this from the transport's sessionId (in mcp-sse.ts).
    */
   setSessionId(id: string): void {
-    this.currentSessionId = id;
+    void id; // v4.0 G3: deprecated (was for per-session lazy registry); kept for API compat
   }
 
   /**
@@ -211,22 +204,7 @@ export class DatabaseMCPServer {
    * version. We match case-insensitively on the substring "claude-code".
    * This is the heuristic the user agreed to in v3.3.1 brainstorming.
    */
-  private isClaudeCodeClientName(name: string): boolean {
-    if (!name) return false;
-    // Match Claude Code client reports: "claude-code", "Claude Code",
-    // "claude_code", "claude.code" (hypothetical). Be permissive but
-    // require the literal "claude" + space/underscore/hyphen/dot + "code"
-    // pattern to avoid false positives like "claude-anything-else".
-    return /claude[\s_.\-]+code/i.test(name);
-  }
-
-  /**
-   * v3.3.1: should the current session skip lazy loading even when
-   * DB_LAZY_LOAD_ENABLED=true? Currently: yes if the client is Claude Code
-   * (which doesn't honor listChanged — see anthropics/claude-code#79826).
-   * Returns true for the per-session fast path.
-   */
-// v4.0 G5: shouldSkipLazyLoading() removed (toolRegistry always null)
+  // v4.0 G3: Claude Code detection removed — all clients get identical behavior
 
 // v4.0 G1: rebuildToolRegistry() is now a no-op; will be deleted in Task 8
   private rebuildToolRegistry(): void {
@@ -253,27 +231,9 @@ export class DatabaseMCPServer {
     // way to reliably read clientInfo — `oninitialized` fires AFTER initialize
     // but reads return undefined (timing issue with private field).
     this.server.setRequestHandler(InitializeRequestSchema, async (request) => {
-      try {
-        const params = (request.params ?? {}) as any;
-        const clientInfo = params.clientInfo;
-        if (clientInfo?.name) {
-          const info = { name: String(clientInfo.name), version: clientInfo.version ? String(clientInfo.version) : undefined };
-          this.sessionClientInfo.set(this.currentSessionId, info);
-          if (this.isClaudeCodeClientName(info.name)) {
-            console.warn(
-              `[mcp-server] detected Claude Code client (name="${info.name}" version="${info.version ?? '?'}"). ` +
-              `Known to not honor notifications/tools/list_changed (anthropics/claude-code#79826). ` +
-              `Auto-disabling lazy loading for this session so all tools remain visible without restart.`
-            );
-          }
-        }
-      } catch (e) {
-        console.warn('[mcp-server] initialize handler clientInfo capture failed:', (e as Error)?.message ?? e);
-      }
-      // Delegate to the SDK's default _oninitialize to return the proper
-      // InitializeResult (protocolVersion, capabilities, serverInfo).
+      // v4.0 G3: simplified — no Claude Code detection, no sessionClientInfo tracking
+      // v4.0 G8: inject instructions for deferred tool search
       const result = await (this.server as any)._oninitialize(request);
-      // v4.0 G8: 注入 instructions(给 deferred tool search 用的"何时 search / search 什么"线索)
       return { ...result, instructions: buildInstructions() };
     });
 
