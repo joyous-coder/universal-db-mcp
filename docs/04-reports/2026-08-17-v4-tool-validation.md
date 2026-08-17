@@ -1,7 +1,7 @@
 # Universal DB MCP v4.0 — 41 工具完整集成验证报告
 
 **日期**: 2026-08-17
-**环境**: 达梦 DM `10.1.15.50:5237`,user `BBZ_PROVINCE_EG`,permissionMode=full
+**环境**: 达梦 DM `<internal-ip>`:5237,user `<internal-user>`,permissionMode=full
 **测试目标**: 验证 v4.0 release 后 41 个 MCP tool 在 Claude Code 集成场景下**真实行为**(INSERT 真的落库 + 写权限门真生效 + 错误路径真拒绝)
 **测试方法**: 3-stage 验证 — happy call + side-effect verify + error path
 **隔离保证**: 所有写操作在新建 schema `v4_test_mcp` 内,完成后 DROP,验证真实表零变化
@@ -145,9 +145,9 @@ const qualified = tableInfo.name.includes('.')
 **严重程度**: 🟡 中
 
 **证据**:
-- 用 `connect_database` 用 `10.1.15.50:5237/BBZ_PROVINCE_EG/BBZ_PROVINCE_EG` 成功
-- 保存 BBZ_EG_TEST profile(同样 creds)
-- `use_profile("BBZ_EG_TEST")` 报 `达梦数据库连接失败: 无法连接到数据库服务器`
+- 用 `connect_database` 用 `<internal-ip>:5237/<internal-user>/<internal-user>` 成功
+- 保存 `<internal-profile>` profile(同样 creds)
+- `use_profile("<internal-profile>")` 报 `达梦数据库连接失败: 无法连接到数据库服务器`
 - `use_profile("e2e-331-test")`(SQLite, 路径 D:/tmp/e2e-331.db) 报 `unable to open database file`
 
 **根因推测**: `use_profile` 路径与 `connect_database` 不同,可能在 adapter factory 复用 / 连接池状态 / `useProfile` 方法签名上有 bug。建议深查 `src/mcp/mcp-server.ts::handleUseProfile` 和 `src/core/profile-manager.ts::useProfile`。

@@ -48,7 +48,28 @@ export function buildSaveTemplateHandler(qa: QueryAnalyzer) {
     /** v2.19: bind template to a profile (omit/null for global). */
     profile_name?: string | null;
   }) => {
-    return qa.saveTemplate(args);
+    // v4.0.2 Bug #6 fix: accept EITHER:
+    //   (a) array of strings, e.g. ["id", "name"]  — most common MCP call style
+    //   (b) array of {name|type|required} objects  — internal/template-store style
+    //   (c) array of {item|type|required} objects — alternate MCP call style
+    // Internally TemplateInput.parameters is Omit<TemplateParam, 'name'>[] — convert
+    // strings and {item:...} into proper {type, required} so substituteParams can find them.
+    const params: any[] = (args.parameters ?? []).map((p: any) => {
+      if (typeof p === 'string') {
+        return { type: 'string', required: false, name: p };
+      }
+      const name = p?.name ?? p?.item;
+      if (!name) return p; // already has its own shape; pass through
+      // Strip `item` field if present; normalize required to boolean.
+      const { item: _omit, ...rest } = p;
+      return {
+        ...rest,
+        name,
+        type: rest.type ?? 'string',
+        required: rest.required === true || rest.required === 'true' ? true : false,
+      };
+    });
+    return qa.saveTemplate({ ...args, parameters: params });
   };
 }
 
@@ -74,7 +95,7 @@ export function buildDeleteTemplateHandler(qa: QueryAnalyzer) {
 }
 
 export function buildExecuteTemplateHandler(qa: QueryAnalyzer) {
-  return async (args: { id?: string; name?: string; params: Record<string, unknown> }, adapter: DbAdapter) => {
+  return async (args: { id?: string; name?: string; params?: Record<string, unknown> }, adapter: DbAdapter) => {
     // v3.2.6 fix: accept either `id` (short hash) or `name` (user-friendly).
     // Lookup by name if id not provided.
     let templateId = args.id;
@@ -86,7 +107,11 @@ export function buildExecuteTemplateHandler(qa: QueryAnalyzer) {
       if (!templateId) throw new Error(`template not found by name: ${args.name}`);
     }
     if (!templateId) throw new Error('either id or name is required');
-    return qa.executeTemplate(templateId, args.params, adapter);
+    // v4.0.2 Bug #6 fix: default args.params to {} so missing params gives clean
+    // "missing required param: <name>" from substituteParams rather than
+    // "Cannot read properties of undefined (reading 'id')" deep in handler chain.
+    const params = args.params ?? {};
+    return qa.executeTemplate(templateId, params, adapter);
   };
 }
 

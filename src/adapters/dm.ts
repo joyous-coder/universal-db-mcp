@@ -153,10 +153,15 @@ export class DMAdapter extends BaseAdapter {
 
       // createPool 支持 connectString，getConnection 不支持
       // 所以先用 createPool 创建连接池，再从池中获取连接
+      // v4.0.2 Bug #8 fix: dmdb is process-wide singleton — every pool needs a
+      // unique `poolAlias`, otherwise the second createPool with the same alias
+      // (default) fails with "[20006] 连接池别名已存在". Pass a random alias
+      // per DM adapter instance so multiple DM connections can coexist.
       this.pool = await DM.createPool({
         connectString,
         poolMax,
         poolMin,
+        poolAlias: `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         poolTimeout: poolTimeoutSec,
       });
       this.connection = await this.pool.getConnection();

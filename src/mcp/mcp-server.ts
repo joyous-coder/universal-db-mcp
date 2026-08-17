@@ -870,9 +870,14 @@ export class DatabaseMCPServer {
             if (!this.profileManager) throw new Error('profileManager not configured');
             const r = await buildUseProfileHandler(this.profileManager)(args as any);
             // v4.0 Bug #4 fix: use_profile 之前只设 this.activeProfile 但不切 adapter。
-            // 现在按 connect_database 同样的步骤:断开旧 adapter → 用 profile.config 建新 adapter → 切换。
+            // v4.0.2 Bug #7 fix: 不要重复 createAdapter + connect!ProfileManager.loadProfile
+            // 已经做了。第一次连成功后 dmdb 内部用 (host+port+user) 生成 pool alias,第二次
+            // createPool 同 alias 会抛 "[20006] 连接池别名已存在"。所以这里直接复用
+            // loadProfile 返回的 live.adapter + live.service。
+            const liveAdapter = (r as any).adapter;
+            const liveService = (r as any).service;
             const profileConfig = (r as any).profileConfig as DbConfig;
-            if (!profileConfig) {
+            if (!liveAdapter || !liveService || !profileConfig) {
               return {
                 content: [{
                   type: 'text',
@@ -884,27 +889,22 @@ export class DatabaseMCPServer {
                 isError: true,
               };
             }
-            const newConfig: DbConfig = {
-              ...profileConfig,
-              type: normalizeDbType(r.type),
-              permissionMode: profileConfig.permissionMode || 'safe',
-            };
-            // 断开旧 adapter
-            if (this.adapter) {
+            // 断开旧 adapter(如果还在连着)
+            if (this.adapter && this.adapter !== liveAdapter) {
               try {
                 await this.adapter.disconnect();
               } catch (err) {
                 console.error('断开旧适配器时出错:', err instanceof Error ? err.message : String(err));
               }
-              this.adapter = null;
-              this.databaseService = null;
             }
-            // 建立新连接
-            const newAdapter = createAdapter(newConfig);
-            await newAdapter.connect();
-            this.adapter = newAdapter;
-            this.config = newConfig;
-            this.databaseService = new DatabaseService(newAdapter, newConfig, this.cacheConfig);
+            // 切换到 loadProfile 已经建好的 adapter + service
+            this.adapter = liveAdapter;
+            this.config = {
+              ...profileConfig,
+              type: normalizeDbType(r.type),
+              permissionMode: profileConfig.permissionMode || 'safe',
+            };
+            this.databaseService = liveService;
             this.activeProfile = r.name;
             return {
               content: [{
@@ -913,10 +913,10 @@ export class DatabaseMCPServer {
                   success: true,
                   message: `已切换到 profile: ${r.name}`,
                   connection: {
-                    type: newConfig.type,
-                    host: newConfig.host,
-                    port: newConfig.port,
-                    permissionMode: newConfig.permissionMode,
+                    type: r.type,
+                    host: profileConfig.host,
+                    port: profileConfig.port,
+                    permissionMode: this.config.permissionMode,
                   },
                 }, null, 2),
               }],

@@ -36,12 +36,18 @@ export function buildListProfilesHandler(pm: ProfileManager) {
 export function buildUseProfileHandler(pm: ProfileManager) {
   return async (args: { name: string }) => {
     const live = await pm.loadProfile(args.name);
-    // v4.0 Bug #4 fix: also return profile.config so mcp-server can rebuild adapter
+    // v4.0.2 Bug #7 fix: return the entire LiveProfile (adapter + service already
+    // connected by loadProfile). Caller must use these directly — do NOT call
+    // createAdapter+connect again, because dmdb.createPool uses an internal alias
+    // derived from host+port+user; a second createPool with same alias fails with
+    // "[20006] 连接池别名已存在".
     return {
       name: live.profile.name,
       type: live.profile.type,
       role: live.profile.role,
       profileConfig: live.profile.config,
+      adapter: live.adapter,
+      service: live.service,
     };
   };
 }
