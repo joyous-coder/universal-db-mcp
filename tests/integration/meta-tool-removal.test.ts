@@ -31,3 +31,30 @@ describe('v4.0 G4: use_tool_group removed', () => {
     expect(result.isError).toBe(true);
   });
 });
+
+describe('v4.0 G2: use_tool_schema removed', () => {
+  let server: DatabaseMCPServer;
+  let client: Client;
+
+  beforeAll(async () => {
+    server = new DatabaseMCPServer(null);
+    client = new Client({ name: 'test-client', version: '1.0.0' }, { capabilities: {} });
+    const [sT, cT] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(sT), client.connect(cT)]);
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  it('use_tool_schema is NOT in tools/list', async () => {
+    const { tools } = await client.listTools();
+    const names = tools.map((t) => t.name);
+    expect(names).not.toContain('use_tool_schema');
+  });
+
+  it('calling use_tool_schema returns isError response', async () => {
+    const result = await client.callTool({ name: 'use_tool_schema', arguments: { name: 'generate_sample_data' } });
+    expect(result.isError).toBe(true);
+  });
+});
