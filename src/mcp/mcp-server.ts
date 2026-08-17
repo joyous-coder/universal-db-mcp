@@ -535,12 +535,12 @@ export class DatabaseMCPServer {
       if (resolvedPerms.includes('batch')) {
         tools.push({
           name: 'execute_batch',
-          description: '批量执行同一条 SQL 的多个参数集(类似 JdbcTemplate.batchUpdate)。需要 permissions 包含 "batch"。',
+          description: '批量执行同一条 SQL 的多个参数集(最多 1000 行)。需要 permissions 包含 "batch"。返回 affectedRowsPerStatement 数组,推荐用 SELECT 验证副作用以保证数据写入正确。',
           inputSchema: {
             type: 'object',
             properties: {
               sql: { type: 'string', description: '带占位符的 SQL 模板' },
-              paramsList: { type: 'array', items: { type: 'array' }, description: '参数集列表' },
+              paramsList: { type: 'array', maxItems: 1000, items: { type: 'array', maxItems: 50, description: '每行参数数组' }, description: '参数集列表' },
               useTransaction: { type: 'boolean', description: '是否在事务中执行(默认 true)', default: true },
               maxBatchSize: { type: 'number', description: '最大行数(默认 1000)', default: 1000 },
             },
@@ -624,9 +624,9 @@ export class DatabaseMCPServer {
       // on perms at server start (config undefined → read-only) so never listed.
       // Move visibility to always-on; CallToolRequest still enforces perms.
       const alwaysOnTools = [
-        { name: 'execute_script', description: '执行多语句 SQL 脚本或 PL/SQL 块(最多 1000 条)。需要 permissions 包含 script。✅ 推荐:DM 多语句 INSERT 用这个,不用 execute_batch(规避 3+ 参数 adapter bug)。返回 lastResult 显示最后一条的 affectedRows,其他语句请用 SELECT 验证副作用。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['sql'] } },
+        { name: 'execute_script', description: '执行多语句 SQL 脚本或 PL/SQL 块(最多 1000 条)。需要 permissions 包含 script。返回 lastResult 显示最后一条的 affectedRows,其他语句请用 SELECT 验证副作用。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['sql'] } },
         { name: 'execute_sql_file', description: '执行 .sql 文件(最多 1000 条语句)。需要 permissions 包含 script + DB_ALLOWED_FILE_PATHS。⚠️ 路径必须在 DB_ALLOWED_FILE_PATHS 白名单内。', inputSchema: { type: 'object', properties: { filePath: { type: 'string', description: '文件路径(必须在白名单内)' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 }, dryRun: { type: 'boolean', default: false, description: 'v4.0 G8 增强:true = 只解析 + lint,不执行' } }, required: ['filePath'] } },
-        { name: 'execute_batch', description: '批量执行同一条 SQL 的多个参数集(最多 1000 行)。需要 permissions 包含 batch。⚠️ 已知问题:DM adapter 对 3+ 参数的 INSERT/UPDATE 会静默返回 -1 但实际未写入。建议参数 ≤2,否则用 execute_script 替代。返回 affectedRowsPerStatement 数组,务必逐行 SELECT 验证副作用(v4.0 G8 流程改进)。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, paramsList: { type: 'array', maxItems: 1000, items: { type: 'array', maxItems: 50, description: '每行参数数组(建议 ≤2 元素)' } }, useTransaction: { type: 'boolean', default: true }, maxBatchSize: { type: 'number', default: 1000 } }, required: ['sql', 'paramsList'] } },
+        { name: 'execute_batch', description: '批量执行同一条 SQL 的多个参数集(最多 1000 行)。需要 permissions 包含 batch。返回 affectedRowsPerStatement 数组,推荐用 SELECT 验证副作用以保证数据写入正确(v4.0 G8 流程改进)。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, paramsList: { type: 'array', maxItems: 1000, items: { type: 'array', maxItems: 50, description: '每行参数数组' } }, useTransaction: { type: 'boolean', default: true }, maxBatchSize: { type: 'number', default: 1000 } }, required: ['sql', 'paramsList'] } },
         { name: 'generate_sample_data', description: '根据表结构自动生成并插入样例数据。需要 insert+batch 权限。完整 inputSchema 同上(Permission 控制由 CallToolRequest 强制执行)。', inputSchema: { type: 'object', properties: { tableName: { type: 'string' }, rowCount: { type: 'number', default: 10 }, options: { type: 'object', properties: { seed: { type: 'number' }, columns: { type: 'array', items: { type: 'string' } }, columnOverrides: { type: 'object' }, rules: { type: 'array', items: { type: 'object', properties: { match: { type: 'object', properties: { columnName: { type: 'string' }, columnNamePattern: { type: 'string' }, tableName: { type: 'string' }, columnType: { type: 'string' } } }, generate: { type: 'object', properties: { type: { type: 'string', enum: ['fixed', 'range', 'pattern', 'faker', 'choice', 'enum', 'sequence', 'regex', 'null', 'skip'] } }, required: ['type'], additionalProperties: true } }, required: ['generate'], additionalProperties: true } }, overwrite: { type: 'boolean', default: false } } } }, required: ['tableName'] } },
         { name: 'export_profiles', description: '导出 profiles 为 YAML/JSON。', inputSchema: { type: 'object', properties: { format: { type: 'string', enum: ['yaml', 'json'] }, includeSecrets: { type: 'boolean' } } } },
         { name: 'import_profiles', description: '从 YAML/JSON 导入 profiles。', inputSchema: { type: 'object', properties: { input: { type: 'string' }, format: { type: 'string', enum: ['yaml', 'json'] }, mode: { type: 'string', enum: ['merge', 'replace'] }, dryRun: { type: 'boolean' } }, required: ['input'] } },
