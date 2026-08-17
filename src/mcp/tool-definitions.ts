@@ -159,92 +159,74 @@ export function buildToolDefinitions(deps: ToolDeps): ToolDefinitions {
   // ─── META (always-on) — v4.0 G4, G2: use_tool_group + use_tool_schema removed ───
   const meta: ToolDefinition[] = [];
 
-  // ─── INFO-LAZY HANDLER SCHEMAS (for use_tool_schema) ──────────────────
-  // Note: generate_sample_data execution lives in mcp-server switch (stateful).
-  // Here we just expose the full schema for use_tool_schema to return.
-  const infoLazyFullSchemas: Record<string, any> = {
-    generate_sample_data: {
-      type: 'object',
-      properties: {
-        tableName: { type: 'string' },
-        rowCount: { type: 'number', default: 10 },
-        options: {
-          type: 'object',
-          properties: {
-            seed: { type: 'number' },
-            columns: { type: 'array', items: { type: 'string' } },
-            columnOverrides: { type: 'object' },
-            rules: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  match: {
-                    type: 'object',
-                    properties: {
-                      columnName: { type: 'string' },
-                      columnNamePattern: { type: 'string' },
-                      tableName: { type: 'string' },
-                      columnType: { type: 'string' },
-                    },
-                  },
-                  generate: {
-                    type: 'object',
-                    properties: {
-                      type: {
-                        type: 'string',
-                        enum: ['fixed', 'range', 'pattern', 'faker', 'choice', 'enum', 'sequence', 'regex', 'null', 'skip'],
-                      },
-                    },
-                    required: ['type'],
-                    additionalProperties: true,
-                  },
-                },
-                required: ['generate'],
-                additionalProperties: true,
-              },
-              examples: [
-                { match: { columnName: 'tenant_id' }, generate: { type: 'fixed', value: 'BBZ_PROVINCE_EG' } },
-                { match: { columnName: 'amount' }, generate: { type: 'range', min: 100, max: 10000, decimals: 2 } },
-                { match: { columnName: 'project_code' }, generate: { type: 'pattern', template: 'PRJ-{year}-{sequence:05d}' } },
-                { match: { columnName: 'email' }, generate: { type: 'faker', method: 'internet.email' } },
-                { match: { columnName: 'status' }, generate: { type: 'choice', values: ['pending', 'paid', 'shipped'] } },
-                { match: { columnName: 'id' }, generate: { type: 'sequence', start: 1, step: 1, format: '05d' } },
-                { match: { columnName: 'code' }, generate: { type: 'regex', pattern: '^[A-Z]{3}-\\d{4}$' } },
-                { match: { columnName: 'deleted_at' }, generate: { type: 'null' } },
-                { match: { columnName: 'created_at' }, generate: { type: 'skip' } },
-              ],
-            },
-            overwrite: { type: 'boolean', default: false },
-          },
-        },
-      },
-      required: ['tableName'],
-    },
-  };
-
-  // Lightweight info-lazy tool definition (just for ListTools visibility)
+  // ─── generate_sample_data (v4.0 G2: full schema inline, no infoLazy split) ───
+  // Execution lives in mcp-server switch (stateful). The stub is never called.
   const infoLazy: ToolDefinition[] = [
     {
       name: 'generate_sample_data',
-      description: '按表结构生成 + 插入样例数据。需要 insert+batch 权限。完整参数用 use_tool_schema(\'generate_sample_data\') 拿。',
+      description: '按表结构生成 + 插入样例数据。需要 insert+batch 权限。',
       inputSchema: {
         type: 'object',
         properties: {
-          tableName: { type: 'string', description: '目标表名' },
-          rowCount: { type: 'number', description: '生成行数(默认 10)', default: 10 },
+          tableName: { type: 'string' },
+          rowCount: { type: 'number', default: 10 },
+          options: {
+            type: 'object',
+            properties: {
+              seed: { type: 'number' },
+              columns: { type: 'array', items: { type: 'string' } },
+              columnOverrides: { type: 'object' },
+              rules: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    match: {
+                      type: 'object',
+                      properties: {
+                        columnName: { type: 'string' },
+                        columnNamePattern: { type: 'string' },
+                        tableName: { type: 'string' },
+                        columnType: { type: 'string' },
+                      },
+                    },
+                    generate: {
+                      type: 'object',
+                      properties: {
+                        type: {
+                          type: 'string',
+                          enum: ['fixed', 'range', 'pattern', 'faker', 'choice', 'enum', 'sequence', 'regex', 'null', 'skip'],
+                        },
+                      },
+                      required: ['type'],
+                      additionalProperties: true,
+                    },
+                  },
+                  required: ['generate'],
+                  additionalProperties: true,
+                },
+                examples: [
+                  { match: { columnName: 'tenant_id' }, generate: { type: 'fixed', value: 'EXAMPLE_TENANT' } },
+                  { match: { columnName: 'amount' }, generate: { type: 'range', min: 100, max: 10000, decimals: 2 } },
+                  { match: { columnName: 'project_code' }, generate: { type: 'pattern', template: 'PRJ-{year}-{sequence:05d}' } },
+                  { match: { columnName: 'email' }, generate: { type: 'faker', method: 'internet.email' } },
+                  { match: { columnName: 'status' }, generate: { type: 'choice', values: ['pending', 'paid', 'shipped'] } },
+                  { match: { columnName: 'id' }, generate: { type: 'sequence', start: 1, step: 1, format: '05d' } },
+                  { match: { columnName: 'code' }, generate: { type: 'regex', pattern: '^[A-Z]{3}-\\d{4}$' } },
+                  { match: { columnName: 'deleted_at' }, generate: { type: 'null' } },
+                  { match: { columnName: 'created_at' }, generate: { type: 'skip' } },
+                ],
+              },
+              overwrite: { type: 'boolean', default: false },
+            },
+          },
         },
         required: ['tableName'],
       },
-      group: null,
-      infoLazy: true,
-      fullInputSchema: infoLazyFullSchemas.generate_sample_data,
       // Execution lives in mcp-server switch (stateful). This stub is never called.
       call: async () => ({ error: 'generate_sample_data must be routed by mcp-server (stateful)' }),
     },
   ];
-
-  // ─── INFO-LAZY is defined above (infoLazy array) ────────────────────────
 
   return {
     groups: {
