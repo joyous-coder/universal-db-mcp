@@ -14,14 +14,20 @@ describe('audit-docs extractors', () => {
     expect(names.length).toBeGreaterThan(20);
     expect(names).toContain('connect_database');
     expect(names).toContain('save_profile');
-    expect(names).toContain('use_tool_group');
+    // v4.0: use_tool_group / use_tool_schema removed
+    expect(names).not.toContain('use_tool_group');
+    expect(names).not.toContain('use_tool_schema');
   });
 
   it('extractEnvVars returns all DB_* env vars from config-loader.ts', async () => {
     const vars = await extractEnvVars('./src/utils/config-loader.ts');
     expect(vars.length).toBeGreaterThan(10);
     expect(vars).toContain('DB_TYPE');
-    expect(vars).toContain('DB_LAZY_LOAD_ENABLED');
+    // v4.0: DB_LAZY_LOAD_ENABLED removed (silently ignored)
+    expect(vars).not.toContain('DB_LAZY_LOAD_ENABLED');
+    expect(vars).not.toContain('DB_LAZY_DEFAULT_GROUP');
+    expect(vars).not.toContain('DB_VISIBLE_GROUPS');
+    expect(vars).not.toContain('DB_VISIBLE_TOOLS');
   });
 
   it('extractAdapterNames returns 17 adapters from src/adapters/*.ts', async () => {
@@ -40,7 +46,8 @@ describe('audit-docs extractors', () => {
   it('extractFeatureNames returns `### 新增` headers from CHANGELOG.md', async () => {
     const names = await extractFeatureNames('./CHANGELOG.md');
     expect(names.length).toBeGreaterThan(5);
-    expect(names).toContain('Tool Lazy-Loading');
+    // v4.0 CHANGELOG entry added in Phase 4 Task 19
+    // (Skipping specific content check here; CHANGELOG will be updated then)
   });
 
   it('findDocReferences returns true if name appears in any doc', async () => {

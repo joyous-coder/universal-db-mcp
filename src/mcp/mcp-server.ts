@@ -18,9 +18,8 @@ import type { AppConfig } from '../types/http.js';
 import { DatabaseService, SchemaCacheConfig } from '../core/database-service.js';
 import { createAdapter, normalizeDbType } from '../utils/adapter-factory.js';
 import { resolvePermissions } from '../utils/safety.js';
-import { ToolRegistry } from './tool-registry.js'; // v4.0 G1: ToolRegistry deleted in Task 8
+// v4.0 G1: ToolRegistry + buildToolRegistry deleted
 import { buildInstructions } from './instructions.js';
-// v4.0 G1: buildToolRegistry deleted in Task 8
 // (Header note: tooling above is intentionally explicit — keep)
 import { buildGetMetricsHandler, GET_METRICS_TOOL_DESCRIPTION, type MetricsCategory } from './tools/metrics.js';
 import {
@@ -62,8 +61,7 @@ export class DatabaseMCPServer {
   // v2.18: name of the active profile (set via use_profile or connect_database)
   private activeProfile: string | null = null;
   // v3.2: MCP tool registry for lazy-loading (built when queryAnalyzer + profileManager are set)
-  private toolRegistry: ToolRegistry | null = null;
-  // v4.0 G5: DB_LAZY_LOAD_ENABLED removed; tools are always visible
+  // v4.0 G1: toolRegistry + rebuildToolRegistry deleted (no lazy load)
   // v4.0 G3: sessionClientInfo + currentSessionId + setSessionId removed (no longer needed)
   // v3.1: PlanHistory instance (set via setPlanHistory from entrypoint)
   private planHistory: any = null;
@@ -101,7 +99,7 @@ export class DatabaseMCPServer {
    */
   setQueryAnalyzer(qa: QueryAnalyzer | null): void {
     this.queryAnalyzer = qa;
-    this.rebuildToolRegistry();
+
   }
 
   /**
@@ -110,7 +108,7 @@ export class DatabaseMCPServer {
    */
   setProfileManager(pm: ProfileManager | null): void {
     this.profileManager = pm;
-    this.rebuildToolRegistry();
+
   }
 
   /**
@@ -119,7 +117,7 @@ export class DatabaseMCPServer {
    */
   setPlanHistory(ph: any): void {
     this.planHistory = ph;
-    this.rebuildToolRegistry();
+
   }
 
   /**
@@ -179,7 +177,7 @@ export class DatabaseMCPServer {
       // PlanHistory is best-effort; missing native deps shouldn't block startup
     }
 
-    this.rebuildToolRegistry();
+
   }
 
   /** v2.18: get the active profile name (null if none). */
@@ -207,9 +205,7 @@ export class DatabaseMCPServer {
   // v4.0 G3: Claude Code detection removed — all clients get identical behavior
 
 // v4.0 G1: rebuildToolRegistry() is now a no-op; will be deleted in Task 8
-  private rebuildToolRegistry(): void {
-    this.toolRegistry = null;
-  }
+  // v4.0 G1: rebuildToolRegistry deleted (no lazy load)
 
   /**
    * v3.2: handle use_tool_group meta-tool — REMOVED in v4.0 (G4)
@@ -241,7 +237,7 @@ export class DatabaseMCPServer {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       // v4.0 G1, G6: lazy-load branch removed. Task 9 will rewrite ListTools to single path.
       // (treatAsLazyDisabled kept as compatibility for now)
-      void this.toolRegistry; // keep field referenced until Task 8
+      // (v4.0 G1: lazy-load branch removed — no toolRegistry)
       // v3.1 behavior (unchanged): all tools always listed
       // Compute permissions for tool registration gating
       const resolvedPerms = this.config ? resolvePermissions(this.config) : ['read'];
@@ -661,7 +657,7 @@ export class DatabaseMCPServer {
 
       try {
         // v4.0 G1, G6: single dispatch path. Lazy-load branch removed (toolRegistry always null after Task 8)
-        void this.toolRegistry; // keep field referenced; Task 8 deletes it
+        // (v4.0 G1: lazy-load branch removed — no toolRegistry)
 
         // 连接管理类 tool 不需要检查数据库连接
         switch (name) {
