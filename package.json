@@ -19,7 +19,9 @@
     "test": "vitest",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "test:cleanup": "node -e \"import('node:fs/promises').then(async fs => { const { readdirSync, statSync } = await import('node:fs'); const files = readdirSync('.').filter(f => f.startsWith('.tmp-')); let removed = 0; for (const f of files) { try { await fs.unlink(f); removed++; } catch (e) { console.warn('skip', f, e.code); } } console.log('cleanup: removed ' + removed + '/' + files.length + ' orphan files'); })\""
+    "test:cleanup": "node -e \"import('node:fs/promises').then(async fs => { const { readdirSync, statSync } = await import('node:fs'); const files = readdirSync('.').filter(f => f.startsWith('.tmp-')); let removed = 0; for (const f of files) { try { await fs.unlink(f); removed++; } catch (e) { console.warn('skip', f, e.code); } } console.log('cleanup: removed ' + removed + '/' + files.length + ' orphan files'); })\"",
+    "lint:instructions": "npx tsx scripts/lint-instructions.ts",
+    "lint": "npm run lint:instructions"
   },
   "keywords": [
     "mcp",
