@@ -19,6 +19,7 @@ import { DatabaseService, SchemaCacheConfig } from '../core/database-service.js'
 import { createAdapter, normalizeDbType } from '../utils/adapter-factory.js';
 import { resolvePermissions } from '../utils/safety.js';
 import { ToolRegistry, type ToolGroup } from './tool-registry.js';
+import { buildInstructions } from './instructions.js';
 import { buildToolRegistry } from './tool-definitions.js';
 // (Header note: tooling above is intentionally explicit — keep)
 import { buildGetMetricsHandler, GET_METRICS_TOOL_DESCRIPTION, type MetricsCategory } from './tools/metrics.js';
@@ -84,9 +85,9 @@ export class DatabaseMCPServer {
       },
       {
         capabilities: {
-          tools: {
-            listChanged: true,  // v3.2.1: notify clients when tools change (fix finding #12)
-          },
+          // v4.0 G4: tools.listChanged removed. All tools are always visible,
+          // no notifications needed (deferred tool search handles lazy schema).
+          tools: {},
         },
       }
     );
@@ -473,7 +474,9 @@ export class DatabaseMCPServer {
       }
       // Delegate to the SDK's default _oninitialize to return the proper
       // InitializeResult (protocolVersion, capabilities, serverInfo).
-      return await (this.server as any)._oninitialize(request);
+      const result = await (this.server as any)._oninitialize(request);
+      // v4.0 G8: 注入 instructions(给 deferred tool search 用的"何时 search / search 什么"线索)
+      return { ...result, instructions: buildInstructions() };
     });
 
     // 列出可用工具
