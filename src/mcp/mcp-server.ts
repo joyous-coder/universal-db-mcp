@@ -262,117 +262,10 @@ export class DatabaseMCPServer {
   }
 
   /**
-   * v3.2: handle use_tool_group meta-tool.
+   * v3.2: handle use_tool_group meta-tool — REMOVED in v4.0 (G4)
+   * v3.2: handle use_tool_schema meta-tool — REMOVED in v4.0 (G2)
    */
-  private async handleUseToolGroup(args: { name: string }) {
-    // v3.2.4 Bug #22: when DB_LAZY_LOAD_ENABLED=false, toolRegistry is null
-    // but all 43 tools are already in ListTools. Return "alreadyActive" no-op
-    // instead of error so client UX is consistent.
-    if (!this.toolRegistry) {
-      const VALID_GROUPS = ['query-experience', 'profiles', 'data-governance', 'index-advisor'];
-      if (!args || typeof args.name !== 'string' || !VALID_GROUPS.includes(args.name)) {
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              error: 'invalid group name',
-              provided: args?.name ?? '(undefined)',
-              valid: VALID_GROUPS,
-            }, null, 2),
-          }],
-          isError: true,
-        };
-      }
-      return { content: [{ type: 'text', text: JSON.stringify({
-        alreadyActive: true,
-        activeGroups: VALID_GROUPS,
-        newlyAvailable: [],
-        note: 'DB_LAZY_LOAD_ENABLED=false: all tools already visible, activation is no-op',
-      }, null, 2) }] };
-    }
-    // v3.2.1: validate args.name against enum (fix finding #11)
-    const VALID_GROUPS: ToolGroup[] = ['query-experience', 'profiles', 'data-governance', 'index-advisor'];
-    if (!args || typeof args.name !== 'string' || !VALID_GROUPS.includes(args.name as ToolGroup)) {
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
-            error: 'invalid group name',
-            provided: args?.name ?? '(undefined)',
-            valid: VALID_GROUPS,
-          }, null, 2),
-        }],
-        isError: true,
-      };
-    }
-    const r = this.toolRegistry.activateGroup(this.currentSessionId, args.name as ToolGroup);
-    // v3.2.1: notify clients that the tool list changed (fix finding #12).
-    // v3.3.1: log instead of silently swallowing — if SDK errored, ops needs
-    // to know. Standard MCP protocol behavior; client (e.g. Claude Code) is
-    // responsible for honoring the notification.
-    try {
-      await this.server.sendToolListChanged();
-    } catch (e) {
-      console.error('[use_tool_group] sendToolListChanged failed:', (e as Error)?.message ?? e);
-    }
-    // v3.3.1: Also bump version field in initialize response so clients
-    // that cache by version know to invalidate. Some HTTP transports rely
-    // on this when listChanged is ignored.
-    return { content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] };
-  }
-
-  /**
-   * v3.2: handle use_tool_schema meta-tool.
-   */
-  private async handleUseToolSchema(args: { name: string }) {
-    // v3.2.4 Bug #22: when DB_LAZY_LOAD_ENABLED=false, toolRegistry is null.
-    // Return the schema from a hardcoded list (single infoLazy tool currently).
-    if (!this.toolRegistry) {
-      const VALID = ['generate_sample_data'];
-      if (!args || typeof args.name !== 'string' || !VALID.includes(args.name)) {
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              error: 'invalid tool name for use_tool_schema',
-              provided: args?.name ?? '(undefined)',
-              valid: VALID,
-              note: 'use_tool_schema only loads schemas for info-lazy tools. Call use_tool_group instead for lazy group tools.',
-            }, null, 2),
-          }],
-          isError: true,
-        };
-      }
-      // Return hardcoded schema for generate_sample_data (matches the infoLazy definition)
-      return { content: [{ type: 'text', text: JSON.stringify({
-        name: 'generate_sample_data',
-        schema: {
-          type: 'object',
-          properties: {
-            tableName: { type: 'string', description: '目标表名' },
-            rowCount: { type: 'number', description: '生成行数(默认 10)', default: 10 },
-            options: {
-              type: 'object',
-              properties: {
-                seed: { type: 'number' },
-                columns: { type: 'array', items: { type: 'string' } },
-                columnOverrides: { type: 'object' },
-                rules: { type: 'array' },
-                overwrite: { type: 'boolean', default: false },
-              },
-            },
-          },
-          required: ['tableName'],
-        },
-        note: 'DB_LAZY_LOAD_ENABLED=false: schema returned from hardcoded map (registry unavailable)',
-      }, null, 2) }] };
-    }
-    const schema = this.toolRegistry.getFullSchema(args.name);
-    if (!schema) {
-      return { content: [{ type: 'text', text: JSON.stringify({ error: `tool ${args.name} is not info-lazy or not found`, available: ['generate_sample_data'] }) }], isError: true };
-    }
-    return { content: [{ type: 'text', text: JSON.stringify({ name: args.name, schema }, null, 2) }] };
-  }
+// (deleted)
 
   /**
    * v3.2: return error response when LLM calls a lazy tool without activating the group.
@@ -877,16 +770,11 @@ export class DatabaseMCPServer {
         });
       }
 
-      // v3.2.4 (Bug #13 fix): always register meta + lazy group tools so they're discoverable
-      // regardless of session-start config state. Claude Code MCP client caches ListTools at
-      // session start; without these the 25 lazy group + 2 meta tools are unreachable.
-      // Execution is still gated by perms in CallToolRequest handler.
+      // v4.0 G4, G2: use_tool_group + use_tool_schema removed; tools are always visible
+      // v3.2.4 Bug #13: execute_script/sql_file/batch/generate_sample_data were gated
+      // on perms at server start (config undefined → read-only) so never listed.
+      // Move visibility to always-on; CallToolRequest still enforces perms.
       const alwaysOnTools = [
-        { name: 'use_tool_group', description: '激活一个 tool group 解锁其下工具(enum: query-experience|profiles|data-governance|index-advisor)。已激活组为 no-op。**v3.3.1**: Claude Code 客户端会自动跳过 lazy loading(全部 45 tool 可见),无需调用此工具;其他客户端(Cline/Dify/Continue/Cherry Studio/5ire)可正常用此工具激活新 group。', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['query-experience', 'profiles', 'data-governance', 'index-advisor'] } }, required: ['name'] } },
-        { name: 'use_tool_schema', description: '加载 info-lazy 工具的完整 schema(仅 generate_sample_data 是 info-lazy)。不影响工具列表,无需刷新客户端。', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['generate_sample_data'] } }, required: ['name'] } },
-        // v3.2.4 Bug #13: execute_script/sql_file/batch/generate_sample_data were gated
-        // on perms at server start (config undefined → read-only) so never listed.
-        // Move visibility to always-on; CallToolRequest still enforces perms.
         { name: 'execute_script', description: '执行多语句 SQL 脚本或 PL/SQL 块。需要 permissions 包含 script。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['sql'] } },
         { name: 'execute_sql_file', description: '执行 .sql 文件。需要 permissions 包含 script + DB_ALLOWED_FILE_PATHS。', inputSchema: { type: 'object', properties: { filePath: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['filePath'] } },
         { name: 'execute_batch', description: '批量执行同一条 SQL 的多个参数集。需要 permissions 包含 batch。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, paramsList: { type: 'array', items: { type: 'array' } }, useTransaction: { type: 'boolean', default: true }, maxBatchSize: { type: 'number', default: 1000 } }, required: ['sql', 'paramsList'] } },
@@ -919,14 +807,7 @@ export class DatabaseMCPServer {
       const { name, arguments: args } = request.params;
 
       try {
-        // v3.2.4 (Bug #20/#21): meta-tool handling BEFORE lazyLoad check so these work
-        // even when DB_LAZY_LOAD_ENABLED=false.
-        if (name === 'use_tool_group') {
-          return await this.handleUseToolGroup(args as any);
-        }
-        if (name === 'use_tool_schema') {
-          return await this.handleUseToolSchema(args as any);
-        }
+        // v4.0 G2, G4: use_tool_group / use_tool_schema removed; no meta-tool pre-routing
         // v3.2.1: meta-tool + registry routing inside try/catch (fix finding #13)
         // v3.3.1: Claude Code session bypasses lazy gating per session
         const effectiveLazyEnabled = this.lazyLoadEnabled && !this.shouldSkipLazyLoading();
