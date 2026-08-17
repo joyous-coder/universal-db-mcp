@@ -7,7 +7,7 @@
  */
 
 import oracledb from 'oracledb';
-import { BaseAdapter, ExecuteScriptOptions, TransactionContext } from './base.js';
+import { BaseAdapter, ExecuteScriptOptions, ExecuteBatchOptions, TransactionContext, BatchResult } from './base.js';
 import type {
   QueryResult,
   SchemaInfo,
@@ -20,6 +20,42 @@ import type {
 import { isWriteOperation as checkWriteOperation } from '../utils/safety.js';
 import { withRetry, isConnectionErrorMessage } from '../utils/retry.js';
 import { splitStatements } from '../utils/sql-parser.js';
+
+/**
+ * v4.0.2 Bug #12 fix: oracledb uses named bind placeholders (:1, :2, :3) rather
+ * than anonymous "?". To accept the same SQL syntax as DM/MySQL/Postgres
+ * adapters (e.g. `INSERT INTO t VALUES (?, ?, ?)`), convert ? to :N in the
+ * SQL string before passing to oracledb.execute(). Skips placeholders inside
+ * single-quoted string literals (e.g. `WHERE name = 'what?'`).
+ */
+function convertQuestionMarks(sql: string): string {
+  let out = '';
+  let inString = false;
+  let stringChar = '';
+  let bindIdx = 0;
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    const prev = i > 0 ? sql[i - 1] : '';
+    if (inString) {
+      out += ch;
+      if (ch === stringChar && prev !== '\\') inString = false;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      inString = true;
+      stringChar = ch;
+      out += ch;
+      continue;
+    }
+    if (ch === '?') {
+      bindIdx++;
+      out += `:${bindIdx}`;
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
 
 export class OracleAdapter extends BaseAdapter {
   private pool: oracledb.Pool | null = null;
@@ -168,7 +204,9 @@ export class OracleAdapter extends BaseAdapter {
       return await this.withRetry(() => this.withConnection(async (connection) => {
         let cleanQuery = query.trim();
         if (cleanQuery.endsWith(';')) cleanQuery = cleanQuery.slice(0, -1).trim();
-        const result = await connection.execute(cleanQuery, params || [], { autoCommit: true, outFormat: oracledb.OUT_FORMAT_OBJECT });
+        // v4.0.2 Bug #12: convert ? to :1, :2, ... for oracledb named binds.
+        const oracledbSql = convertQuestionMarks(cleanQuery);
+        const result = await connection.execute(oracledbSql, params || [], { autoCommit: true, outFormat: oracledb.OUT_FORMAT_OBJECT });
         const executionTime = Date.now() - startTime;
         if (result.rows && result.rows.length > 0) {
           const rows = result.rows.map((row: any) => { const r: Record<string, unknown> = {}; for (const [k, v] of Object.entries(row)) { r[k.toLowerCase()] = v; } return r; });
@@ -661,13 +699,21 @@ export class OracleAdapter extends BaseAdapter {
     }
     const connection = await this.pool.getConnection();
     try {
-      await connection.execute('BEGIN');
+      // v4.0.2 Bug #9 fix: oracledb's `autoCommit:false` mode auto-begins a
+      // transaction; do NOT explicitly execute `BEGIN` because that's a PL/SQL
+      // keyword requiring a block. oracledb rejects bare `BEGIN` with
+      // ORA-06550: PLS-00103 'Encountered the symbol "end-of-file" ...'.
+      // Similarly DDL (CREATE/DROP) implicit-commits, so true atomicity for
+      // mixed DDL+DML scripts is best-effort; the executeQuery calls below
+      // still use autoCommit:false so DML rolls back together.
       const tx: TransactionContext = {
         executeQuery: async (query: string, params?: unknown[]) => {
           const startTime = Date.now();
           let cleanQuery = query.trim();
           if (cleanQuery.endsWith(';')) cleanQuery = cleanQuery.slice(0, -1).trim();
-          const result = await connection.execute(cleanQuery, params || [], {
+          // v4.0.2 Bug #12: convert ? to :1, :2, ... for oracledb named binds.
+          const oracledbSql = convertQuestionMarks(cleanQuery);
+          const result = await connection.execute(oracledbSql, params || [], {
             autoCommit: false,
             outFormat: oracledb.OUT_FORMAT_OBJECT,
           });
@@ -689,10 +735,10 @@ export class OracleAdapter extends BaseAdapter {
         },
       };
       const result = await fn(tx);
-      await connection.execute('COMMIT');
+      await connection.execute('COMMIT', [], { autoCommit: false });
       return result;
     } catch (err) {
-      try { await connection.execute('ROLLBACK'); } catch { /* ignore */ }
+      try { await connection.execute('ROLLBACK', [], { autoCommit: false }); } catch { /* ignore */ }
       throw err;
     } finally {
       try { await connection.close(); } catch { /* ignore */ }
@@ -721,6 +767,34 @@ export class OracleAdapter extends BaseAdapter {
         rows: [],
         executionTime: Date.now() - startTime,
         metadata: { statementCount: statements.length, lastResult },
+      };
+    });
+  }
+
+  /**
+   * v4.0.2 Bug #10 fix: Override executeBatch.
+   * BaseAdapter.executeBatch defaults to wrapping in BEGIN/COMMIT/ROLLBACK
+   * (src/adapters/base.ts:215). oracledb rejects bare BEGIN with ORA-06550
+   * PLS-00103 (it's a PL/SQL keyword requiring a block). Same workaround as
+   * Bug #9: route through withTransaction so autoCommit:false + the existing
+   * tx.executeQuery handle atomicity without sending BEGIN.
+   *
+   * DDL inside a batch is not supported (DDL implicit-commits in Oracle).
+   * DML only.
+   */
+  async executeBatch(sql: string, paramsList: unknown[][], options: ExecuteBatchOptions = {}): Promise<BatchResult> {
+    if (options.useTransaction === false) {
+      return super.executeBatch(sql, paramsList, { ...options, useTransaction: false });
+    }
+    return this.withTransaction(async (tx) => {
+      const affectedRowsPerStatement: number[] = [];
+      for (const params of paramsList) {
+        const r = await tx.executeQuery(sql, params);
+        affectedRowsPerStatement.push(r.affectedRows ?? 0);
+      }
+      return {
+        affectedRowsPerStatement,
+        totalAffectedRows: affectedRowsPerStatement.reduce((a, b) => a + Math.max(b, 0), 0),
       };
     });
   }

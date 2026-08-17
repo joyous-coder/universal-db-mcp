@@ -710,7 +710,7 @@ export class DatabaseMCPServer {
             if (this.adapter) {
               console.error('🔄 断开旧数据库连接...');
               if (this.databaseService) {
-                this.databaseService.clearSchemaCache();
+                this.databaseService!.clearSchemaCache();
               }
               try {
                 await this.adapter.disconnect();
@@ -734,7 +734,7 @@ export class DatabaseMCPServer {
             // was created at server start but never propagated to per-connection service,
             // so get_query_history always returned empty.
             if (this.queryAnalyzer) {
-              this.databaseService.setQueryAnalyzer(this.queryAnalyzer);
+              this.databaseService!.setQueryAnalyzer(this.queryAnalyzer);
               // v3.2.4 Bug #18 fix: attachAdapter wires Explainer for explain_query.
               // Previously attachAdapter was never called so explainer stayed null
               // and explain_query always returned empty plan.
@@ -776,7 +776,7 @@ export class DatabaseMCPServer {
             }
 
             if (this.databaseService) {
-              this.databaseService.clearSchemaCache();
+              this.databaseService!.clearSchemaCache();
             }
 
             const oldType = this.config?.type;
@@ -955,10 +955,10 @@ export class DatabaseMCPServer {
             }
 
             if (this.databaseService) {
-              const cacheStats = this.databaseService.getCacheStats();
+              const cacheStats = this.databaseService!.getCacheStats();
               status.schemaCache = {
                 cached: cacheStats.isCached,
-                hitRate: this.databaseService.getCacheHitRate() + '%',
+                hitRate: this.databaseService!.getCacheHitRate() + '%',
               };
             }
 
@@ -975,7 +975,14 @@ export class DatabaseMCPServer {
         }
 
         // 以下 tool 需要数据库已连接
-        if (!this.databaseService) {
+        // v4.0.2 Bug #13 fix: profile lifecycle tools (delete/enable/disable/disconnect_profile)
+        // only need profileManager (SQLite-backed), not a live DB connection. Allow them
+        // through even when the session is disconnected.
+        const profileOnlyTools = new Set([
+          'delete_profile', 'enable_profile', 'disable_profile', 'disconnect_profile',
+          'get_profile', 'import_profiles', 'export_profiles',
+        ]);
+        if (!this.databaseService && !profileOnlyTools.has(name)) {
           throw new Error('数据库未连接。请先使用 connect_database 工具连接数据库。');
         }
 
@@ -985,7 +992,7 @@ export class DatabaseMCPServer {
               sql: string; useTransaction?: boolean; maxStatements?: number;
             };
             console.error(`📜 执行脚本 (${sql.length} chars)...`);
-            const result = await this.databaseService.executeScript(sql, { useTransaction, maxStatements });
+            const result = await this.databaseService!.executeScript(sql, { useTransaction, maxStatements });
             return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
           }
 
@@ -994,7 +1001,7 @@ export class DatabaseMCPServer {
               filePath: string; useTransaction?: boolean; maxStatements?: number;
             };
             console.error(`📂 执行 SQL 文件: ${filePath}`);
-            const result = await this.databaseService.executeSqlFile({ filePath, useTransaction, maxStatements });
+            const result = await this.databaseService!.executeSqlFile({ filePath, useTransaction, maxStatements });
             return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
           }
 
@@ -1003,7 +1010,7 @@ export class DatabaseMCPServer {
               sql: string; paramsList: unknown[][]; useTransaction?: boolean; maxBatchSize?: number;
             };
             console.error(`📦 批量执行: ${paramsList.length} 行`);
-            const result = await this.databaseService.executeBatch(sql, paramsList, { useTransaction, maxBatchSize });
+            const result = await this.databaseService!.executeBatch(sql, paramsList, { useTransaction, maxBatchSize });
             return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
           }
 
@@ -1012,7 +1019,7 @@ export class DatabaseMCPServer {
               throw new Error('数据库未连接');
             }
             const { tableName, rowCount, options } = args as any;
-            const result = await this.databaseService.generateAndInsertSampleData(
+            const result = await this.databaseService!.generateAndInsertSampleData(
               tableName,
               rowCount ?? 10,
               options
@@ -1025,7 +1032,7 @@ export class DatabaseMCPServer {
 
             console.error(`📊 执行查询: ${sql.substring(0, 100)}...`);
 
-            const result = await this.databaseService.executeQuery(sql, params);
+            const result = await this.databaseService!.executeQuery(sql, params);
 
             return {
               content: [
@@ -1042,16 +1049,16 @@ export class DatabaseMCPServer {
 
             console.error('📋 获取数据库结构...');
 
-            const schema = await this.databaseService.getSchema(forceRefresh);
+            const schema = await this.databaseService!.getSchema(forceRefresh);
 
             // 添加缓存状态信息
-            const cacheStats = this.databaseService.getCacheStats();
+            const cacheStats = this.databaseService!.getCacheStats();
             const response = {
               ...schema,
               _cacheInfo: {
                 cached: cacheStats.isCached,
                 cachedAt: cacheStats.cachedAt?.toISOString(),
-                hitRate: this.databaseService.getCacheHitRate() + '%',
+                hitRate: this.databaseService!.getCacheHitRate() + '%',
               },
             };
 
@@ -1070,7 +1077,7 @@ export class DatabaseMCPServer {
 
             console.error(`📄 获取表信息: ${tableName}`);
 
-            const table = await this.databaseService.getTableInfo(tableName, forceRefresh);
+            const table = await this.databaseService!.getTableInfo(tableName, forceRefresh);
 
             return {
               content: [
@@ -1085,7 +1092,7 @@ export class DatabaseMCPServer {
           case 'clear_cache': {
             console.error('🗑️ 清除 Schema 缓存...');
 
-            this.databaseService.clearSchemaCache();
+            this.databaseService!.clearSchemaCache();
 
             return {
               content: [
@@ -1110,7 +1117,7 @@ export class DatabaseMCPServer {
 
             console.error(`🔢 获取枚举值: ${tableName}.${columnName}`);
 
-            const result = await this.databaseService.getEnumValues(
+            const result = await this.databaseService!.getEnumValues(
               tableName,
               columnName,
               limit,
@@ -1136,7 +1143,7 @@ export class DatabaseMCPServer {
 
             console.error(`📝 获取示例数据: ${tableName}`);
 
-            const result = await this.databaseService.getSampleData(
+            const result = await this.databaseService!.getSampleData(
               tableName,
               columns,
               limit
@@ -1319,7 +1326,7 @@ export class DatabaseMCPServer {
 
     // 2. 清理 Schema 缓存
     if (this.databaseService) {
-      this.databaseService.clearSchemaCache();
+      this.databaseService!.clearSchemaCache();
     }
 
     // 3. 断开数据库连接
