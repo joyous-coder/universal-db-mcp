@@ -750,7 +750,7 @@ export class DatabaseMCPServer {
                       additionalProperties: true,
                     },
                     examples: [
-                      { match: { columnName: 'tenant_id' }, generate: { type: 'fixed', value: 'BBZ_PROVINCE_EG' } },
+                      { match: { columnName: 'tenant_id' }, generate: { type: 'fixed', value: 'EXAMPLE_TENANT' } },
                       { match: { columnName: 'amount' }, generate: { type: 'range', min: 100, max: 10000, decimals: 2 } },
                       { match: { columnName: 'project_code' }, generate: { type: 'pattern', template: 'PRJ-{year}-{sequence:05d}' } },
                       { match: { columnName: 'email' }, generate: { type: 'faker', method: 'internet.email' } },

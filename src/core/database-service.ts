@@ -794,7 +794,7 @@ export class DatabaseService {
     // 1. 验证表是否存在
     const tableInfo = await this.getTableInfo(tableName);
     // v3.2.8 Bug #45 fix: 保留 schema 前缀(对 DM/Oracle 这类 current user default schema
-    // 不一定是 BBZ_PROVINCE_EG 时必须),buildSampleDataQuery 会用 quoteIdentifier 分别加引号
+    // 不一定是固定值时必须),buildSampleDataQuery 会用 quoteIdentifier 分别加引号
     const actualTableName = tableInfo.schema ? `${tableInfo.schema}.${tableInfo.name}` : tableInfo.name;
 
     // 2. 验证并确定要查询的列
