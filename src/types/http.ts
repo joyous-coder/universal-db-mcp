@@ -67,18 +67,7 @@ export interface AppConfig {
   queryAnalyzer?: QueryAnalyzerConfig;
   /** v2.18: multi-database profile manager settings */
   profileManager?: ProfileManagerConfig;
-  /** v3.2: MCP tool lazy-loading settings */
-  lazyLoad?: LazyLoadConfig;
-}
-
-/**
- * v3.2: MCP tool lazy-loading configuration.
- * Controls whether MCP `ListToolsRequest` returns only core + meta tools,
- * or all tools (v3.1 behavior).
- */
-export interface LazyLoadConfig {
-  enabled: boolean;
-  defaultActiveGroups: ('query-experience' | 'profiles' | 'data-governance' | 'index-advisor')[];
+  // v4.0 G5: DB_LAZY_LOAD_ENABLED / DB_LAZY_DEFAULT_GROUP removed; tools are always visible
 }
 
 /**

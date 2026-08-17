@@ -31,7 +31,7 @@ export class Explainer {
 
     // v3.2.8 Bug #43 fix: DM (达梦) `EXPLAIN <sql>` doesn't return rows in dmdb driver.
     // v3.2.8 Bug #49 fix: Use `EXPLAIN AS <plan_name> FOR <sql>` syntax which DOES return rows
-    // via dmdb (verified on BBZ_PROVINCE_EG @ 10.1.15.50:5237, forresttse/dm8:latest).
+    // via dmdb (verified with forresttse/dm8:latest image).
     // Returns 19 columns: plan_id, plan_name, create_time, level_id, operation, tab_name,
     // idx_name, scan_type, scan_range, row_nums, bytes, cost, cpu_cost, io_cost,
     // filter, join_cond, advice_info, pstart, pstop.

@@ -215,20 +215,8 @@ export function loadFromEnv(): Partial<AppConfig> {
     (config as any).planHistoryPath = planHistoryPath;
   }
 
-  // v3.2: MCP tool lazy-loading
-  const lazyEnabled = process.env.DB_LAZY_LOAD_ENABLED;
-  const lazyDefaultGroups = process.env.DB_LAZY_DEFAULT_GROUP;
-  if (lazyEnabled !== undefined || lazyDefaultGroups !== undefined) {
-    const allGroups = ['query-experience', 'profiles', 'data-governance', 'index-advisor'] as const;
-    const defaultGroups: ReadonlyArray<typeof allGroups[number]> = (lazyDefaultGroups ?? '')
-      .split(',')
-      .map(s => s.trim())
-      .filter((s): s is typeof allGroups[number] => allGroups.includes(s as typeof allGroups[number]));
-    config.lazyLoad = {
-      enabled: lazyEnabled === undefined ? true : /^(true|1|yes)$/i.test(lazyEnabled),
-      defaultActiveGroups: [...defaultGroups],
-    };
-  }
+  // v4.0 G5: DB_LAZY_LOAD_ENABLED / DB_LAZY_DEFAULT_GROUP removed (silently ignored)
+  // v4.0 G7: DB_VISIBLE_GROUPS / DB_VISIBLE_TOOLS never implemented (silently ignored)
 
   return config;
 }
@@ -252,7 +240,7 @@ export function mergeConfigs(...configs: Partial<AppConfig>[]): AppConfig {
     metrics: { enabled: true, ipAllowList: [], slowBufferSize: 100 }, // v2.16 default
     queryAnalyzer: { enabled: true, historyTtlDays: 30, historyMaxRows: 10000, explainTimeoutMs: 10000 }, // v2.17 default
     profileManager: { enabled: true, maxProfiles: 50, defaultRole: 'primary', readRouting: 'round-robin' }, // v2.18 default
-    lazyLoad: { enabled: false, defaultActiveGroups: [] }, // v3.4 default: SAFE = opt-in (no behavior change from v3.1 unless DB_LAZY_LOAD_ENABLED=true)
+    // v4.0 G5: lazyLoad config removed; tools are always visible
   };
 
   for (const config of configs) {
@@ -274,9 +262,7 @@ export function mergeConfigs(...configs: Partial<AppConfig>[]): AppConfig {
     if (config.profileManager) {
       merged.profileManager = { ...merged.profileManager, ...config.profileManager };
     }
-    if (config.lazyLoad) {
-      merged.lazyLoad = { ...merged.lazyLoad, ...config.lazyLoad };
-    }
+    // v4.0 G5: lazyLoad config block removed
   }
 
   // Ensure HTTP config exists if in HTTP mode
