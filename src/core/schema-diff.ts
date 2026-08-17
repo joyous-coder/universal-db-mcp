@@ -81,6 +81,7 @@ export class SchemaDiff {
     pm: ProfileManager,
     nameA: string,
     nameB: string,
+    options: { maxTablesPerProfile?: number } = {},
   ): Promise<SchemaDiffResult> {
     if (!pm.isEnabled()) throw new Error('ProfileManager disabled');
     const view = await buildGlobalSchemaView(pm);
@@ -88,6 +89,10 @@ export class SchemaDiff {
     const b = view.profiles.find(p => p.name === nameB);
     if (!a) throw new Error(`profile not found: ${nameA}`);
     if (!b) throw new Error(`profile not found: ${nameB}`);
+    // v4.0 G8: cap per-profile tables to avoid 1MB+ output on big DBs
+    const max = options.maxTablesPerProfile ?? 100;
+    if (a.tables.length > max) a.tables = a.tables.slice(0, max);
+    if (b.tables.length > max) b.tables = b.tables.slice(0, max);
 
     const flatA = flatten(a);
     const flatB = flatten(b);

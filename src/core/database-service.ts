@@ -733,7 +733,14 @@ export class DatabaseService {
     // 使用实际的列名（保持原始大小写）
     const actualColumnName = column.name;
     // v3.2.8 Bug #45 fix: 保留 schema 前缀(DM/Oracle 必需,见 getSampleData 同 fix)
-    const actualTableName = tableInfo.schema ? `${tableInfo.schema}.${tableInfo.name}` : tableInfo.name;
+    // v3.2.8 Bug #45 + v4.0 Bug #2/#3 fix:
+    // tableInfo.name 已经是 schema-qualified (e.g. "v4_test_mcp.v4_test_users") when
+    // caller passed a qualified name. Bug was: prefixing schema again produced
+    // "V4_TEST_MCP.v4_test_mcp.v4_test_users" which DM parses as schema.table.table.
+    const isAlreadyQualified = tableInfo.name.includes('.');
+    const actualTableName = isAlreadyQualified
+      ? tableInfo.name
+      : (tableInfo.schema ? `${tableInfo.schema}.${tableInfo.name}` : tableInfo.name);
 
     // 2. 限制返回数量（安全限制）
     const safeLimit = Math.min(Math.max(1, limit), 100);
@@ -795,7 +802,14 @@ export class DatabaseService {
     const tableInfo = await this.getTableInfo(tableName);
     // v3.2.8 Bug #45 fix: 保留 schema 前缀(对 DM/Oracle 这类 current user default schema
     // 不一定是固定值时必须),buildSampleDataQuery 会用 quoteIdentifier 分别加引号
-    const actualTableName = tableInfo.schema ? `${tableInfo.schema}.${tableInfo.name}` : tableInfo.name;
+    // v3.2.8 Bug #45 + v4.0 Bug #2/#3 fix:
+    // tableInfo.name 已经是 schema-qualified (e.g. "v4_test_mcp.v4_test_users") when
+    // caller passed a qualified name. Bug was: prefixing schema again produced
+    // "V4_TEST_MCP.v4_test_mcp.v4_test_users" which DM parses as schema.table.table.
+    const isAlreadyQualified = tableInfo.name.includes('.');
+    const actualTableName = isAlreadyQualified
+      ? tableInfo.name
+      : (tableInfo.schema ? `${tableInfo.schema}.${tableInfo.name}` : tableInfo.name);
 
     // 2. 验证并确定要查询的列
     let selectedColumns: string[];

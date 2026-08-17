@@ -36,7 +36,13 @@ export function buildListProfilesHandler(pm: ProfileManager) {
 export function buildUseProfileHandler(pm: ProfileManager) {
   return async (args: { name: string }) => {
     const live = await pm.loadProfile(args.name);
-    return { name: live.profile.name, type: live.profile.type, role: live.profile.role };
+    // v4.0 Bug #4 fix: also return profile.config so mcp-server can rebuild adapter
+    return {
+      name: live.profile.name,
+      type: live.profile.type,
+      role: live.profile.role,
+      profileConfig: live.profile.config,
+    };
   };
 }
 

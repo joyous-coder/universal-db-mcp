@@ -229,12 +229,11 @@ export abstract class BaseAdapter implements DbAdapter {
       }
     } else {
       for (const params of paramsList) {
-        try {
-          const result = await this.executeQuery(sql, params);
-          affectedRowsPerStatement.push(result.affectedRows ?? 0);
-        } catch {
-          affectedRowsPerStatement.push(-1); // indicate failure
-        }
+        const result = await this.executeQuery(sql, params);
+        // v4.0 G8 / Bug #1 fix: NO silent failure. Any error here throws so the
+        // caller knows the row did NOT insert. We previously swallowed errors
+        // into -1 which masked data loss (e.g. DM pool.execute failing on 3+ params).
+        affectedRowsPerStatement.push(result.affectedRows ?? 0);
       }
     }
 

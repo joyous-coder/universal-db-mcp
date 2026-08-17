@@ -16,8 +16,11 @@ import type { ProfileManager } from '../../core/profile-manager.js';
 import { SchemaDiff } from '../../core/schema-diff.js';
 
 export function buildCompareProfileSchemasHandler(pm: ProfileManager) {
-  return async (args: { nameA: string; nameB: string }) => {
-    return SchemaDiff.compareProfiles(pm, args.nameA, args.nameB);
+  // v4.0 G8: accept maxTablesPerProfile to cap output size on big DBs
+  return async (args: { nameA: string; nameB: string; maxTablesPerProfile?: number }) => {
+    return SchemaDiff.compareProfiles(pm, args.nameA, args.nameB, {
+      maxTablesPerProfile: args.maxTablesPerProfile,
+    });
   };
 }
 

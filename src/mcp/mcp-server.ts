@@ -485,7 +485,7 @@ export class DatabaseMCPServer {
           },
           {
             name: 'use_profile',
-            description: PROFILE_TOOL_DESCRIPTIONS.use_profile,
+            description: '切换活跃连接到已存 profile。v4.0 修复后实际断开旧 adapter 并用 profile.config 新建连接(之前只设 activeProfile 字段但不切 adapter — Bug #4)。返回的 connection 字段反映新连接状态。',
             inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
           },
           {
@@ -624,9 +624,9 @@ export class DatabaseMCPServer {
       // on perms at server start (config undefined → read-only) so never listed.
       // Move visibility to always-on; CallToolRequest still enforces perms.
       const alwaysOnTools = [
-        { name: 'execute_script', description: '执行多语句 SQL 脚本或 PL/SQL 块。需要 permissions 包含 script。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['sql'] } },
-        { name: 'execute_sql_file', description: '执行 .sql 文件。需要 permissions 包含 script + DB_ALLOWED_FILE_PATHS。', inputSchema: { type: 'object', properties: { filePath: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['filePath'] } },
-        { name: 'execute_batch', description: '批量执行同一条 SQL 的多个参数集。需要 permissions 包含 batch。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, paramsList: { type: 'array', items: { type: 'array' } }, useTransaction: { type: 'boolean', default: true }, maxBatchSize: { type: 'number', default: 1000 } }, required: ['sql', 'paramsList'] } },
+        { name: 'execute_script', description: '执行多语句 SQL 脚本或 PL/SQL 块(最多 1000 条)。需要 permissions 包含 script。✅ 推荐:DM 多语句 INSERT 用这个,不用 execute_batch(规避 3+ 参数 adapter bug)。返回 lastResult 显示最后一条的 affectedRows,其他语句请用 SELECT 验证副作用。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['sql'] } },
+        { name: 'execute_sql_file', description: '执行 .sql 文件(最多 1000 条语句)。需要 permissions 包含 script + DB_ALLOWED_FILE_PATHS。⚠️ 路径必须在 DB_ALLOWED_FILE_PATHS 白名单内。', inputSchema: { type: 'object', properties: { filePath: { type: 'string', description: '文件路径(必须在白名单内)' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 }, dryRun: { type: 'boolean', default: false, description: 'v4.0 G8 增强:true = 只解析 + lint,不执行' } }, required: ['filePath'] } },
+        { name: 'execute_batch', description: '批量执行同一条 SQL 的多个参数集(最多 1000 行)。需要 permissions 包含 batch。⚠️ 已知问题:DM adapter 对 3+ 参数的 INSERT/UPDATE 会静默返回 -1 但实际未写入。建议参数 ≤2,否则用 execute_script 替代。返回 affectedRowsPerStatement 数组,务必逐行 SELECT 验证副作用(v4.0 G8 流程改进)。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, paramsList: { type: 'array', maxItems: 1000, items: { type: 'array', maxItems: 50, description: '每行参数数组(建议 ≤2 元素)' } }, useTransaction: { type: 'boolean', default: true }, maxBatchSize: { type: 'number', default: 1000 } }, required: ['sql', 'paramsList'] } },
         { name: 'generate_sample_data', description: '根据表结构自动生成并插入样例数据。需要 insert+batch 权限。完整 inputSchema 同上(Permission 控制由 CallToolRequest 强制执行)。', inputSchema: { type: 'object', properties: { tableName: { type: 'string' }, rowCount: { type: 'number', default: 10 }, options: { type: 'object', properties: { seed: { type: 'number' }, columns: { type: 'array', items: { type: 'string' } }, columnOverrides: { type: 'object' }, rules: { type: 'array', items: { type: 'object', properties: { match: { type: 'object', properties: { columnName: { type: 'string' }, columnNamePattern: { type: 'string' }, tableName: { type: 'string' }, columnType: { type: 'string' } } }, generate: { type: 'object', properties: { type: { type: 'string', enum: ['fixed', 'range', 'pattern', 'faker', 'choice', 'enum', 'sequence', 'regex', 'null', 'skip'] } }, required: ['type'], additionalProperties: true } }, required: ['generate'], additionalProperties: true } }, overwrite: { type: 'boolean', default: false } } } }, required: ['tableName'] } },
         { name: 'export_profiles', description: '导出 profiles 为 YAML/JSON。', inputSchema: { type: 'object', properties: { format: { type: 'string', enum: ['yaml', 'json'] }, includeSecrets: { type: 'boolean' } } } },
         { name: 'import_profiles', description: '从 YAML/JSON 导入 profiles。', inputSchema: { type: 'object', properties: { input: { type: 'string' }, format: { type: 'string', enum: ['yaml', 'json'] }, mode: { type: 'string', enum: ['merge', 'replace'] }, dryRun: { type: 'boolean' } }, required: ['input'] } },
@@ -635,13 +635,13 @@ export class DatabaseMCPServer {
         { name: 'enable_profile', description: '启用 profile。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
         { name: 'disable_profile', description: '禁用 profile。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
         { name: 'disconnect_profile', description: '断开指定 profile 的连接。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
-        { name: 'compare_profile_schemas', description: '比较两个 profile 的 schema 差异。', inputSchema: { type: 'object', properties: { nameA: { type: 'string' }, nameB: { type: 'string' } }, required: ['nameA', 'nameB'] } },
+        { name: 'compare_profile_schemas', description: '比较两个 profile 的 schema 差异。⚠️ 大库输出可能 >1MB;用 maxTablesPerProfile 限制避免截断。', inputSchema: { type: 'object', properties: { nameA: { type: 'string' }, nameB: { type: 'string' }, maxTablesPerProfile: { type: 'number', default: 100, description: 'v4.0 G8:每 profile 最多列多少表(默认100,大库调到 20-50 避免输出过大)' } }, required: ['nameA', 'nameB'] } },
         { name: 'export_backup', description: '导出 DB 到文件。', inputSchema: { type: 'object', properties: { profileName: { type: 'string' }, schemaOnly: { type: 'boolean' }, tables: { type: 'array', items: { type: 'string' } }, outputPath: { type: 'string' } }, required: ['profileName'] } },
         { name: 'audit_log', description: '查询审计日志。', inputSchema: { type: 'object', properties: { actor: { type: 'string' }, severity: { type: 'string', enum: ['read', 'write', 'ddl'] }, profileName: { type: ['string', 'null'] }, since: { type: 'string' }, until: { type: 'string' }, limit: { type: 'number' } } } },
         { name: 'get_pii_config', description: '获取 PII 脱敏配置。', inputSchema: { type: 'object', properties: {} } },
         { name: 'set_pii_config', description: '设置 PII 脱敏规则。', inputSchema: { type: 'object', properties: { profileName: { type: 'string' }, rules: { type: 'array', items: { type: 'object', properties: { table: { type: 'string' }, column: { type: 'string' }, strategy: { type: 'string', enum: ['mask', 'mask_last4', 'hash', 'redact', 'passthrough'] } }, required: ['table', 'column', 'strategy'] } } }, required: ['profileName', 'rules'] } },
-        { name: 'explain_query_with_advice', description: 'EXPLAIN + 索引建议。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, profileName: { type: 'string' }, persist: { type: 'boolean' } }, required: ['sql'] } },
-        { name: 'compare_query_plans', description: '比较两个保存的执行计划。', inputSchema: { type: 'object', properties: { queryHash: { type: 'string' }, entryA: { type: 'number' }, entryB: { type: 'number' } }, required: ['queryHash'] } },
+        { name: 'explain_query_with_advice', description: 'EXPLAIN + 索引建议。⚠️ 不支持 ${} 模板占位符(会被作为 SQL 字面量传给 EXPLAIN → 语法错)。用字面量值或 ? + params 数组。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, profileName: { type: 'string' }, persist: { type: 'boolean', default: false, description: 'true = 持久化 plan 以便后续 compare_query_plans' } }, required: ['sql'] } },
+        { name: 'compare_query_plans', description: '比较两个保存的执行计划。⚠️ 需先对相同 queryHash 跑 ≥2 次 explain_query_with_advice({persist:true})。否则返回 "need at least 2 entries with the same queryHash"。', inputSchema: { type: 'object', properties: { queryHash: { type: 'string', description: '要比较的 queryHash(query 文本 hash)' }, entryA: { type: 'number', description: 'entry id A' }, entryB: { type: 'number', description: 'entry id B' } }, required: ['queryHash', 'entryA', 'entryB'] } },
         { name: 'list_query_plans', description: '列出已保存的执行计划。', inputSchema: { type: 'object', properties: { limit: { type: 'number' }, queryHash: { type: 'string' } } } },
       ];
       for (const t of alwaysOnTools) {
@@ -851,7 +851,10 @@ export class DatabaseMCPServer {
           case 'execute_template': {
             if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');
             if (!this.adapter) throw new Error('connect database first');
-            return { content: [{ type: 'text', text: JSON.stringify(await buildExecuteTemplateHandler(this.queryAnalyzer)(args as any, this.adapter), null, 2) }] };
+            // v4.0 Bug #5 fix: default args to {} so missing params gives clean error from substituteParams
+            const safeArgs = (args ?? {}) as { id?: string; name?: string; params?: Record<string, unknown> };
+            // Type satisfies handler signature: handler asserts params presence internally
+            return { content: [{ type: 'text', text: JSON.stringify(await buildExecuteTemplateHandler(this.queryAnalyzer)(safeArgs as any, this.adapter), null, 2) }] };
           }
 
           // v2.18: profile tools
@@ -866,8 +869,58 @@ export class DatabaseMCPServer {
           case 'use_profile': {
             if (!this.profileManager) throw new Error('profileManager not configured');
             const r = await buildUseProfileHandler(this.profileManager)(args as any);
+            // v4.0 Bug #4 fix: use_profile 之前只设 this.activeProfile 但不切 adapter。
+            // 现在按 connect_database 同样的步骤:断开旧 adapter → 用 profile.config 建新 adapter → 切换。
+            const profileConfig = (r as any).profileConfig as DbConfig;
+            if (!profileConfig) {
+              return {
+                content: [{
+                  type: 'text',
+                  text: JSON.stringify({
+                    error: 'profile has no usable config',
+                    name: r.name,
+                  }, null, 2),
+                }],
+                isError: true,
+              };
+            }
+            const newConfig: DbConfig = {
+              ...profileConfig,
+              type: normalizeDbType(r.type),
+              permissionMode: profileConfig.permissionMode || 'safe',
+            };
+            // 断开旧 adapter
+            if (this.adapter) {
+              try {
+                await this.adapter.disconnect();
+              } catch (err) {
+                console.error('断开旧适配器时出错:', err instanceof Error ? err.message : String(err));
+              }
+              this.adapter = null;
+              this.databaseService = null;
+            }
+            // 建立新连接
+            const newAdapter = createAdapter(newConfig);
+            await newAdapter.connect();
+            this.adapter = newAdapter;
+            this.config = newConfig;
+            this.databaseService = new DatabaseService(newAdapter, newConfig, this.cacheConfig);
             this.activeProfile = r.name;
-            return { content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] };
+            return {
+              content: [{
+                type: 'text',
+                text: JSON.stringify({
+                  success: true,
+                  message: `已切换到 profile: ${r.name}`,
+                  connection: {
+                    type: newConfig.type,
+                    host: newConfig.host,
+                    port: newConfig.port,
+                    permissionMode: newConfig.permissionMode,
+                  },
+                }, null, 2),
+              }],
+            };
           }
           case 'get_global_schema': {
             if (!this.profileManager) throw new Error('profileManager not configured');
