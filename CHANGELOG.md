@@ -2,6 +2,33 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [4.0.0] - 2026-08-17
+
+### ⚠ BREAKING CHANGES
+
+- **Removed tools** (2):
+  - `use_tool_group` — group activation no longer needed (all tools always visible)
+  - `use_tool_schema` — schema lazy-loading no longer needed (full schemas in `tools/list`)
+- **Removed env vars** (4): `DB_LAZY_LOAD_ENABLED`, `DB_LAZY_DEFAULT_GROUP`, `DB_VISIBLE_GROUPS`, `DB_VISIBLE_TOOLS` (all silently ignored)
+- **Removed capability**: `tools.listChanged: true` (now default false; not declared)
+- **Removed mechanisms**:
+  - Per-DB-type tool lazy load (`toolRegistry.listActiveTools`)
+  - `infoLazy` mode (`generate_sample_data` stub/full schema split)
+  - Claude Code client workaround (`isClaudeCodeClientName`, `shouldSkipLazyLoading`)
+  - Tool `group` field + `ToolGroup` type
+- **Added**: `InitializeResult.instructions` field — Markdown hint (< 2000 chars) for deferred tool search
+- **Tool count**: 43 → 41
+
+### Notes
+
+- The DB schema cache (`database-service.ts` `schemaCache` / `clear_cache`) is preserved — this is real DB-level caching, unrelated to tool lazy-load
+- See `docs/MIGRATION-v4.md` for migration guide
+- See `docs/superpowers/specs/2026-08-17-remove-lazy-load-design.md` for design rationale
+
+### Migration
+
+For Claude Code users (the main audience): no action required — v3.3.2's workaround already routed Claude Code to the v3.1 "all tools visible" path. v4.0 makes this the default for all clients.
+
 ## [3.3.4] - 2026-07-27
 
 ### 修复: `DB_LAZY_DEFAULT_GROUP` 未设时不再隐式激活全部 group

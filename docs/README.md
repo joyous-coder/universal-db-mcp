@@ -38,8 +38,8 @@ This directory contains the complete documentation for Universal DB MCP.
 - [Multi-Profile](./03-features/multi-profile.md) — Profile manager + YAML I/O (v2.18-v2.20)
 - [Data Governance](./03-features/data-governance.md) — schema diff / backup / audit / PII (v3.0)
 - [Index Advisor](./03-features/index-advisor.md) — EXPLAIN + 索引建议 + plan diff (v3.1)
-- [Lazy Loading](./03-features/lazy-loading.md) — 4 group lazy load + meta-tool (v3.2)
 - [**Data Migration (NEW v3.3.0)**](./03-features/data-migration.md) — CSV import/export + streaming
+- ~~Lazy Loading~~ — **REMOVED in v4.0**, see [MIGRATION-v4.md](./MIGRATION-v4.md)
 
 ## Integrations (MCP Clients)
 

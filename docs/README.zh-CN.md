@@ -38,8 +38,8 @@
 - [多 Profile 管理](./03-features/multi-profile.md) — Profile + YAML 导入导出 (v2.18-v2.20)
 - [数据治理](./03-features/data-governance.md) — schema diff / backup / audit / PII (v3.0)
 - [索引建议](./03-features/index-advisor.md) — EXPLAIN + 索引建议 + plan diff (v3.1)
-- [懒加载](./03-features/lazy-loading.md) — 4 group 懒加载 + meta-tool (v3.2)
 - [**数据迁移（v3.3.0 新增）**](./03-features/data-migration.md) — CSV 导入导出 + 流式读写
+- ~~懒加载~~ — **v4.0 已移除**,见 [MIGRATION-v4.md](./MIGRATION-v4.md)
 
 ## 第三方集成（MCP 客户端）
 

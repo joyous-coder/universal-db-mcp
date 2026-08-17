@@ -11,8 +11,8 @@
 | `multi-profile.md` | ✅ | ✅ | v2.18-v2.20 — 多 profile + YAML 导入导出 |
 | `data-governance.md` | ✅ | ✅ | v3.0 — schema diff / backup / audit / PII |
 | `index-advisor.md` | ✅ | ✅ | v3.1 — EXPLAIN + 索引建议 + plan diff |
-| `lazy-loading.md` | ✅ | ✅ | v3.2 — 4 group lazy load + meta-tool |
 | `data-migration.md` | ✅ | ✅ | v3.3.0 — CSV import/export + streaming |
+| ~~`lazy-loading.md`~~ | ❌ | ❌ | **REMOVED v4.0** — see [MIGRATION-v4.md](../MIGRATION-v4.md) |
 
 ## 推荐阅读顺序
 

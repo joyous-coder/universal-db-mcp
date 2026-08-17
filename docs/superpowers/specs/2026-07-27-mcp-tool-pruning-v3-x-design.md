@@ -1,3 +1,7 @@
+> ⚠️ **SUPERSEDED BY v4.0** — This design proposed a "CORE 12 + + groups" tool pruning model. v4.0 ([2026-08-17 spec](./2026-08-17-remove-lazy-load-design.md)) removed the lazy-load mechanism and the group concept entirely. The static CORE 12 whitelist idea may still be valuable for further tool surface reduction in v4.x or v5.0 — please file an issue if you want to revive that workstream.
+
+---
+
 # Universal DB MCP — v3.x MCP Tool 精简设计文档
 
 **日期**: 2026-07-27
