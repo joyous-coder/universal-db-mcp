@@ -28,19 +28,11 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Rewrite lock file resolved URLs
-        # package-lock.json may pin packages to corp internal mirrors
-        # (e.g. nvwa.jiuqi.com.cn) that the CI runner cannot reach.
-        # Rewrite only nvwa mirror URLs to the official npm registry,
-        # preserving the rest of the path (e.g. /-/better-sqlite3-11.8.1.tgz).
-        # `--registry` flags alone do NOT override locked `resolved` URLs.
-        run: node -e "const fs=require('fs');const p='package-lock.json';let s=fs.readFileSync(p,'utf8');const re=/https?:\/\/nvwa\.jiuqi\.com\.cn\/npm\/repository\/[^/]+\//g;const before=s.length;s=s.replace(re,'https://registry.npmjs.org/');fs.writeFileSync(p,s);console.log('rewrote',before-s.length,'chars, matches:',(s.match(/nvwa\.jiuqi/g)||[]).length,'remaining');"
-
       - name: Install dependencies
         # Use `npm install` (not `npm ci`) so platform-specific optional deps
         # (e.g. esbuild prebuilt binaries) for the CI runner are resolved.
-        # Force official registry to avoid corp mirrors (e.g. nvwa.jiuqi.com.cn)
-        # that may be configured in the CI runner's user-level npmrc.
+        # Force the official registry explicitly so any user-level npmrc
+        # on the runner cannot redirect installs to an unreachable mirror.
         run: npm install --no-audit --no-fund --registry https://registry.npmjs.org/
 
       - name: Build project
@@ -88,5 +80,5 @@ jobs:
           echo "  - Tests failing (run 'npm test' locally to reproduce)"
           echo "  - Build failing (run 'npm run build' locally to reproduce)"
           echo "  - Missing CHANGELOG entry for this version (add '## [vX.Y.Z] - YYYY-MM-DD' section)"
-          echo "  - Network / registry issues (see lock-file rewrite step)"
+          echo "  - Network / registry issues"
           echo "Please check the logs above for details"
