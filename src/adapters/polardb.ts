@@ -104,7 +104,7 @@ export class PolarDBAdapter extends BaseAdapter {
     const startTime = Date.now();
 
     try {
-      const [rows, fields] = await withRetry(() => this.pool!.execute(query, params));
+      const [rows, fields] = await withRetry(() => this.pool!.execute(query, params as any[]));
       const executionTime = Date.now() - startTime;
 
       // 处理不同类型的查询结果
@@ -427,7 +427,7 @@ export class PolarDBAdapter extends BaseAdapter {
       const tx: TransactionContext = {
         executeQuery: async (query: string, params?: unknown[]) => {
           const startTime = Date.now();
-          const [rows, fields] = await conn.execute(query, params);
+          const [rows, fields] = await conn.execute(query, params as any[]);
           const executionTime = Date.now() - startTime;
           if (Array.isArray(rows)) {
             return {
