@@ -220,7 +220,7 @@ tool('import_csv',
 
 - **SQLite**: export users → drop → import → 校验行数与内容
 - **ClickHouse**: 同上,验证 Bug #53/#54 fix 兼容
-- **DM (生产)**: 试跑一次,若 `BBZ_PROVINCE_EG` 不可达则 skip
+- **DM (生产)**: 试跑一次,若 `EXAMPLE_DB` 不可达则 skip
 
 ## Files Changed
 

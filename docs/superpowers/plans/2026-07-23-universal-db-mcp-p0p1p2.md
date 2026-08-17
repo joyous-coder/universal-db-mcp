@@ -3455,7 +3455,7 @@ faker 内置中文(姓名/手机号/地址/身份证等)。
 
 ## 示例
 
-用户:"生成 100 条订单,所有订单 tenant 都是 BBZ_PROVINCE_EG,project_code 用 PRJ-2026-XXX,amount 在 100-10000 之间,status 从 [pending, paid, shipped] 随机"
+用户:"生成 100 条订单,所有订单 tenant 都是 EXAMPLE_DB,project_code 用 PRJ-2026-XXX,amount 在 100-10000 之间,status 从 [pending, paid, shipped] 随机"
 
 调用:
 {
@@ -3464,7 +3464,7 @@ faker 内置中文(姓名/手机号/地址/身份证等)。
   options: {
     seed: 42,
     rules: [
-      { match: { columnName: "tenant_id" }, generate: { type: "fixed", value: "BBZ_PROVINCE_EG" } },
+      { match: { columnName: "tenant_id" }, generate: { type: "fixed", value: "EXAMPLE_DB" } },
       { match: { columnName: "project_code" }, generate: { type: "pattern", template: "PRJ-{year}-{sequence:05d}" } },
       { match: { columnName: "amount" }, generate: { type: "range", min: 100, max: 10000, decimals: 2 } },
       { match: { columnName: "status" }, generate: { type: "choice", values: ["pending", "paid", "shipped"] } }
