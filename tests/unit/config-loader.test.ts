@@ -269,48 +269,47 @@ describe('Configuration Loader', () => {
     });
   });
 
-  describe('lazy-loading config (v3.2)', () => {
-    it('lazyLoad defaults to enabled=false (v3.4: SAFE opt-in, no behavior change from v3.1)', () => {
-      delete process.env.DB_LAZY_LOAD_ENABLED;
-      delete process.env.DB_LAZY_DEFAULT_GROUP;
-      const cfg = mergeConfigs({}, loadFromEnv());
-      expect(cfg.lazyLoad?.enabled).toBe(false);
-      expect(cfg.lazyLoad?.defaultActiveGroups).toEqual([]);
+  // v4.0 G5: lazy-loading env vars removed. Setting them is silently ignored.
+  describe('lazy-loading env vars (v4.0 G5 — silently ignored)', () => {
+    it('DB_LAZY_LOAD_ENABLED is silently ignored', () => {
+      const prevEnabled = process.env.DB_LAZY_LOAD_ENABLED;
+      const prevGroups = process.env.DB_LAZY_DEFAULT_GROUP;
+      try {
+        process.env.DB_LAZY_LOAD_ENABLED = 'true';
+        process.env.DB_LAZY_DEFAULT_GROUP = 'query-experience';
+        const cfg = loadFromEnv();
+        expect((cfg as any).lazyLoad).toBeUndefined();
+      } finally {
+        if (prevEnabled === undefined) delete process.env.DB_LAZY_LOAD_ENABLED;
+        else process.env.DB_LAZY_LOAD_ENABLED = prevEnabled;
+        if (prevGroups === undefined) delete process.env.DB_LAZY_DEFAULT_GROUP;
+        else process.env.DB_LAZY_DEFAULT_GROUP = prevGroups;
+      }
     });
 
-    it('DB_LAZY_LOAD_ENABLED unset but DB_LAZY_DEFAULT_GROUP set → enabled=true, groups from env', () => {
-      delete process.env.DB_LAZY_LOAD_ENABLED;
-      process.env.DB_LAZY_DEFAULT_GROUP = 'query-experience';
-      const cfg = mergeConfigs({}, loadFromEnv());
-      expect(cfg.lazyLoad?.enabled).toBe(true);
-      expect(cfg.lazyLoad?.defaultActiveGroups).toEqual(['query-experience']);
+    it('DB_VISIBLE_GROUPS is silently ignored (v4.0 G7)', () => {
+      const prev = process.env.DB_VISIBLE_GROUPS;
+      try {
+        process.env.DB_VISIBLE_GROUPS = 'query-experience,profiles';
+        const cfg = loadFromEnv();
+        expect(cfg).toBeDefined();
+        expect((cfg as any).lazyLoad).toBeUndefined();
+      } finally {
+        if (prev === undefined) delete process.env.DB_VISIBLE_GROUPS;
+        else process.env.DB_VISIBLE_GROUPS = prev;
+      }
     });
 
-    it('DB_LAZY_DEFAULT_GROUP="" (explicit empty, with enabled=true) → no groups active', () => {
-      process.env.DB_LAZY_LOAD_ENABLED = 'true';
-      process.env.DB_LAZY_DEFAULT_GROUP = '';
-      const cfg = mergeConfigs({}, loadFromEnv());
-      expect(cfg.lazyLoad?.defaultActiveGroups).toEqual([]);
-    });
-
-    it('DB_LAZY_LOAD_ENABLED=true sets enabled=true', () => {
-      process.env.DB_LAZY_LOAD_ENABLED = 'true';
-      const cfg = mergeConfigs({}, loadFromEnv());
-      expect(cfg.lazyLoad?.enabled).toBe(true);
-    });
-
-    it('DB_LAZY_DEFAULT_GROUP comma-separated → array', () => {
-      process.env.DB_LAZY_LOAD_ENABLED = 'true';
-      process.env.DB_LAZY_DEFAULT_GROUP = 'query-experience,profiles';
-      const cfg = mergeConfigs({}, loadFromEnv());
-      expect(cfg.lazyLoad?.defaultActiveGroups).toEqual(['query-experience', 'profiles']);
-    });
-
-    it('invalid group name in DB_LAZY_DEFAULT_GROUP is silently dropped', () => {
-      process.env.DB_LAZY_LOAD_ENABLED = 'true';
-      process.env.DB_LAZY_DEFAULT_GROUP = 'query-experience,invalid-name,profiles';
-      const cfg = mergeConfigs({}, loadFromEnv());
-      expect(cfg.lazyLoad?.defaultActiveGroups).toEqual(['query-experience', 'profiles']);
+    it('DB_VISIBLE_TOOLS is silently ignored (v4.0 G7)', () => {
+      const prev = process.env.DB_VISIBLE_TOOLS;
+      try {
+        process.env.DB_VISIBLE_TOOLS = 'audit_log,get_metrics';
+        const cfg = loadFromEnv();
+        expect(cfg).toBeDefined();
+      } finally {
+        if (prev === undefined) delete process.env.DB_VISIBLE_TOOLS;
+        else process.env.DB_VISIBLE_TOOLS = prev;
+      }
     });
   });
 });

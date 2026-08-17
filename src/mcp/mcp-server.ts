@@ -18,9 +18,9 @@ import type { AppConfig } from '../types/http.js';
 import { DatabaseService, SchemaCacheConfig } from '../core/database-service.js';
 import { createAdapter, normalizeDbType } from '../utils/adapter-factory.js';
 import { resolvePermissions } from '../utils/safety.js';
-import { ToolRegistry, type ToolGroup } from './tool-registry.js';
+import { ToolRegistry } from './tool-registry.js'; // v4.0 G1: ToolRegistry deleted in Task 8
 import { buildInstructions } from './instructions.js';
-import { buildToolRegistry } from './tool-definitions.js';
+// v4.0 G1: buildToolRegistry deleted in Task 8
 // (Header note: tooling above is intentionally explicit — keep)
 import { buildGetMetricsHandler, GET_METRICS_TOOL_DESCRIPTION, type MetricsCategory } from './tools/metrics.js';
 import {
@@ -65,8 +65,8 @@ export class DatabaseMCPServer {
   private toolRegistry: ToolRegistry | null = null;
   // v3.2: per-session MCP sessionId (stdio uses 'stdio-default'; HTTP/SSE uses transport sessionId)
   private currentSessionId: string = 'stdio-default';
-  // v3.2: whether lazy-loading is enabled (DB_LAZY_LOAD_ENABLED; default false = v3.1 behavior). Claude Code sessions bypass via shouldSkipLazyLoading().
-  private lazyLoadEnabled: boolean = false;
+  // v4.0 G5: DB_LAZY_LOAD_ENABLED removed; tools are always visible
+  // (lazyLoadEnabled field deleted in Task 6)
   // v3.3.1: per-session client identification (mcp clientInfo from initialize)
   // Used to detect Claude Code (which doesn't honor listChanged notifications —
   // see GitHub issues anthropics/claude-code#79826, #78208) and auto-disable
@@ -137,10 +137,7 @@ export class DatabaseMCPServer {
   async configureFromAppConfig(appConfig: AppConfig): Promise<void> {
     this.appConfig = appConfig;
 
-    // v3.2: lazy-loading opt-in
-    if (appConfig.lazyLoad?.enabled) {
-      this.lazyLoadEnabled = true;
-    }
+    // v4.0 G5: lazy-load opt-in removed (AppConfig.lazyLoad deleted in http.ts)
 
     // v2.17: QueryAnalyzer (explain/lint/history/templates)
     if (appConfig.queryAnalyzer?.enabled) {
@@ -197,14 +194,8 @@ export class DatabaseMCPServer {
     return this.activeProfile;
   }
 
-  /**
-   * v3.2: set lazy-loading enabled (DB_LAZY_LOAD_ENABLED). When true, ListToolsRequest
-   * returns only core+meta+info-lazy (14 tools), and lazy tools must be activated via use_tool_group.
-   */
-  setLazyLoadEnabled(enabled: boolean): void {
-    this.lazyLoadEnabled = enabled;
-    this.rebuildToolRegistry();
-  }
+  // v4.0 G5: setLazyLoadEnabled() removed
+  // (setSessionId moved below)
 
   /**
    * v3.2: set the current MCP session id. stdio uses 'stdio-default'; SSE/Streamable HTTP
@@ -235,30 +226,11 @@ export class DatabaseMCPServer {
    * (which doesn't honor listChanged — see anthropics/claude-code#79826).
    * Returns true for the per-session fast path.
    */
-  private shouldSkipLazyLoading(): boolean {
-    const info = this.sessionClientInfo.get(this.currentSessionId);
-    if (!info?.name) return false;
-    return this.isClaudeCodeClientName(info.name);
-  }
+// v4.0 G5: shouldSkipLazyLoading() removed (toolRegistry always null)
 
-  /**
-   * v3.2: rebuild the ToolRegistry after dependencies change.
-   */
+// v4.0 G1: rebuildToolRegistry() is now a no-op; will be deleted in Task 8
   private rebuildToolRegistry(): void {
-    if (!this.lazyLoadEnabled) {
-      this.toolRegistry = null;
-      return;
-    }
-    const profileStore = this.profileManager?.getProfileStore() ?? null;
-    this.toolRegistry = buildToolRegistry({
-      queryAnalyzer: this.queryAnalyzer,
-      profileManager: this.profileManager,
-      profileStore,
-      config: this.config,
-      planHistory: this.planHistory,
-      lazyLoadEnabled: true,
-      defaultActiveGroups: this.appConfig?.lazyLoad?.defaultActiveGroups ?? [],
-    });
+    this.toolRegistry = null;
   }
 
   /**
@@ -267,75 +239,8 @@ export class DatabaseMCPServer {
    */
 // (deleted)
 
-  /**
-   * v3.2: return error response when LLM calls a lazy tool without activating the group.
-   */
-  private lazyToolErrorResponse(toolName: string, group: ToolGroup) {
-    const activeGroups = this.toolRegistry ? this.toolRegistry.getActiveGroups(this.currentSessionId) : [];
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          error: 'tool not available in current session',
-          tool: toolName,
-          group,
-          hint: `call use_tool_group({ name: "${group}" }) first`,
-          activeGroups,
-        }, null, 2),
-      }],
-      isError: true,
-    };
-  }
-
-  /**
-   * v3.2: return validation error response (info-lazy missing fields, etc).
-   */
-  private validationErrorResponse(validation: { ok: boolean; error?: string; hint?: string }) {
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({ error: validation.error ?? 'invalid arguments', hint: validation.hint }, null, 2),
-      }],
-      isError: true,
-    };
-  }
-
-  /**
-   * v3.2.1: list always-on stateful tools (connect, execute_query, etc.) so they appear
-   * in lazy-mode ListToolsResponse. They are routed through the v3.1 fallback switch on call.
-   */
-  private getStatefulToolsForList(): any[] {
-    const perms = this.config ? resolvePermissions(this.config) : ['read'];
-    const tools: any[] = [
-      { name: 'execute_query', description: '执行 SQL 查询或数据库命令。支持 SELECT、JOIN、聚合等查询操作。如果启用了写入模式，也可以执行 INSERT、UPDATE、DELETE 等操作。', inputSchema: { type: 'object', properties: { sql: { type: 'string', description: '要执行的 SQL 语句或数据库命令' }, params: { type: 'array', description: '查询参数（可选，用于参数化查询防止 SQL 注入）', items: { type: 'string' } } }, required: ['sql'] } },
-      { name: 'get_schema', description: '获取数据库结构信息，包括所有 Schema 中用户可访问的表名、列名、数据类型、主键、索引等元数据。', inputSchema: { type: 'object', properties: { forceRefresh: { type: 'boolean', description: '是否强制刷新缓存（可选，默认 false）' } } } },
-      { name: 'get_table_info', description: '获取指定表的详细信息，包括列定义、索引、预估行数等。', inputSchema: { type: 'object', properties: { tableName: { type: 'string', description: '表名。支持 schema.table_name 格式' }, forceRefresh: { type: 'boolean' } }, required: ['tableName'] } },
-      { name: 'clear_cache', description: '清除 Schema 缓存。', inputSchema: { type: 'object', properties: {} } },
-      { name: 'get_enum_values', description: '获取指定列的所有唯一值。', inputSchema: { type: 'object', properties: { tableName: { type: 'string' }, columnName: { type: 'string' }, limit: { type: 'number' }, includeCount: { type: 'boolean' } }, required: ['tableName', 'columnName'] } },
-      { name: 'get_sample_data', description: '获取表的示例数据（已自动脱敏）。', inputSchema: { type: 'object', properties: { tableName: { type: 'string' }, columns: { type: 'array', items: { type: 'string' } }, limit: { type: 'number' } }, required: ['tableName'] } },
-      { name: 'connect_database', description: '连接到数据库。', inputSchema: { type: 'object', properties: { type: { type: 'string', enum: ['mysql','postgres','redis','oracle','dm','sqlserver','mongodb','sqlite','kingbase','gaussdb','oceanbase','tidb','clickhouse','polardb','vastbase','highgo','goldendb'] }, host: { type: 'string' }, port: { type: 'number' }, user: { type: 'string' }, password: { type: 'string' }, database: { type: 'string' }, filePath: { type: 'string' }, allowWrite: { type: 'boolean' }, permissionMode: { type: 'string', enum: ['safe','readwrite','full'] }, authSource: { type: 'string' }, oracleClientPath: { type: 'string' } }, required: ['type'] } },
-      { name: 'disconnect_database', description: '断开当前数据库连接。', inputSchema: { type: 'object', properties: {} } },
-      { name: 'get_connection_status', description: '获取当前数据库连接状态。', inputSchema: { type: 'object', properties: {} } },
-      // Stateful lazy tools (kept here so they're visible; routed via fallback switch)
-      { name: 'execute_template', description: TOOL_DESCRIPTIONS?.execute_template ?? 'Execute a saved template with params.', inputSchema: { type: 'object', properties: { id: { type: 'string' }, params: { type: 'object' } }, required: ['id'] } },
-      { name: 'get_metrics', description: 'Get server observability metrics. category=summary|slow_queries|all.', inputSchema: { type: 'object', properties: { category: { type: 'string', enum: ['summary','slow_queries','all','multi_db'], default: 'summary' } } } },
-      { name: 'use_profile', description: 'Switch active connection to a saved profile.', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
-    ];
-    if (perms.includes('script')) {
-      tools.push({ name: 'execute_script', description: '执行多语句 SQL 脚本或 PL/SQL 块。需要 script 权限。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['sql'] } });
-      const allowedPaths = (this.config as any)?.allowedSqlFilePaths as string[] | undefined;
-      if (allowedPaths && allowedPaths.length > 0) {
-        tools.push({ name: 'execute_sql_file', description: '执行 .sql 文件。需要 script + DB_ALLOWED_FILE_PATHS。', inputSchema: { type: 'object', properties: { filePath: { type: 'string' }, useTransaction: { type: 'boolean', default: true }, maxStatements: { type: 'number', default: 1000 } }, required: ['filePath'] } });
-      }
-    }
-    if (perms.includes('batch')) {
-      tools.push({ name: 'execute_batch', description: '批量执行同一条 SQL 的多个参数集。需要 batch 权限。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, paramsList: { type: 'array', items: { type: 'array' } }, useTransaction: { type: 'boolean', default: true }, maxBatchSize: { type: 'number', default: 1000 } }, required: ['sql', 'paramsList'] } });
-    }
-    if (perms.includes('insert') && perms.includes('batch')) {
-      tools.push({ name: 'generate_sample_data', description: '按表结构生成 + 插入样例数据。需要 insert+batch 权限。完整参数用 use_tool_schema 拿。', inputSchema: { type: 'object', properties: { tableName: { type: 'string' }, rowCount: { type: 'number', default: 10 } }, required: ['tableName'] } });
-    }
-    return tools;
-  }
+// v4.0 G1, G2: lazyToolErrorResponse, validationErrorResponse, getStatefulToolsForList
+// all removed (their only callers were in the lazy-load branches that no longer execute)
 
   /**
    * 设置 MCP 协议处理器
@@ -374,21 +279,9 @@ export class DatabaseMCPServer {
 
     // 列出可用工具
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      // v3.3.1: Claude Code detection — bypass lazy loading entirely for this
-      // session even if DB_LAZY_LOAD_ENABLED=true. Falls through to v3.1
-      // behavior (all tools always listed) so users don't need to restart.
-      const treatAsLazyDisabled = this.shouldSkipLazyLoading();
-      if (this.lazyLoadEnabled && this.toolRegistry && !treatAsLazyDisabled) {
-        const active = this.toolRegistry.listActiveTools(this.currentSessionId);
-        const tools: any[] = active.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
-        // v3.2.1: append always-on stateful tools so clients can discover connect/execute_query/etc.
-        // (these are routed through the v3.1 fallback switch in CallToolRequest)
-        const statefulTools = this.getStatefulToolsForList();
-        for (const st of statefulTools) {
-          if (!tools.find(t => t.name === st.name)) tools.push(st);
-        }
-        return { tools };
-      }
+      // v4.0 G1, G6: lazy-load branch removed. Task 9 will rewrite ListTools to single path.
+      // (treatAsLazyDisabled kept as compatibility for now)
+      void this.toolRegistry; // keep field referenced until Task 8
       // v3.1 behavior (unchanged): all tools always listed
       // Compute permissions for tool registration gating
       const resolvedPerms = this.config ? resolvePermissions(this.config) : ['read'];
@@ -807,28 +700,8 @@ export class DatabaseMCPServer {
       const { name, arguments: args } = request.params;
 
       try {
-        // v4.0 G2, G4: use_tool_group / use_tool_schema removed; no meta-tool pre-routing
-        // v3.2.1: meta-tool + registry routing inside try/catch (fix finding #13)
-        // v3.3.1: Claude Code session bypasses lazy gating per session
-        const effectiveLazyEnabled = this.lazyLoadEnabled && !this.shouldSkipLazyLoading();
-        if (effectiveLazyEnabled && this.toolRegistry) {
-          // route lazy/info-lazy tools through registry
-          if (this.toolRegistry.isToolActive(this.currentSessionId, name)) {
-            // info-lazy validation
-            const v = this.toolRegistry.validateArgs(name, args);
-            if (!v.ok) {
-              return this.validationErrorResponse(v);
-            }
-            const result = await this.toolRegistry.callTool(name, args, this.currentSessionId);
-            return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-          }
-          // Tool not active in current session → lazy error
-          const t = this.toolRegistry.findToolByName(name);
-          if (t && t.group) {
-            return this.lazyToolErrorResponse(name, t.group as ToolGroup);
-          }
-          // Tool not in registry at all — fall through to switch (stateful tools)
-        }
+        // v4.0 G1, G6: single dispatch path. Lazy-load branch removed (toolRegistry always null after Task 8)
+        void this.toolRegistry; // keep field referenced; Task 8 deletes it
 
         // 连接管理类 tool 不需要检查数据库连接
         switch (name) {
