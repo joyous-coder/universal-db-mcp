@@ -503,17 +503,23 @@ this.planHistory = new PlanHistory({
 Run: `npm run build && npm run test:unit`
 Expected: 全绿 (无行为变化,只是路径变了)
 
-- [ ] **Step 5: 手动 smoke test**
+- [ ] **Step 5: 手动 smoke test(用临时目录,不碰用户已有数据)**
 
 ```bash
-# 1. 删除 cwd 老 profiles.db (如有)
-ls profiles.db 2>/dev/null && rm profiles.db
-# 2. 启动 MCP,save_profile 一个测试 profile
-# 3. 验证 ~/.universal-db-mcp/profiles.db 被创建
-ls ~/.universal-db-mcp/profiles.db
-# 4. 删除
-rm -rf ~/.universal-db-mcp
+# 用临时目录模拟 cwd,绝不触碰 ~/.universal-db-mcp/profiles.db 已存在的数据
+TESTDIR=$(mktemp -d)
+cd "$TESTDIR"
+DB_GLOBAL_DIR=$(mktemp -d)/.universal-db-mcp node dist/index.js &
+PID=$!
+# 等启动
+sleep 2
+# 调 save_profile 测试 profile
+# 验证 $DB_GLOBAL_DIR/profiles.db 被创建 (而不是 $TESTDIR/profiles.db)
+kill $PID
+rm -rf "$TESTDIR" "${DB_GLOBAL_DIR}"
 ```
+
+注意:**绝不** 从 cwd 老 profiles.db 迁移任何数据到全局目录;用户手动用 `export_profiles` / `import_profiles` 处理(PR5 文档说明)。
 
 - [ ] **Step 6: Commit**
 
