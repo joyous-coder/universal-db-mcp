@@ -15,6 +15,8 @@ import type { DbConfig } from '../types/adapter.js';
 
 export type ProfileRole = 'primary' | 'replica' | 'analytics';
 export type ReadRouting = 'round-robin' | 'random' | 'least-loaded';
+export type PermissionMode = 'safe' | 'readwrite' | 'full';
+export type ProfileCategory = 'rdbms' | 'kv' | 'document' | 'columnar' | 'search' | 'unknown';
 
 export interface Profile {
   id: string;
@@ -29,6 +31,13 @@ export interface Profile {
   updated_at: string;
   created_by: string;
   use_count: number;
+  // v4.2.0 新增:权限绑 profile,运行时不可覆盖
+  permissionMode: PermissionMode;
+  // v4.2.0 新增:adapter 分类(辅助元)
+  category: ProfileCategory;
+  // v4.2.0 新增:首次连接探测的产品名+版本(辅助元)
+  productName: string | null;
+  version: string | null;
 }
 export interface ProfileInput {
   name: string;
@@ -38,6 +47,22 @@ export interface ProfileInput {
   role?: ProfileRole;
   tags?: string[];
   enabled?: boolean;
+  // v4.2.0 新增:permissionMode 默认 'readwrite',save_profile 必填(后续 PR1 Task 1.3 在 handler 层校验)
+  permissionMode?: PermissionMode;
+  // v4.2.0 新增:可选分类(默认按 type 派生)
+  category?: ProfileCategory;
+  // v4.2.0 新增:产品名/版本(通常由 adapter 探测后回填)
+  productName?: string | null;
+  version?: string | null;
+}
+
+/**
+ * v4.2.0:profile 命名严格约束 — 必须 /^[a-zA-Z0-9_-]+$/
+ * 因为 profile 名作为子目录名(/~/.universal-db-mcp/<name>/history.db 等),
+ * 不能含 `.`、空格、中文、路径分隔符等。
+ */
+export function isValidProfileName(name: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(name);
 }
 
 import { ProfileStore } from './profile-store.js';

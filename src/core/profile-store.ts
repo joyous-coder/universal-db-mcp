@@ -91,6 +91,11 @@ export class ProfileStore {
       id, name: input.name, description: input.description, type: input.type,
       config: input.config, role, tags: input.tags ?? [], enabled,
       created_at: now, updated_at: now, created_by: createdBy, use_count: 0,
+      // v4.2.0 新增字段,save() 写入由 Task 1.2 的 INSERT 同步
+      permissionMode: input.permissionMode ?? 'readwrite',
+      category: input.category ?? 'unknown',
+      productName: input.productName ?? null,
+      version: input.version ?? null,
     };
   }
 
@@ -168,6 +173,11 @@ export class ProfileStore {
       updated_at: row.updated_at as string,
       created_by: row.created_by as string,
       use_count: row.use_count as number,
+      // v4.2.0 新增字段 — 老库无这些列时,rowToProfile 读出 undefined,这里给默认值
+      permissionMode: (row.permission_mode as Profile['permissionMode']) ?? 'readwrite',
+      category: (row.category as Profile['category']) ?? 'unknown',
+      productName: (row.product_name as string | null) ?? null,
+      version: (row.version as string | null) ?? null,
     };
   }
 }
