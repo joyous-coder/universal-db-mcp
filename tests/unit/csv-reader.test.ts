@@ -90,6 +90,7 @@ describe('CsvReader.importCsv', () => {
 
   it('imports with batchSize=2 (2 batches)', async () => {
     const a = new StubAdapter() as any;
+    a.config = { type: 'clickhouse' };  // 显式走 named-param 路径
     const r = await importCsv({
       adapter: a, table: 'users', filePath: tmp, batchSize: 2,
     });
@@ -97,9 +98,34 @@ describe('CsvReader.importCsv', () => {
     expect(r.batches).toBe(2);
     expect(a.executed[0].paramsList.length).toBe(2);
     expect(a.executed[1].paramsList.length).toBe(1);
-    // Bug #54 已修:对象数组 [{c1:v1,c2:v2}]
+    // ClickHouse 走 named-param 路径,params 是 {col:value} 对象
     expect(a.executed[0].paramsList[0]).toEqual({ id: '1', name: 'Alice' });
     expect(a.executed[0].paramsList[1]).toEqual({ id: '2', name: 'Bob' });
+  });
+
+  it('v4.0.9: non-ClickHouse (MySQL/Oracle/PG/...) uses positional ? + array params', async () => {
+    const a = new StubAdapter() as any;
+    a.config = { type: 'mysql' };
+    const r = await importCsv({
+      adapter: a, table: 'users', filePath: tmp, batchSize: 2,
+    });
+    expect(r.totalRows).toBe(3);
+    expect(r.batches).toBe(2);
+    // SQL 用 ? 占位符
+    expect(a.executed[0].sql).toMatch(/VALUES \(\?, \?\)/);
+    // params 是按列顺序的数组 (positional)
+    expect(a.executed[0].paramsList[0]).toEqual(['1', 'Alice']);
+    expect(a.executed[0].paramsList[1]).toEqual(['2', 'Bob']);
+  });
+
+  it('v4.0.9: INSERT columns unquoted for Oracle (relies on DB case folding)', async () => {
+    const a = new StubAdapter() as any;
+    a.config = { type: 'oracle' };
+    await importCsv({
+      adapter: a, table: 'BBZ_CQ.users', filePath: tmp, batchSize: 10,
+    });
+    // Oracle: 不加引号,让 DB 自动大写 — 避免大小写敏感 quoted 标识符不匹配
+    expect(a.executed[0].sql).toMatch(/INSERT INTO BBZ_CQ\.users \(id, name\) VALUES/);
   });
 
   it('dryRun=true does not call executeBatch', async () => {

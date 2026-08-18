@@ -100,11 +100,21 @@ export function _toAdapterBatch(
   adapter: { config?: { type?: string } },
   tableColumnNames: string[]
 ): unknown {
-  const isSqlite = adapter.config?.type === 'sqlite';
-  if (isSqlite && pendingBatch.length > 0) {
+  const dbType = adapter.config?.type;
+  const isSqlite = dbType === 'sqlite';
+  const isClickHouse = dbType === 'clickhouse';
+  if (pendingBatch.length === 0) return pendingBatch;
+  if (isSqlite) {
+    // SQLite: positional ? placeholders, params 是按列顺序的值数组
     return pendingBatch.map((row) => tableColumnNames.map((k) => row[k]));
   }
-  return pendingBatch;
+  if (isClickHouse) {
+    // ClickHouse: {col:String} named params,params 是 {col: value} 对象
+    return pendingBatch;
+  }
+  // v4.0.9: 其他 DB (MySQL/PG/Oracle/DM/Kingbase/...) — 用 ? 占位符 (位置绑定),
+  // params 是按列顺序的值数组
+  return pendingBatch.map((row) => tableColumnNames.map((k) => row[k]));
 }
 
 /**
@@ -182,29 +192,46 @@ export async function importCsv(opts: {
     pendingBatch = [];
   };
 
+  // v4.0.9: Oracle 默认存列名为大写,但 getTableInfo 可能返回小写 — 做大小写无关匹配,
+  // 并用 tableInfo 的实际列名生成 INSERT,避免 bind 占位符大小写不一致。
+  const tableColsLowerMap: Map<string, string> = new Map(
+    tableCols.map((c: string) => [c.toLowerCase(), c]),
+  );
+
   const aiter = streamCsvRows(stream, { hasHeader, nullStrings });
   for await (const row of aiter) {
     if (tableColumnNames.length === 0) {
       // 第一行: 决定列映射(用 opts.columns 显式覆盖, 否则用 row keys)
       const headerKeys = Object.keys(row);
-      tableColumnNames = csvCols ?? headerKeys;
-      for (const col of tableColumnNames) {
-        if (!tableCols.includes(col)) {
-          throw new Error(`column_mismatch: csv column "${col}" not in table columns [${tableCols.join(',')}]`);
+      const csvColNames = csvCols ?? headerKeys;
+      // 大小写无关匹配 → 映射到 tableInfo 实际列名(保持 DB 实际大小写)
+      tableColumnNames = [];
+      for (const csvCol of csvColNames) {
+        const actual = tableColsLowerMap.get(csvCol.toLowerCase());
+        if (actual === undefined) {
+          throw new Error(
+            `column_mismatch: csv column "${csvCol}" not in table columns [${tableCols.join(',')}]`,
+          );
         }
+        tableColumnNames.push(actual);
       }
       // 拼 INSERT INTO schema.name (col1, col2) VALUES (?, ?, ?)
-      // SQLite → ?, 其他 (CH/DM/MySQL/...) → {col:String}
-      const isSqlite = (opts.adapter as any).config?.type === 'sqlite';
+// SQLite/MySQL/PG/Oracle/DM/Kingbase/... → ? (positional)
+// ClickHouse → {col:String} (named with type)
+// v4.0.9: 标识符**不加引号**(除非含特殊字符) — 让 Oracle 自动大写 / MySQL/PG/SQLite 大小写无关
+const dbType = (opts.adapter as any).config?.type;
+      const isClickHouse = dbType === 'clickhouse';
       const { schema, name } = opts.table.includes('.')
         ? { schema: opts.table.substring(0, opts.table.indexOf('.')), name: opts.table.substring(opts.table.indexOf('.') + 1) }
         : { schema: null as string | null, name: opts.table };
-      const q = (i: string) => `"${i}"`;
-      const colList = tableColumnNames.map(q).join(', ');
-      const tbl = schema ? `${q(schema)}.${q(name)}` : name;
-      const placeholders = isSqlite
-        ? tableColumnNames.map(() => '?').join(', ')
-        : tableColumnNames.map((c) => `{${c}:String}`).join(', ');
+      // v4.0.9: 只对含特殊字符的标识符加引号 — 否则让 DB 自己 case fold
+      const safeIdent = (i: string) =>
+        /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(i) ? i : `"${i.replace(/"/g, '""')}"`;
+      const colList = tableColumnNames.map(safeIdent).join(', ');
+      const tbl = schema ? `${safeIdent(schema)}.${safeIdent(name)}` : safeIdent(name);
+      const placeholders = isClickHouse
+        ? tableColumnNames.map((c: string) => `{${c}:String}`).join(', ')
+        : tableColumnNames.map(() => '?').join(', ');
       insertSql = `INSERT INTO ${tbl} (${colList}) VALUES (${placeholders})`;
     }
     pendingBatch.push(row);
