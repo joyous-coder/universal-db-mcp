@@ -30,6 +30,10 @@ gh workflow run publish.yml --ref vX.Y.Z
 
 **Do NOT use manual `npm login` + `npm publish`** — bypasses Trusted Publishing OIDC and breaks the provenance chain.
 
+**Release notes format** (avoid duplicate version title):
+- `release-notes.md` 文件**不要**用 `# vX.Y.Z Release Notes` 这种头,因为 `gh release create --notes-file` 已经会自动把 tag 名 `vX.Y.Z` 加到标题里。直接以 `## 摘要` / `## 改动` / `## 测试` 等正文 section 开头即可,避免双重标题。
+- v4.0.5 案例:publish workflow 报告 403 失败,但 npm 实际接受 — 因为 npmjs OIDC 不让重发已 publish 的版本。**核对 npmjs `npm view @scope/pkg@latest dist-tags` 确认实际状态,不要只看 workflow run 结论。**
+
 ## AI Work Constraints
 
 When working on this codebase, AI agents (Claude Code, etc.) **must** follow these rules:
