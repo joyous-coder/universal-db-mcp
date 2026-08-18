@@ -132,6 +132,8 @@ export class DatabaseMCPServer {
     // v4.0 G5: lazy-load opt-in removed (AppConfig.lazyLoad deleted in http.ts)
 
     // v2.17: QueryAnalyzer (explain/lint/history/templates)
+    // v4.2.0: 默认路径已由 config-loader 改为 ~/.universal-db-mcp/{kind}.db,
+    // 这里只需把 _default 占位路径在 active profile 加载后重定向(PR3 Task 3.2 处理)
     if (appConfig.queryAnalyzer?.enabled) {
       const { QueryAnalyzer } = await import('../core/query-analyzer.js');
       this.queryAnalyzer = new QueryAnalyzer({
@@ -148,12 +150,13 @@ export class DatabaseMCPServer {
       });
     }
 
-    // v2.18: ProfileManager
+    // v2.18: ProfileManager — v4.2.0 用全局 profiles.db
     if (appConfig.profileManager?.enabled) {
       const { ProfileManager } = await import('../core/profile-manager.js');
+      const { getProfilesDbPath } = await import('../utils/global-paths.js');
       const pm = new ProfileManager({
         enabled: true,
-        profilesDbPath: appConfig.profileManager.profilesDbPath ?? 'profiles.db',
+        profilesDbPath: appConfig.profileManager.profilesDbPath ?? getProfilesDbPath(),
         maxProfiles: appConfig.profileManager.maxProfiles,
         defaultRole: appConfig.profileManager.defaultRole,
         readRouting: appConfig.profileManager.readRouting,
@@ -165,9 +168,12 @@ export class DatabaseMCPServer {
       this.profileManager = pm;
     }
 
-    // v3.1: PlanHistory
+    // v3.1: PlanHistory — v4.2.0 用全局 profile-scoped plans.db
     try {
-      const path = (appConfig as any).planHistoryPath ?? process.env.DB_PLAN_HISTORY_DB_PATH;
+      const { getProfileDbPath } = await import('../utils/global-paths.js');
+      const path = (appConfig as any).planHistoryPath
+        ?? (this.profileManager ? undefined : getProfileDbPath('_default', 'plans'))
+        ?? process.env.DB_PLAN_HISTORY_DB_PATH;
       if (path) {
         const { PlanHistory } = await import('../core/plan-history.js');
         this.planHistory = new PlanHistory({
