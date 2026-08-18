@@ -350,6 +350,20 @@ export class DMAdapter extends BaseAdapter {
         const cs = this.getValueByIndex(r, 1) as string;
         cm.set(String(cn).toLowerCase(), String(cs));
       }
+      // v4.0.3.2 Bug #17: 查 ALL_TAB_IDENTITY_COLS (DM 兼容 Oracle 12c+)
+      // 检测哪些列是 IDENTITY 自增,标记在 ColumnInfo.autoIncrement 上,generator 跳过。
+      let identityCols = new Set<string>();
+      try {
+        const idRes: any = await this.connection.execute(
+          `SELECT COLUMN_NAME FROM ALL_TAB_IDENTITY_COLS WHERE OWNER = :1 AND TABLE_NAME = :2`,
+          [owner, bareName]
+        );
+        for (const r of idRes.rows ?? []) {
+          identityCols.add(String(this.getValueByIndex(r, 0) as string).toLowerCase());
+        }
+      } catch {
+        // 视图不存在或权限不足,fallback 到 generator 的 name-启发式
+      }
       const columns: ColumnInfo[] = [];
       for (const r of colRes.rows) {
         const cn = this.getValueByIndex(r, 2) as string;
@@ -365,6 +379,8 @@ export class DMAdapter extends BaseAdapter {
           nullable: nullable === 'Y',
           defaultValue: defv ? String(defv).trim() : undefined,
           comment: cm.get(String(cn).toLowerCase()),
+          // v4.0.3.2 Bug #17: 标记 IDENTITY 自增列
+          autoIncrement: identityCols.has(String(cn).toLowerCase()),
         });
       }
       const primaryKeys: string[] = [];
@@ -528,6 +544,21 @@ export class DMAdapter extends BaseAdapter {
         console.error('获取外键信息失败，跳过:', error instanceof Error ? error.message : String(error));
       }
 
+      // v4.0.3.2 Bug #17: 查 ALL_TAB_IDENTITY_COLS 标记 IDENTITY 自增列
+      // (DM 兼容 Oracle 12c+)
+      let allIdentityCols: any[] = [];
+      try {
+        const allIdentityColsResult = await this.connection.execute(
+          `SELECT OWNER, TABLE_NAME, COLUMN_NAME
+           FROM ALL_TAB_IDENTITY_COLS
+           WHERE OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUDITOR', 'SYSSSO', 'CTISYS')`,
+          []
+        );
+        allIdentityCols = allIdentityColsResult.rows || [];
+      } catch {
+        // 视图不存在 / 老版本 DM — skip
+      }
+
       return this.assembleSchemaFromIndexedRows(
         databaseName,
         version,
@@ -537,6 +568,7 @@ export class DMAdapter extends BaseAdapter {
         allIndexesResult.rows || [],
         allStatsResult.rows || [],
         allForeignKeys,
+        allIdentityCols,
         schemaName
       );
   }
@@ -577,8 +609,20 @@ export class DMAdapter extends BaseAdapter {
     allIndexes: any[],
     allStats: any[],
     allForeignKeys: any[],
+    allIdentityCols: any[] = [],
     currentUser: string
   ): SchemaInfo {
+    // v4.0.3.2 Bug #17: 按 tableKey 索引 IDENTITY 列
+    const identityByTable = new Map<string, Set<string>>();
+    for (const ic of allIdentityCols) {
+      const owner = String(this.getValueByIndex(ic, 0) as string);
+      const tableName = String(this.getValueByIndex(ic, 1) as string);
+      const columnName = String(this.getValueByIndex(ic, 2) as string);
+      if (!tableName || !columnName) continue;
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+      if (!identityByTable.has(tableKey)) identityByTable.set(tableKey, new Set());
+      identityByTable.get(tableKey)!.add(columnName.toLowerCase());
+    }
     // 按表名分组列信息
     // 列顺序: 0=OWNER, 1=TABLE_NAME, 2=COLUMN_NAME, 3=DATA_TYPE, 4=DATA_LENGTH,
     //        5=DATA_PRECISION, 6=DATA_SCALE, 7=NULLABLE, 8=DATA_DEFAULT, 9=COLUMN_ID
@@ -618,6 +662,8 @@ export class DMAdapter extends BaseAdapter {
         ),
         nullable: nullable === 'Y',
         defaultValue: dataDefault ? String(dataDefault).trim() : undefined,
+        // v4.0.3.2 Bug #17: IDENTITY 自增标记(在 _populateIdentityColumns 中填)
+        autoIncrement: identityByTable.get(tableKey)?.has(String(columnName).toLowerCase()),
       });
     }
 

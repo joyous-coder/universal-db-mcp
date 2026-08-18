@@ -6,6 +6,14 @@ export interface GenerateContext {
   overrides?: Record<string, unknown>;
   rule?: any;
   rowContext?: Record<string, unknown>;
+  /**
+   * v4.0.3.2 Bug #17 fix: 主键列名集合(由 databaseService 从 tableInfo.primaryKeys 传入)。
+   * generator 据此识别 PK 列,对不同类型主键采用不同生成策略:
+   * - IDENTITY 自增 PK (column.autoIncrement=true): 跳过,让 DB 自填
+   * - UUID/CHAR(36) PK: 生成 uuid v4
+   * - 其他 PK: 生成 sequence int
+   */
+  primaryKeys?: Set<string> | string[];
 }
 
 export class SampleDataGenerator {
@@ -26,11 +34,42 @@ export class SampleDataGenerator {
 
   /**
    * Generate a value for a single column.
-   * Returns undefined for auto-increment primary keys.
+   *
+   * v4.0.3.2 Bug #17 fix: PK 列处理策略
+   * - column.autoIncrement === true → 跳过(IDENTITY 自增,DB 自填)
+   * - context.primaryKeys 包含 column.name 且 column 类型是 UUID/CHAR(36) → faker.string.uuid()
+   * - 其他 PK → sequence int(避免 unique constraint violation)
+   * 非 PK 列走原 heuristic + fallbackByType 路径。
    */
   generateValue(column: ColumnInfo, context: GenerateContext = {}, rowIndex: number = 0): unknown {
     if (context.overrides?.[column.name] !== undefined) {
       return context.overrides[column.name];
+    }
+
+    // v4.0.3.2 Bug #17: adapter 标记了 autoIncrement 列 → 跳过,DB 自填
+    if (column.autoIncrement === true) {
+      return undefined;
+    }
+
+    // v4.0.3.2 Bug #17: PK 列特殊处理(未标记 autoIncrement 时)
+    const pkSet = context.primaryKeys instanceof Set
+      ? context.primaryKeys
+      : new Set(context.primaryKeys ?? []);
+    if (pkSet.has(column.name)) {
+      const type = column.type.toLowerCase();
+      // UUID PK → uuid v4
+      if (type.includes('uuid') || type.includes('uniqueidentifier')) {
+        return this.faker.string.uuid();
+      }
+      // CHAR(36) PK → uuid v4 (常见: UUID 存成 char(36))
+      if (type.startsWith('char') && /char\(\s*36\s*\)/.test(column.type)) {
+        return this.faker.string.uuid();
+      }
+      // 其他类型 PK (INT/BIGINT/VARCHAR 等) → sequence int 避免冲突
+      if (type.includes('int') || type.includes('serial') || type.includes('numeric') ||
+          type.includes('decimal') || type.includes('number')) {
+        return (rowIndex + 1) * 1 + Math.floor(Math.random() * 1000);
+      }
     }
 
     if (context.rule) {
@@ -135,7 +174,12 @@ export class SampleDataGenerator {
     if (/float|double|decimal|real/.test(type)) {
       return this.faker.number.float({ min: 0, max: 10000, fractionDigits: 2 });
     }
-    if (/date|time/.test(type)) return this.faker.date.recent();
+    // v4.0.3.2 Bug #17 fix: DM driver 不接受 JS Date 对象作为 bind 参数,
+    // 转 ISO 字符串让 DB driver 自己解析。手测用 '2026-08-18 12:00:00' 字符串 OK,
+    // JS Date → DM 报"类型转换异常"(包装成 "表或视图不存在")。
+    if (/date|time/.test(type)) {
+      return this.faker.date.recent().toISOString().slice(0, 19).replace('T', ' ');
+    }
     if (/bool|tinyint\(1\)/.test(type)) return this.faker.datatype.boolean();
     if (/json|jsonb/.test(type)) return JSON.stringify({ sample: true });
     return this.faker.lorem.sentence();

@@ -27,12 +27,13 @@
 
 **总计**: 41 个 tool
 - ✅ **PASS**: 27
-- ⚠️ **PASS with caveat**: 2 (clear_cache 需 DB 连接,generate_sample_data 含 IDENTITY PK 列时冲突)
+- ⚠️ **PASS with caveat**: 1 (clear_cache disconnected 保留 intentional behavior)
 - ❌ **FAIL**: 0
 - ⏸️ **SKIP**: 12 (pre-existing 限制 / 输出过大 / 已知)
 
-**Bug 修复总计**: 1 个新 DM bug (Bug #15)
-- ✅ Bug #15: `getTableInfo` 报错"表 V403_DM.T_USERS 不存在"(同时有 2 个根因)
+**Bug 修复总计**: 2 个新 DM bug (Bug #15 + Bug #17)
+- ✅ Bug #15: `getTableInfo` 报错"表 V403_DM.T_USERS 不存在" (同时有 2 个根因)
+- ✅ Bug #17: `generate_sample_data` 含 IDENTITY PK 列时 bind 整数冲突 → "参数不兼容"
 
 ---
 
@@ -96,7 +97,7 @@
 | `execute_sql_file` (白名单外) | "Path not in allowlist" 正确拒绝 |
 | `explain_query_with_advice` | DM 字面量 SQL 出 plan (NSET2/PRJT2/SLCT2/CSCN2);`persist:true` 成功 |
 | `lint_sql` | `SELECT *` 检测为 warning |
-| `generate_sample_data` | ✅ 3 rows 真插入 V403_DM_T_LOGS (cols=msg+level) |
+| `generate_sample_data` | ✅ 3 rows 真插入 V403_DM_T_LOGS (cols=msg+level) (Bug #17 修复后无需显式 columns) |
 
 ### PII / Audit / Plan / Import (7)
 
@@ -112,17 +113,17 @@
 
 ---
 
-## 3. ⚠️ PASS with caveat (2 tools)
+## 3. ⚠️ PASS with caveat (1 tool)
 
-### ⚠️ `clear_cache` disconnected 状态报"数据库未连接"
+### ⚠️ `clear_cache` disconnected 状态报"数据库未连接" (decisions: 保留原行为) (decisions: 保留原行为)
 
 **现象**: `disconnect_database` → `clear_cache` → "执行失败: 数据库未连接。请先使用 connect_database 工具连接数据库。"
 
-**评估**: 这是 Bug #13 同类问题。`clear_cache` 只清缓存,不依赖 DB 连接 — 但当前实现要求 databaseService != null。functional 但 UX 不一致。
+**评估**: **明确设计**:clear_cache 涉及 databaseService.clearSchemaCache(),disconnected 状态下 databaseService=null,调用不安全(没有可清的 cache)。该 caveat 需要先 connect_database 才能清缓存是**预期行为**,不修复。
 
-**优先级**: P3,不影响功能。建议把 `clear_cache` 加入 `profileOnlyTools` set (类似 Bug #13 修复)。
+**优先级**: P3 — 建议文档化,不调整代码。
 
-### ⚠️ `generate_sample_data` 含 IDENTITY PK 列时报"参数不兼容"
+### ⚠️ `generate_sample_data` 含 IDENTITY PK 列时报"参数不兼容" — ✅ Bug #17 已修复 (v4.0.3.2)
 
 **现象**: `generate_sample_data(tableName: V403_DM_T_LOGS, rowCount: 3)` (auto 包含 LOG_ID IDENTITY 列) → "[-5403] 参数不兼容", TRUNCATE 已成功执行但 0 rows 插入。
 
@@ -137,6 +138,86 @@
 ## 4. ❌ FAIL (0 tools)
 
 所有 27 个 tool 全部通过验证。Bug #15 修复并验证。
+
+---
+
+## 4.1 ✅ Bug #17 修复详情 — generate_sample_data IDENTITY PK 自动跳过 (v4.0.3.2)
+
+**严重程度**: 🟡 中 — `generate_sample_data` 含 IDENTITY PK 时 bind 整数 → 主键冲突 → "参数不兼容" 包装成 "表或视图不存在"
+
+**证据**(修复前):
+```
+generate_sample_data("V403_DM_T_USERS", rowCount: 3)  → "[-5403] 参数不兼容" (TRUNCATE 成功但 0 rows 插入)
+```
+
+**根因** (3 层):
+1. DM `ALL_TAB_IDENTITY_COLS` 视图不可用(本 DM 8 实例),adapter 无法标注 IDENTITY 列
+2. `SampleDataGenerator.matchHeuristic` 用 `name === 'id' || /_id$/i.test(name)` 启发式生成 1-100000 int → bind INT IDENTITY 列 → 主键冲突
+3. `fallbackByType` 对 TIMESTAMP 返回 JS Date 对象 → dmdb driver 不接受 Date 对象 bind(timestamp 列)
+4. `getTableInfo` 默认 `columnsToInsert` 含所有列 → INSERT 必含 IDENTITY PK → DM 协议层报 "表或视图不存在"
+
+**修复** (3 文件,~50 行):
+
+```typescript
+// src/utils/sample-data-generator.ts
+const pkSet = context.primaryKeys instanceof Set
+  ? context.primaryKeys
+  : new Set(context.primaryKeys ?? []);
+if (pkSet.has(column.name)) {
+  const type = column.type.toLowerCase();
+  if (type.includes('uuid') || type.includes('uniqueidentifier')) {
+    return this.faker.string.uuid();
+  }
+  if (type.startsWith('char') && /char\(\s*36\s*\)/.test(column.type)) {
+    return this.faker.string.uuid();
+  }
+  if (type.includes('int') || type.includes('serial') || type.includes('numeric')) {
+    return (rowIndex + 1) * 1 + Math.floor(Math.random() * 1000);
+  }
+}
+// fallbackByType: date → ISO string (DM driver 不接受 JS Date bind)
+if (/date|time/.test(type)) {
+  return this.faker.date.recent().toISOString().slice(0, 19).replace('T', ' ');
+}
+
+// src/core/database-service.ts
+const userSpecifiedColumns = !!options?.columns;
+const autoExcludePks = (tableInfo.primaryKeys ?? []).filter(pk => {
+  const col = tableInfo.columns.find(c => c.name.toLowerCase() === pk.toLowerCase());
+  if (!col) return true;
+  if (col.autoIncrement === true) return true;
+  const t = col.type.toLowerCase();
+  if (t.includes('uuid') || t.includes('uniqueidentifier')) return true;
+  if (t.startsWith('char') && /char\(\s*36\s*\)/.test(col.type)) return true;
+  return !userSpecifiedColumns;
+});
+const columnsToInsert = options?.columns?.length
+  ? options.columns
+  : tableInfo.columns.filter(c => !autoExcludePks.includes(c.name.toLowerCase())).map(c => c.name);
+
+// src/adapters/dm.ts (getTableInfo fast path + getSchema 全路径)
+try {
+  const idRes = await this.connection.execute(
+    `SELECT COLUMN_NAME FROM ALL_TAB_IDENTITY_COLS WHERE OWNER = :1 AND TABLE_NAME = :2`,
+    [owner, bareName]
+  );
+  // populate identityCols set, then mark autoIncrement on each column
+} catch { /* DM 8 无此视图,fallback 到 generator 的 PK+type 启发式 */ }
+```
+
+**验证**:
+- `generate_sample_data("V403_BUG17_T_USERS", rowCount: 3)` (auto, no options.columns) → 3 rows 真插入,DM auto-inc ID 4/5/6,490ms
+- `generate_sample_data` 带 `options.columns: ['name','score']` → 用户显式覆盖,2 rows 插入,179ms
+- `clear_cache` 保留 intentional behavior (需要连接)
+
+**PK 列自动策略**:
+| PK 类型 | 行为 |
+|---------|------|
+| IDENTITY (autoIncrement=true) | 跳过 → DB 自填 |
+| UUID/UNIQUEIDENTIFIER | 生成 uuid v4 |
+| CHAR(36) | 生成 uuid v4 |
+| INT/BIGINT/NUMERIC/SERIAL | (rowIndex+1)*1 + random int 避免冲突 |
+| VARCHAR(50)/其他 | 走 heuristic fallback (lorem.sentence) — 当前实现 |
 
 ---
 
@@ -247,7 +328,18 @@ ON i.INDEX_NAME = ic.INDEX_NAME AND i.OWNER = ic.INDEX_OWNER
 
 | 文件 | 改动 |
 |------|------|
-| `src/adapters/dm.ts` | Bug #15 第 1 处:`if (!owner)` fallback `owner = String(this.config.user || '').toUpperCase()` <br> Bug #15 第 2 处:`ic.IND_OWNER` → `ic.INDEX_OWNER` (Oracle 列名) |
+| `src/adapters/dm.ts` | Bug #15 第 1 处:`if (!owner)` fallback `owner = String(this.config.user || '').toUpperCase()` <br> Bug #15 第 2 处:`ic.IND_OWNER` → `ic.INDEX_OWNER` (Oracle 列名) <br> Bug #17: `getTableInfo` fast path + `getSchema` 全路径查 `ALL_TAB_IDENTITY_COLS` 标记 IDENTITY 列 |
+| `src/utils/sample-data-generator.ts` | Bug #17: `GenerateContext` 加 `primaryKeys`; `generateValue` 优先读 `column.autoIncrement` → 跳过; 非 IDENTITY PK 按类型生成 UUID/sequence int; `fallbackByType` date → ISO string(DM driver 不接受 JS Date) |
+| `src/core/database-service.ts` | Bug #17: `generateAndInsertSampleData` 默认排除 PK 列(IDENTITY/UUID/CHAR(36)),用户显式 `options.columns` 时不强制排除; 把 `primaryKeys` Set 传给 generator context |
+
+---
+
+## 9.1 v4.0.3.2 综合修复清单 (Bug #15 + #17)
+
+| Bug | 严重度 | 状态 | 修复文件 |
+|-----|--------|------|----------|
+| #15 getTableInfo INDEX_OWNER + owner fallback | 🟡 中 | ✅ FIXED (v4.0.3) | `src/adapters/dm.ts` |
+| #17 generate_sample_data IDENTITY PK | 🟡 中 | ✅ FIXED (v4.0.3.2) | `src/utils/sample-data-generator.ts` + `src/core/database-service.ts` + `src/adapters/dm.ts` |
 
 ---
 
