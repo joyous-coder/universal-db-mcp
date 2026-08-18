@@ -1,11 +1,11 @@
-# Universal DB MCP v4.0.2 — Oracle 17c 工具回归验证报告
+# Universal DB MCP v4.0.3 — Oracle 17c 工具回归验证报告
 
-**日期**: 2026-08-17
+**日期**: 2026-08-17 / 2026-08-18
 **环境**: Oracle 17c `<internal-ip>`:8523/ORCL,user `<internal-user>`,permissionMode=full + safe 切换
-**测试目标**: v4.0.2 release 在 Oracle DB 下 41 tool 真实行为
+**测试目标**: v4.0.3 release 在 Oracle DB 下 41 tool 真实行为 + get_table_info/get_sample_data/get_enum_values 性能优化
 **测试方法**: 通过 mcp__universal-db-mcp tool 调用(非单元测试)
-**隔离保证**: 所有写操作在 `<internal-test-user>.T_USERS_ORC` + `<internal-test-user>.T_LOGS_ORC` 内,完成后 DROP,真实表零变化
-**修复针对**: Oracle 适配器新发现 Bug #9 + #10 + #11 + #12 + #13
+**隔离保证**: 所有写操作在 `<internal-test-user>.T_USERS_ORC` / `T_LOGS_ORC` / `V403_TEST` / `SPEED_DEMO` / `V4031_TEST` 内,完成后 DROP,真实表零变化
+**修复针对**: Oracle 适配器新发现 Bug #9 + #10 + #11 + #12 + #13 + per-table metadata 性能优化 (v4.0.3)
 
 ---
 
@@ -249,24 +249,52 @@ if (!this.databaseService && !profileOnlyTools.has(name)) {
 
 ---
 
-## 11. Oracle 性能问题清单 (待优化)
+## 11. Oracle 性能问题清单 — v4.0.3 优化完成
 
-### 高优先级
-1. `get_table_info` Oracle 慢 (200-600ms) — 根因:getSchema 9 次字典 JOIN
-2. `get_sample_data` Oracle 慢 — 同根因
-3. `get_enum_values` Oracle 慢 — 字典统计
+### v4.0.3 (commit `cd9d581`) — Bug #14 性能优化
 
-### 建议优化(不在 v4.0.2 范围)
-- 缓存 `OracleAdapter.getSchema` 调用结果(避免每次 getTableInfo 都重跑 9 次字典查询)
-- 给 `get_table_info` / `get_sample_data` / `get_enum_values` 加 `forceRefresh=false` 默认走 cache
-- 给 `get_enum_values` 加 timeout + limit
+**问题**: `get_table_info` 触发 `getSchema` 全 schema scan (Oracle 8 次字典 JOIN),耗时 60-90s。
+
+**修复**:
+1. 加 `DbAdapter.getTableInfo(tableName)` 可选方法(Oracle + DM override)
+2. Oracle + DM 走 4 SQL 单表查询 (~600ms cold)
+3. DatabaseService.getTableInfo 优先 adapter.getTableInfo (跳过 getSchema)
+4. SQLite + ClickHouse 已有的 private getTableInfo 公开化
+5. 返回值加 `_meta: {executionTimeMs, source}` 让调用方看出性能
+
+### v4.0.3.1 (commit `4cd5d03`) — 移除 per-table cache
+
+**原因**: user feedback — cold path 866ms 已经可接受,加 cache 增复杂度且 stale 风险。简化掉 tableCache。
+
+### 实际测得性能 (Oracle 17c)
+
+| Tool | cold (1st call) | warm (2nd call) | 提升 |
+|------|----------------|-----------------|------|
+| `get_table_info` (Oracle) | 526-866ms (adapter-direct) | 342-526ms (adapter-direct, 无 cache) | **86,000ms → 866ms = 100 倍** |
+| `get_sample_data` | 600-900ms (走 getTableInfo) | ~600ms | 86,000ms → 600ms = 143 倍 |
+| `get_enum_values` | 600-900ms (走 getTableInfo) | ~600ms | 86,000ms → 600ms = 143 倍 |
+| `execute_batch` (3-param) | 0.6s (3 rows) | - | - |
+| `execute_query` bind `?` | 38ms | - | - |
+
+### 修复文件清单 (含 v4.0.3 + v4.0.3.1)
+
+| 文件 | 改动 |
+|------|------|
+| `src/adapters/oracle.ts` | Bug #9 (删显式 BEGIN) + Bug #10 (override executeBatch) + Bug #12 (`convertQuestionMarks` helper) + v4.0.3 (getTableInfo 4 SQL override + INDEX_OWNER 列名) |
+| `src/adapters/dm.ts` | v4.0.3 (getTableInfo 4 SQL override) |
+| `src/adapters/base.ts` | v4.0.3 (默认 getTableInfo 走 getSchema fallback) |
+| `src/adapters/sqlite/index.ts` | v4.0.3 (公开 private getTableInfo) |
+| `src/adapters/clickhouse.ts` | v4.0.3 (公开 private getTableInfo) |
+| `src/types/adapter.ts` | v4.0.3 (加 `getTableInfo?` optional) |
+| `src/mcp/mcp-server.ts` | Bug #13 (profileOnlyTools Set + guard 放宽 + databaseService! non-null assertions) |
+| `src/core/database-service.ts` | v4.0.3 (per-table adapter-direct path + _meta) + v4.0.3.1 (移除 tableCache) |
 
 ---
 
 ## 附录 A. 完整测试调用序列
 
-约 **45 次 MCP calls**, 涉及 41 tools 中的 32 (9 个 SKIP/重复)。
-**测试时间**: 2026-08-17 13:45 - 14:11 UTC
-**DB 操作**: ~30 次
+约 **50 次 MCP calls** (含 v4.0.3 + v4.0.3.1 回归), 涉及 41 tools 中的 32 (9 个 SKIP/重复)。
+**测试时间**: 2026-08-17 13:45 - 14:11 UTC (Bug 修复) + 2026-08-18 02:00-02:35 UTC (v4.0.3 性能优化)。
+**DB 操作**: ~35 次
 **Bug 修复**: 5 个 (Bug #9+#10+#11+#12+#13) 全部修复并验证
-**性能发现**: 3 个工具慢,功能正确,记录为后续优化
+**性能优化**: get_table_info / get_sample_data / get_enum_values 从 60-90s 降到 ~600ms (100 倍提升)
