@@ -16,7 +16,6 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { DbAdapter, DbConfig } from '../types/adapter.js';
 import type { AppConfig } from '../types/http.js';
 import { DatabaseService, SchemaCacheConfig } from '../core/database-service.js';
-import { createAdapter, normalizeDbType } from '../utils/adapter-factory.js';
 import { resolvePermissions } from '../utils/safety.js';
 // v4.0 G1: ToolRegistry + buildToolRegistry deleted
 import { buildInstructions } from './instructions.js';
@@ -379,47 +378,8 @@ export class DatabaseMCPServer {
               required: ['tableName'],
             },
           },
-          {
-            name: 'connect_database',
-            description: '连接到数据库。支持动态指定数据库类型和连接参数，无需重启服务。如果当前已有连接，会自动断开旧连接再建立新连接。支持的数据库类型：mysql, postgres, redis, oracle, dm, sqlserver, mongodb, sqlite, kingbase, gaussdb, oceanbase, tidb, clickhouse, polardb, vastbase, highgo, goldendb。',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                type: {
-                  type: 'string',
-                  description: '数据库类型',
-                  enum: [
-                    'mysql', 'postgres', 'redis', 'oracle', 'dm', 'sqlserver',
-                    'mongodb', 'sqlite', 'kingbase', 'gaussdb', 'oceanbase',
-                    'tidb', 'clickhouse', 'polardb', 'vastbase', 'highgo', 'goldendb',
-                  ],
-                },
-                host: { type: 'string', description: '数据库主机地址' },
-                port: { type: 'number', description: '数据库端口' },
-                user: { type: 'string', description: '用户名' },
-                password: { type: 'string', description: '密码' },
-                database: { type: 'string', description: '数据库名称' },
-                filePath: { type: 'string', description: 'SQLite 数据库文件路径' },
-                allowWrite: { type: 'boolean', description: '是否允许写操作（默认 false）' },
-                permissionMode: {
-                  type: 'string',
-                  description: '权限模式: safe(只读) | readwrite(读写不删) | full(完全控制)',
-                  enum: ['safe', 'readwrite', 'full'],
-                },
-                authSource: { type: 'string', description: 'MongoDB 认证数据库（默认 admin）' },
-                oracleClientPath: { type: 'string', description: 'Oracle Instant Client 路径' },
-              },
-              required: ['type'],
-            },
-          },
-          {
-            name: 'disconnect_database',
-            description: '断开当前数据库连接。断开后需要重新调用 connect_database 才能执行查询。',
-            inputSchema: {
-              type: 'object',
-              properties: {},
-            },
-          },
+          // v4.2.0 BREAKING: connect_database / disconnect_database 已删除
+          // 用 save_profile + use_profile + disconnect_profile 替代
           {
             name: 'get_connection_status',
             description: '获取当前数据库连接状态。返回是否已连接、数据库类型、地址、数据库名、权限模式等信息。',
@@ -689,152 +649,9 @@ export class DatabaseMCPServer {
         // v4.0 G1, G6: single dispatch path. Lazy-load branch removed (toolRegistry always null after Task 8)
         // (v4.0 G1: lazy-load branch removed — no toolRegistry)
 
-        // 连接管理类 tool 不需要检查数据库连接
+        // v4.2.0 BREAKING: connect_database / disconnect_database 已删除
+        // 用 save_profile + use_profile + disconnect_profile 替代
         switch (name) {
-          case 'connect_database': {
-            const {
-              type, host, port, user, password, database,
-              filePath, allowWrite, permissionMode, authSource, oracleClientPath,
-            } = args as Record<string, any>;
-
-            // 构建新配置
-            const newConfig: DbConfig = {
-              type: normalizeDbType(type),
-              host,
-              port,
-              user,
-              password,
-              database,
-              filePath,
-              allowWrite: allowWrite || false,
-              permissionMode: permissionMode || 'safe',
-            };
-
-            // MongoDB 特殊配置
-            if (newConfig.type === 'mongodb' && authSource) {
-              (newConfig as any).authSource = authSource;
-            }
-
-            // Oracle 特殊配置
-            if (newConfig.type === 'oracle' && oracleClientPath) {
-              newConfig.oracleClientPath = oracleClientPath;
-            }
-
-            // v3.2.8 Bug #35 fix: carry over server-side env-loaded config (e.g. allowedSqlFilePaths
-            // from DB_ALLOWED_FILE_PATHS) into the runtime newConfig. Without this, tools/call
-            // for execute_sql_file fails because DatabaseService sees no allowedSqlFilePaths.
-            if (this.appConfig?.database) {
-              const serverDbCfg = this.appConfig.database as any;
-              if (serverDbCfg.allowedSqlFilePaths && !(newConfig as any).allowedSqlFilePaths) {
-                (newConfig as any).allowedSqlFilePaths = serverDbCfg.allowedSqlFilePaths;
-              }
-              if (serverDbCfg.allowWrite !== undefined && newConfig.allowWrite === undefined) {
-                newConfig.allowWrite = serverDbCfg.allowWrite;
-              }
-              if (serverDbCfg.poolConfig && !newConfig.poolConfig) {
-                newConfig.poolConfig = serverDbCfg.poolConfig;
-              }
-            }
-
-            // 断开旧连接(总是清空状态,即使 disconnect 抛错)
-            if (this.adapter) {
-              console.error('🔄 断开旧数据库连接...');
-              if (this.databaseService) {
-                this.databaseService!.clearSchemaCache();
-              }
-              try {
-                await this.adapter.disconnect();
-              } catch (err) {
-                console.error('断开旧适配器时出错:', err instanceof Error ? err.message : String(err));
-              }
-              this.adapter = null;
-              this.databaseService = null;
-            }
-
-            // 建立新连接
-            console.error(`🔌 正在连接 ${newConfig.type} 数据库...`);
-            const newAdapter = createAdapter(newConfig);
-            await newAdapter.connect();
-
-            this.adapter = newAdapter;
-            this.config = newConfig;
-            this.databaseService = new DatabaseService(newAdapter, newConfig, this.cacheConfig);
-            // v3.2.4 Bug #17 fix: wire queryAnalyzer to new databaseService so
-            // executeQuery records history + applies lint hints. Previously queryAnalyzer
-            // was created at server start but never propagated to per-connection service,
-            // so get_query_history always returned empty.
-            if (this.queryAnalyzer) {
-              this.databaseService!.setQueryAnalyzer(this.queryAnalyzer);
-              // v3.2.4 Bug #18 fix: attachAdapter wires Explainer for explain_query.
-              // Previously attachAdapter was never called so explainer stayed null
-              // and explain_query always returned empty plan.
-              this.queryAnalyzer.attachAdapter(newAdapter as any, newConfig.type);
-            }
-
-            const connInfo = newConfig.type === 'sqlite'
-              ? `SQLite: ${newConfig.filePath}`
-              : `${newConfig.type}: ${newConfig.host}:${newConfig.port}/${newConfig.database || '(default)'}`;
-
-            console.error(`✅ 数据库连接成功: ${connInfo}`);
-
-            return {
-              content: [{
-                type: 'text',
-                text: JSON.stringify({
-                  success: true,
-                  message: `已成功连接到 ${connInfo}`,
-                  connection: {
-                    type: newConfig.type,
-                    host: newConfig.host,
-                    port: newConfig.port,
-                    database: newConfig.database,
-                    permissionMode: newConfig.permissionMode || 'safe',
-                  },
-                }, null, 2),
-              }],
-            };
-          }
-
-          case 'disconnect_database': {
-            if (!this.adapter) {
-              return {
-                content: [{
-                  type: 'text',
-                  text: JSON.stringify({ success: true, message: '当前没有活跃的数据库连接' }, null, 2),
-                }],
-              };
-            }
-
-            if (this.databaseService) {
-              this.databaseService!.clearSchemaCache();
-            }
-
-            const oldType = this.config?.type;
-
-            // Try disconnect but always clear state regardless of success
-            try {
-              await this.adapter.disconnect();
-            } catch (err) {
-              console.error(`断开适配器时出错 (${oldType}):`, err instanceof Error ? err.message : String(err));
-            }
-
-            this.adapter = null;
-            this.config = null;
-            this.databaseService = null;
-
-            console.error(`👋 数据库连接已断开: ${oldType || ''}`);
-
-            return {
-              content: [{
-                type: 'text',
-                text: JSON.stringify({
-                  success: true,
-                  message: `已断开 ${oldType || ''} 数据库连接`,
-                }, null, 2),
-              }],
-            };
-          }
-
           case 'get_metrics': {
             // v2.16: observability — does not require a database connection
             const handler = buildGetMetricsHandler({
@@ -931,7 +748,8 @@ export class DatabaseMCPServer {
             this.adapter = liveAdapter;
             this.config = {
               ...profileConfig,
-              type: normalizeDbType(r.type),
+              // v4.2.0: r.type 来自 ProfileStore,创建 adapter 时已经规范化 — cast 到 DbConfig['type'] union
+              type: r.type as DbConfig['type'],
               permissionMode: profileConfig.permissionMode || 'safe',
             };
             this.databaseService = liveService;
@@ -964,7 +782,7 @@ export class DatabaseMCPServer {
                   type: 'text',
                   text: JSON.stringify({
                     connected: false,
-                    message: '当前未连接任何数据库。请使用 connect_database 工具连接。',
+                    message: '当前未连接任何数据库。请使用 use_profile 工具激活 profile。',
                   }, null, 2),
                 }],
               };
@@ -1013,7 +831,7 @@ export class DatabaseMCPServer {
           'get_profile', 'import_profiles', 'export_profiles',
         ]);
         if (!this.databaseService && !profileOnlyTools.has(name)) {
-          throw new Error('数据库未连接。请先使用 connect_database 工具连接数据库。');
+          throw new Error('数据库未连接。请先使用 use_profile 工具激活 profile。');
         }
 
         switch (name) {

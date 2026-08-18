@@ -12,8 +12,11 @@ describe('audit-docs extractors', () => {
   it('extractToolNames returns all tool names from src/mcp/tools/*.ts', async () => {
     const names = await extractToolNames('./src/mcp/tools');
     expect(names.length).toBeGreaterThan(20);
-    expect(names).toContain('connect_database');
+    // v4.2.0: connect_database / disconnect_database 已删除
+    expect(names).not.toContain('connect_database');
+    expect(names).not.toContain('disconnect_database');
     expect(names).toContain('save_profile');
+    expect(names).toContain('use_profile');
     // v4.0: use_tool_group / use_tool_schema removed
     expect(names).not.toContain('use_tool_group');
     expect(names).not.toContain('use_tool_schema');
