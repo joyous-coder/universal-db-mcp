@@ -29,7 +29,7 @@
 ```
 ~/.universal-db-mcp/                                # Windows: %USERPROFILE%\.universal-db-mcp
 ├── profiles.db                                     # 全局 profile 注册表
-├── config.json                                     # 版本/迁移提示标志
+├── config.json                                     # 版本
 ├── bbz-cq-oracle/                                  # profile 名作为子目录 (名字约束见 §3.1)
 │   ├── history.db
 │   ├── templates.db
@@ -208,8 +208,7 @@ use_profile({ name: 'bbz-cq-oracle', recordToProject: true })  // 激活 + 写 .
 2. 加载 `profiles.db` (全局)
 3. 检测 cwd 是否有 `.profile`,若有 → 找到对应 profile → `use_profile`
 4. 加载各 profile-scoped DB (按当前 active profile)
-5. 检测 cwd 是否有遗留的 `profiles.db` / `history.db` 等(迁移提示)
-6. 启动完成
+5. 启动完成
 
 ---
 
@@ -221,7 +220,7 @@ use_profile({ name: 'bbz-cq-oracle', recordToProject: true })  // 激活 + 写 .
 
 ---
 
-## 7. 迁移与向后兼容
+## 7. 向后兼容
 
 ### 7.1 现有 `.mcp.json` 凭据 env
 
@@ -230,14 +229,9 @@ use_profile({ name: 'bbz-cq-oracle', recordToProject: true })  // 激活 + 写 .
 ⚠️ DB_HOST/DB_USER/DB_PASSWORD 等凭据 env 已废弃。请用 save_profile 管理。
 ```
 
-### 7.2 现有 cwd-relative `profiles.db` 等
+(历史 cwd-relative `profiles.db` 等不再迁移;用户手动用 `export_profiles` / `import_profiles` 处理。)
 
-启动时检测 `cwd/profiles.db` / `cwd/history.db` / `cwd/templates.db` 等是否存在,若存在:
-- 仅一次 stderr 提示(用 `~/.universal-db-mcp/config.json` 标记 `migration_hint_shown_at`)
-- 不自动迁移
-- `export_profiles` 已有,但 history/templates/plans 暂无导入工具(列出为后续 spec)
-
-### 7.3 `connect_database` / `disconnect_database` tool 的移除
+### 7.2 `connect_database` / `disconnect_database` tool 的移除
 
 MCP tool 列表少两项。已使用这些 tool 的客户端会收到 "tool not found" 错误 — 用户需要迁移到 `save_profile` + `use_profile` + `disconnect_profile`。这是 breaking change,CHANGELOG 标注 **BREAKING**。
 
@@ -256,7 +250,6 @@ MCP tool 列表少两项。已使用这些 tool 的客户端会收到 "tool not 
 
 - e2e:** 创建 `.profile`,启动 MCP,验证自动激活
 - e2e:** save_profile → use_profile(recordToProject=true) → 检查 `.profile` 内容
-- e2e:** cwd 有老 profiles.db → 启动 hint 一次,后续启动无 hint
 - e2e:** Profile 自带 permissionMode,验证越权操作被阻止(无需传 permissionMode)
 
 ### 8.3 Windows EISDIR 复测
@@ -289,8 +282,8 @@ MCP tool 列表少两项。已使用这些 tool 的客户端会收到 "tool not 
 
 ## 11. 实施拆分 (建议 PR 顺序)
 
-1. **PR1**: Profile 模型 + 名字正则 + permissionMode 字段迁移 (DB schema 变更)
+1. **PR1**: Profile 模型 + 名字正则 + permissionMode 字段 (DB schema 变更)
 2. **PR2**: 全局路径解析 + `.universal-db-mcp/` 默认
 3. **PR3**: 项目 `.profile` 自动激活 + use_profile recordToProject
 4. **PR4**: 删除 `connect_database` / `disconnect_database` tool + 移除凭据 env (BREAKING)
-5. **PR5**: 迁移提示 + 文档更新
+5. **PR5**: 文档更新 (README + CHANGELOG)
