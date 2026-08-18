@@ -54,7 +54,7 @@ AI: Let me query that for you...
 
 - **17 Database Support** - MySQL, PostgreSQL, Redis, Oracle, SQL Server, MongoDB, SQLite, and 10 Chinese domestic databases
 - **55+ Platform Integrations** - Works with Claude Desktop, Cursor, VS Code, ChatGPT, Dify, and [50+ other platforms](#-supported-platforms)
-- **43 MCP Tools** - Connection, query, schema, profile, template, governance, sample-data, PII, audit, **CSV export/import** ([full list](#-available-tools-43-total))
+- **41 MCP Tools** - Connection, query, schema, profile, template, governance, sample-data, PII, audit, **CSV export/import** ([full list](#-available-tools-41-total))
 - **Flexible Architecture** - 2 startup modes (stdio/http) with 4 access methods: MCP stdio, MCP SSE, MCP Streamable HTTP, and REST API
 - **Security First** - Read-only mode by default prevents accidental data modifications
 - **Intelligent Caching** - Schema caching with configurable TTL for blazing-fast performance
@@ -82,13 +82,14 @@ See [GitHub Releases](https://github.com/joyous-coder/universal-db-mcp/releases)
 | Schema cache (50 tables) | ~5s | ~200ms | **25×** |
 | Schema cache (500 tables) | ~50s | ~500ms | **100×** |
 
-## 🛠️ Available Tools (43 total)
+## 🛠️ Available Tools (41 total)
 
 ### Connection (4)
 | Tool | Description |
 |------|-------------|
-| `connect_database` | Connect to a database with credentials + permission mode (`safe` |
-| `disconnect_database` | Close the current database connection |
+| `use_profile` | 激活保存的 profile + 建立连接 (替换 v4.x 的 connect_database) |
+| `save_profile` | 保存命名 profile (host/port/user 等 + permissionMode) |
+| `disconnect_profile` | 断开当前 profile 的连接 (替换 v4.x 的 disconnect_database) |
 | `get_connection_status` | Show connection state, schema cache hit rate, last error |
 | `get_metrics` | Prometheus-style counters + histograms + slow-query ring buffer |
 
@@ -155,43 +156,107 @@ See [tools reference](./docs/03-features/tools.md) for parameter details.
 
 ## 🚀 Quick Start
 
-### Installation
+### v5.0.0 新流程(Profile-based)
 
-```bash
-npm install -g @joyous-coder/universal-db-mcp
+**所有凭据现在通过 `save_profile` 管理**,不再写进 `.mcp.json`。同一套 DB 凭据可跨多个项目复用,不需要重复输入。
+
+#### 1. 第一次使用 — 保存 profile
+
+```ts
+// 在 Claude Desktop / Claude Code 里:
+save_profile({
+  name: "my-dev-db",             // /^[a-zA-Z0-9_-]+$/
+  type: "mysql",                 // oracle / mysql / postgres / redis / dm / ...
+  config: {
+    host: "localhost",
+    port: 3306,
+    user: "root",
+    password: "your_password",
+    database: "your_database",
+  },
+  permissionMode: "readwrite",   // safe / readwrite / full (默认 readwrite)
+})
 ```
 
-### MCP Mode (Claude Desktop)
+profile 存到 `~/.universal-db-mcp/profiles.db`(Windows: `%USERPROFILE%\.universal-db-mcp\profiles.db`),跨项目保留。
 
-Add to your Claude Desktop configuration file:
+#### 2. 激活并绑定项目
 
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+```ts
+use_profile({
+  name: "my-dev-db",
+  recordToProject: true,   // 写到 <cwd>/.profile — 下次自动激活
+})
+```
+
+下次 MCP 启动时,自动读 `<cwd>/.profile` 并激活指定 profile — 无需手动 `use_profile`。
+
+#### 3. 开始查询
+
+- *"Show me the structure of the users table"*
+- *"Count orders from the last 7 days"*
+- *"Find the top 5 products by sales"*
+
+### 数据存储
+
+所有持久化数据都放在 `~/.universal-db-mcp/`(可用 `DB_GLOBAL_DIR` 覆盖):
+
+```
+~/.universal-db-mcp/
+├── profiles.db                       # 全局 profile 注册表
+├── config.json                       # 配置标记
+├── my-dev-db/                        # profile 名作为子目录
+│   ├── history.db                    # 查询历史(按 profile 隔离)
+│   ├── templates.db                  # SQL 模板
+│   └── plans.db                      # EXPLAIN 历史
+└── other-profile/
+    ├── history.db
+    ├── templates.db
+    └── plans.db
+```
+
+### 多项目工作流
+
+```bash
+# 项目 A
+cd ~/projects/app-a
+echo 'profile=my-dev-db' > .profile
+# MCP 启动自动激活
+
+# 项目 B(同一 DB)
+cd ~/projects/app-b
+echo 'profile=my-dev-db' > .profile
+# 同一 profile,无需重新保存
+
+# 项目 C(不同 DB — staging)
+save_profile({name: 'staging-db', type: 'mysql', config: {...}})
+use_profile({name: 'staging-db', recordToProject: true})
+```
+
+### MCP Mode 配置(简化版)
+
+`.mcp.json` 现在**只需要**安装信息,不需要凭据:
 
 ```json
 {
   "mcpServers": {
-    "my-database": {
+    "universal-db-mcp": {
       "command": "npx",
-      "args": [
-        "universal-db-mcp",
-        "--type", "mysql",
-        "--host", "localhost",
-        "--port", "3306",
-        "--user", "root",
-        "--password", "your_password",
-        "--database", "your_database"
-      ]
+      "args": ["@joyous-coder/universal-db-mcp"]
     }
   }
 }
 ```
 
-Restart Claude Desktop and start asking questions:
+启动后用 `save_profile` + `use_profile` 配连接。
 
-- *"Show me the structure of the users table"*
-- *"Count orders from the last 7 days"*
-- *"Find the top 5 products by sales"*
+### HTTP API Mode
+
+```bash
+# Set environment variables
+export MODE=http
+export HTTP_PORT=3000
+export API_KEYS=your-secret-key
 
 ### HTTP API Mode
 
@@ -289,11 +354,11 @@ See [Dify Integration Guide](./docs/04-integrations/DIFY.md) for detailed setup 
 │  │  • clear_cache          │    │  │  • execute_query            │  │   │
 │  │  • get_enum_values      │    │  │  • get_schema               │  │   │
 │  │  • get_sample_data      │    │  │  • get_table_info           │  │   │
-│  │  • connect_database     │    │  │  • clear_cache              │  │   │
-│  │  • disconnect_database  │    │  │  • get_enum_values          │  │   │
+│  │  • save_profile     │    │  │  • clear_cache              │  │   │
+│  │  • dissave_profile  │    │  │  • get_enum_values          │  │   │
 │  │  • get_connection_status│    │  │  • get_sample_data          │  │   │
-│  │                         │    │  │  • connect_database         │  │   │
-│  │  For: Claude Desktop,   │    │  │  • disconnect_database      │  │   │
+│  │                         │    │  │  • save_profile         │  │   │
+│  │  For: Claude Desktop,   │    │  │  • dissave_profile      │  │   │
 │  │       Cursor, etc.      │    │  │  • get_connection_status    │  │   │
 │  └─────────────┬───────────┘    │  │                             │  │   │
 │                │                │  │  For: Dify, Remote Access   │  │   │

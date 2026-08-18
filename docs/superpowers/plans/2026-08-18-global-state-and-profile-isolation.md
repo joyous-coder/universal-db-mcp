@@ -1,10 +1,11 @@
-# v4.2.0 全局持久化 + Profile 隔离 Implementation Plan
+# v5.0.0 全局持久化 + Profile 隔离 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 将 profiles + history + templates + plans 从 cwd-relative 改为 `~/.universal-db-mcp/` 全局目录,profile-scoped 隔离 history/templates/plans,`<cwd>/.profile` 自动激活,删除 `connect_database`/`disconnect_database` tool。
 
 **Architecture:**
+
 - `profiles.db` 在全局根目录,`<profile-name>/` 子目录存放该 profile 的 history/templates/plans
 - MCP 启动读 `<cwd>/.profile`,自动激活其中指定的 profile
 - `save_profile` 必填 `permissionMode`;`use_profile` 加 `recordToProject` 参数
@@ -29,6 +30,7 @@
 ## File Structure
 
 **新增文件**:
+
 - `src/utils/path-resolver.ts` — `.profile` 解析与写入 (~50 LOC)
 - `src/utils/global-paths.ts` — 集中全局路径解析 (~40 LOC)
 - `src/utils/product-detector.ts` — adapter `detectProductInfo()` 通用接口 + base impl (~30 LOC)
@@ -38,6 +40,7 @@
 - `tests/integration/.profile-flow.test.ts` — `.profile` 端到端 (~100 LOC)
 
 **修改文件**:
+
 - `src/core/profile-manager.ts` — Profile 接口加 permissionMode/category/productName/version,name 校验
 - `src/core/profile-store.ts` — DB schema 加新字段 (ALTER TABLE 兼容老库)
 - `src/utils/config-loader.ts` — 默认路径改全局,删除凭据 env 读取,新增 DB_GLOBAL_DIR
@@ -46,7 +49,7 @@
 - `src/mcp/tools/database-tools.ts` (若存在) 或 mcp-server — 删除 connect_database handler
 - 各 adapter (`src/adapters/oracle.ts`, `mysql.ts`, `postgres.ts`, `redis.ts`, 等) — 加 `detectProductInfo()` 方法
 - `README.md` — 快速开始改写
-- `CHANGELOG.md` — v4.2.0 段
+- `CHANGELOG.md` — v5.0.0 段
 - `tests/unit/profile-store.test.ts` — 加新字段测试
 - `tests/unit/csv-tools.test.ts` 等 — 任何引用 connect_database 的测试需更新
 
@@ -59,10 +62,12 @@
 ### Task 1.1: Profile 接口扩展 (类型层)
 
 **Files:**
+
 - Modify: `src/core/profile-manager.ts:19-35` (Profile interface)
 - Test: `tests/unit/profile-name-regex.test.ts` (NEW)
 
 **Interfaces:**
+
 - Produces: `Profile.permissionMode`, `Profile.category`, `Profile.productName`, `Profile.version` 字段
 
 - [ ] **Step 1: 写测试 — name 正则**
@@ -118,7 +123,7 @@ export interface Profile {
   updated_at: string;
   created_by: string;
   use_count: number;
-  // v4.2.0 新增:
+  // v5.0.0 新增:
   permissionMode: 'safe' | 'readwrite' | 'full';
   category: 'rdbms' | 'kv' | 'document' | 'columnar' | 'search' | 'unknown';
   productName: string | null;
@@ -146,10 +151,12 @@ git commit -m "feat(profile): add permissionMode + category + productName/versio
 ### Task 1.2: ProfileStore schema 迁移 (DB 层)
 
 **Files:**
+
 - Modify: `src/core/profile-store.ts:58-76` (CREATE TABLE + ALTER TABLE 迁移)
 - Test: `tests/unit/profile-store.test.ts` (现有测试,加新字段断言)
 
 **Interfaces:**
+
 - Consumes: Profile 接口 (Task 1.1)
 - Produces: `save(input)` 写入新字段,`rowToProfile()` 读出新字段
 
@@ -181,6 +188,7 @@ Expected: FAIL — TypeError: cannot read 'permissionMode' of undefined
 - [ ] **Step 3: 改 schema + rowToProfile + save**
 
 在 `init()` 的 CREATE TABLE 加新字段:
+
 ```sql
 CREATE TABLE IF NOT EXISTS profiles (
   id TEXT PRIMARY KEY,
@@ -195,7 +203,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   updated_at TEXT NOT NULL,
   created_by TEXT NOT NULL,
   use_count INTEGER DEFAULT 0,
-  -- v4.2.0 新增:
+  -- v5.0.0 新增:
   permission_mode TEXT NOT NULL DEFAULT 'readwrite',
   category TEXT NOT NULL DEFAULT 'unknown',
   product_name TEXT,
@@ -204,12 +212,14 @@ CREATE TABLE IF NOT EXISTS profiles (
 ```
 
 紧接着加 ALTER 兼容老库:
+
 ```sql
--- v4.2.0 迁移: 添加缺失字段(老库兼容)
+-- v5.0.0 迁移: 添加缺失字段(老库兼容)
 -- SQLite 不支持 IF NOT EXISTS for ADD COLUMN,需 catch error
 ```
 
 实际用 try/catch:
+
 ```ts
 const alterStmts = [
   `ALTER TABLE profiles ADD COLUMN permission_mode TEXT NOT NULL DEFAULT 'readwrite'`,
@@ -223,6 +233,7 @@ for (const stmt of alterStmts) {
 ```
 
 改 `save()` 加新字段:
+
 ```ts
 this.conn.exec(
   `INSERT INTO profiles (id, name, description, type, config_json, role, tags_json, enabled, created_at, updated_at, created_by, use_count, permission_mode, category, product_name, version)
@@ -258,10 +269,12 @@ git commit -m "feat(profile-store): schema migration + permissionMode/category/p
 ### Task 1.3: save_profile handler 加 name + permissionMode 校验
 
 **Files:**
+
 - Modify: `src/mcp/tools/profile-tools.ts` (save_profile 的 handler)
 - Test: `tests/unit/csv-tools.test.ts` 邻近的 `profile-tools.test.ts` (现有测试)
 
 **Interfaces:**
+
 - Consumes: `isValidProfileName`, ProfileInput
 - Produces: save_profile 拒绝不合法名字,自动填 default permissionMode='readwrite'
 
@@ -282,7 +295,6 @@ it('save_profile defaults permissionMode to readwrite when omitted', async () =>
 ```
 
 - [ ] **Step 2: 跑测试 fail**
-
 - [ ] **Step 3: 改 handler — 头部加校验**
 
 ```ts
@@ -297,7 +309,6 @@ const permissionMode = args.permissionMode ?? 'readwrite';
 ```
 
 - [ ] **Step 4: 跑测试 pass**
-
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -314,10 +325,12 @@ git commit -m "feat(profile-tools): save_profile rejects invalid name, defaults 
 ### Task 2.1: global-paths.ts 工具模块
 
 **Files:**
+
 - Create: `src/utils/global-paths.ts`
 - Test: `tests/unit/global-paths.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `getGlobalDir(): string` — 返回 `~/.universal-db-mcp` (env `DB_GLOBAL_DIR` 覆盖)
   - `getProfilesDbPath(): string` — `{globalDir}/profiles.db`
@@ -363,7 +376,6 @@ describe('global-paths', () => {
 ```
 
 - [ ] **Step 2: 跑测试 fail**
-
 - [ ] **Step 3: 实现 global-paths.ts**
 
 ```ts
@@ -385,7 +397,6 @@ export function getProfileDbPath(profileName: string, kind: 'history' | 'templat
 ```
 
 - [ ] **Step 4: 跑测试 pass**
-
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -396,10 +407,12 @@ git commit -m "feat(global-paths): ~/.universal-db-mcp default with DB_GLOBAL_DI
 ### Task 2.2: config-loader 默认值改全局
 
 **Files:**
+
 - Modify: `src/utils/config-loader.ts:172-211`
 - Test: `tests/unit/config-loader.test.ts` (现有)
 
 **Interfaces:**
+
 - Consumes: `getProfilesDbPath`, `getProfileDbPath` (Task 2.1)
 - Produces: profileManager.profilesDbPath, queryAnalyzer.historyDbPath/templatesDbPath, planHistoryPath 默认走全局
 
@@ -422,10 +435,10 @@ it('historyDbPath defaults to global {profile-active}/history.db (when profileMa
 ```
 
 - [ ] **Step 2: 跑测试 fail**
-
 - [ ] **Step 3: 改 config-loader**
 
 在 line 172-211 区域:
+
 ```ts
 // 替换默认 fallback:
 const defaultProfilesDb = getProfilesDbPath();  // 新增 import
@@ -442,7 +455,6 @@ const defaultTemplates = getProfileDbPath('_default', 'templates');
 ```
 
 - [ ] **Step 4: 跑测试 pass**
-
 - [ ] **Step 5: 跑全量**
 
 Run: `npx vitest run tests/unit/config-loader.test.ts`
@@ -458,11 +470,13 @@ git commit -m "feat(config-loader): default paths use ~/.universal-db-mcp"
 ### Task 2.3: mcp-server 使用全局路径初始化
 
 **Files:**
+
 - Modify: `src/mcp/mcp-server.ts:150-170` (ProfileManager 初始化)
 - Modify: `src/mcp/mcp-server.ts:130-145` (QueryAnalyzer 初始化)
 - Modify: `src/mcp/mcp-server.ts:170-185` (PlanHistory 初始化)
 
 **Interfaces:**
+
 - Consumes: `getProfilesDbPath`, `getProfileDbPath` (Task 2.1)
 
 - [ ] **Step 1: 改 ProfileManager 初始化 — 用全局 profiles 路径**
@@ -537,10 +551,12 @@ git commit -m "feat(mcp-server): use global paths for profiles/history/templates
 ### Task 3.1: path-resolver.ts — `.profile` 读写
 
 **Files:**
+
 - Create: `src/utils/path-resolver.ts`
 - Test: `tests/unit/path-resolver.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `readProjectProfile(cwd: string): { profile: string } | null` — 读 `.profile`,parse key=value
   - `writeProjectProfile(cwd: string, profileName: string): void` — 写 `profile=NAME\n`
@@ -589,7 +605,6 @@ describe('path-resolver .profile', () => {
 ```
 
 - [ ] **Step 2: 跑测试 fail**
-
 - [ ] **Step 3: 实现 path-resolver.ts**
 
 ```ts
@@ -621,7 +636,6 @@ export function writeProjectProfile(cwd: string, profileName: string): void {
 ```
 
 - [ ] **Step 4: 跑测试 pass**
-
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -632,14 +646,17 @@ git commit -m "feat(path-resolver): read/write .profile for project profile bind
 ### Task 3.2: mcp-server 启动读 `.profile` 自动激活
 
 **Files:**
+
 - Modify: `src/mcp/mcp-server.ts` 启动序列(PR2 Task 2.3 之后)
 
 **Interfaces:**
+
 - Consumes: `readProjectProfile` (Task 3.1), ProfileManager
 
 - [ ] **Step 1: 改启动序列 step 3**
 
 在 PR2 启动序列的 step 3 (读 .profile) 实现:
+
 ```ts
 // 在 ProfileManager 加载后,PlanHistory 加载前:
 import { readProjectProfile } from '../utils/path-resolver.js';
@@ -685,6 +702,7 @@ git commit -m "feat(mcp-server): auto-load profile from <cwd>/.profile at startu
 ### Task 3.3: `use_profile` 加 `recordToProject` 参数
 
 **Files:**
+
 - Modify: `src/mcp/tools/profile-tools.ts` (use_profile handler)
 - Test: `tests/unit/profile-tools.test.ts`
 
@@ -704,7 +722,6 @@ it('use_profile with recordToProject=true writes .profile', async () => {
 ```
 
 - [ ] **Step 2: 跑测试 fail**
-
 - [ ] **Step 3: 改 handler**
 
 ```ts
@@ -731,7 +748,6 @@ export function buildUseProfileHandler(pm: any) {
 ```
 
 - [ ] **Step 4: 跑测试 pass**
-
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -748,10 +764,12 @@ git commit -m "feat(profile-tools): use_profile adds recordToProject option for 
 ### Task 4.1: 删除 `connect_database` tool
 
 **Files:**
+
 - Modify: `src/mcp/mcp-server.ts` (line 356, 667-722 等 — schema + dispatch + handler)
 - Test: 任何引用 connect_database 的测试需更新
 
 **Interfaces:**
+
 - Produces: connect_database tool 不再注册
 
 - [ ] **Step 1: grep 所有 connect_database 引用**
@@ -760,11 +778,8 @@ Run: `grep -rn "connect_database" src/ tests/`
 Expected: 找到所有引用点
 
 - [ ] **Step 2: 删除 schema 注册(line 356 附近)**
-
 - [ ] **Step 3: 删除 dispatch case (line 667-722)**
-
 - [ ] **Step 4: 删除或注释 handler 函数**
-
 - [ ] **Step 5: 跑测试,确认无引用错误**
 
 Run: `npm run test:unit`
@@ -780,10 +795,10 @@ git commit -m "refactor(mcp): BREAKING remove connect_database tool — use save
 ### Task 4.2: 删除 `disconnect_database` tool
 
 **Files:**
+
 - Modify: `src/mcp/mcp-server.ts` (line 389-390 schema, 771-794 dispatch)
 
 - [ ] **Step 1: grep + 删除 schema + dispatch + handler**
-
 - [ ] **Step 2: 测试 + commit**
 
 ```bash
@@ -795,9 +810,11 @@ git commit -m "refactor(mcp): BREAKING remove disconnect_database tool — use d
 ### Task 4.3: config-loader 静默忽略凭据 env
 
 **Files:**
+
 - Modify: `src/utils/config-loader.ts:1-100`
 
 **Interfaces:**
+
 - Produces: `DB_HOST`/`DB_USER`/`DB_PASSWORD`/`DB_TYPE`/`DB_PORT`/`DB_NAME`/`DB_SERVICE_NAME`/`DB_SID`/`DB_FILE_PATH`/`DB_AUTH_SOURCE` 全部忽略,首次启动 stderr 一次性 hint
 
 - [ ] **Step 1: 写测试**
@@ -821,7 +838,6 @@ it('emits one-time stderr hint when legacy credential env detected', () => {
 ```
 
 - [ ] **Step 2: 跑测试 fail**
-
 - [ ] **Step 3: 改 config-loader**
 
 ```ts
@@ -836,7 +852,6 @@ if (legacyFound.length > 0) {
 然后删除(或跳过)处理这些 env 的代码块(line 1-100 范围)。
 
 - [ ] **Step 4: 跑测试 pass**
-
 - [ ] **Step 5: Commit**
 
 ```bash
@@ -851,6 +866,7 @@ git commit -m "feat(config-loader): silently ignore legacy credential env vars w
 ### Task 5.1: README 快速开始改写
 
 **Files:**
+
 - Modify: `README.md` (顶部 "Quick Start" / "快速开始" section)
 
 - [ ] **Step 1: 找到 Quick Start section**
@@ -860,6 +876,7 @@ Run: `grep -n -i "quick.*start\|快速\|getting started\|# 快速" README.md`
 - [ ] **Step 2: 重写 section**
 
 新的 Quick Start 应强调:
+
 1. 第一次: `save_profile` 创建 profile
 2. 日常: `use_profile({name, recordToProject: true})` 激活 + 绑项目
 3. 后续启动: 自动从 `.profile` 加载
@@ -867,7 +884,6 @@ Run: `grep -n -i "quick.*start\|快速\|getting started\|# 快速" README.md`
 移除任何 `connect_database` 引用
 
 - [ ] **Step 3: 加 ".profile" + "~/.universal-db-mcp" 说明**
-
 - [ ] **Step 4: Commit**
 
 ```bash
@@ -875,9 +891,10 @@ git add README.md
 git commit -m "docs(readme): rewrite Quick Start for profile-based flow + .profile"
 ```
 
-### Task 5.2: CHANGELOG v4.2.0 段
+### Task 5.2: CHANGELOG v5.0.0 段
 
 **Files:**
+
 - Modify: `CHANGELOG.md` (顶部加新段)
 
 - [ ] **Step 1: 加 `## [4.2.0] - 2026-08-18` 段**
@@ -909,7 +926,7 @@ git commit -m "docs(readme): rewrite Quick Start for profile-based flow + .profi
 
 ```bash
 git add CHANGELOG.md
-git commit -m "docs(changelog): v4.2.0 global state + profile isolation"
+git commit -m "docs(changelog): v5.0.0 global state + profile isolation"
 ```
 
 ---
@@ -942,6 +959,7 @@ git commit -m "docs(changelog): v4.2.0 global state + profile isolation"
 - Spec §11 (PR 拆分) → 完全对齐
 
 类型一致性:
+
 - `isValidProfileName(name: string)` 在 Task 1.1 定义,Task 1.3 复用 ✓
 - `getProfilesDbPath()` 在 Task 2.1 定义,Task 2.2/2.3 复用 ✓
 - `getProfileDbPath(name, kind)` 在 Task 2.1 定义,Task 2.3/3.2 复用 ✓
@@ -950,9 +968,8 @@ git commit -m "docs(changelog): v4.2.0 global state + profile isolation"
 
 占位符扫描:
 -无 "TBD"/"TODO"/"implement later" 模式
+
 - 无 "fill in details"
 - 所有代码块有具体内容
 
 Scope 检查: 5 PR 各自独立可测,完整后形成 working software。
-</content>
-</invoke>

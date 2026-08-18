@@ -1,4 +1,4 @@
-# 全局持久化 + Profile 隔离 (v4.2.0)
+# 全局持久化 + Profile 隔离 (v5.0.0)
 
 **日期**: 2026-08-18
 **作者**: brainstorm (Claude)
