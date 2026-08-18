@@ -120,7 +120,11 @@ interface Profile {
 - `DB_PROFILES_MAX`, `DB_DEFAULT_PROFILE_ROLE`, `DB_READ_ROUTING` — 行为开关
 - `DB_QUERY_ANALYZER_*`, `DB_METRICS_*` — 监控配置
 - `MODE`, `LOG_LEVEL` — 运行模式
-- `DB_LAZY_LOAD_ENABLED` — 行为开关
+
+清理建议 (v4.0 G5 早已 silently,但 `.mcp.json` 示例常误带):
+- 删除 `DB_LAZY_LOAD_ENABLED` — v4.0 G5 重构后已完全失效
+- 删除 `DB_LAZY_DEFAULT_GROUP` — 同上
+- 删除 `DB_VISIBLE_GROUPS` / `DB_VISIBLE_TOOLS` — v4.0 G7 从未实现
 
 不识别的 env (如 `DB_HOST`) 静默忽略(不抛错),保留向后兼容旧的 `.mcp.json`,但功能失效。
 
