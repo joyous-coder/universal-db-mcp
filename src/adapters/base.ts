@@ -103,6 +103,16 @@ export abstract class BaseAdapter implements DbAdapter {
   abstract isWriteOperation(query: string): boolean;
 
   /**
+   * v4.0.3: Default fast-path implementation. Delegates to getSchema() +
+   * in-memory filter. Adapters with native per-table queries should
+   * override this to avoid scanning the entire schema.
+   */
+  async getTableInfo(_tableName: string): Promise<import('../types/adapter.js').TableInfo | null> {
+    const schema = await this.getSchema();
+    return schema.tables.find(t => t.name === _tableName || t.name.toLowerCase() === _tableName.toLowerCase()) ?? null;
+  }
+
+  /**
    * Override in adapters to identify their dialect for sql-parser.
    */
   protected abstract getDialect(): import('../utils/adapter-factory.js').DbType;

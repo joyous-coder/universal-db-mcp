@@ -146,7 +146,7 @@ export class SQLiteAdapter extends BaseAdapter {
       const relationships: RelationshipInfo[] = [];
 
       for (const table of tables) {
-        const { tableInfo, tableForeignKeys } = await this.getTableInfo(table.name);
+        const { tableInfo, tableForeignKeys } = await this._getTableInfo(table.name);
         tableInfos.push(tableInfo);
 
         for (const fk of tableForeignKeys) {
@@ -183,9 +183,31 @@ export class SQLiteAdapter extends BaseAdapter {
   }
 
   /**
-   * 获取单个表的详细信息
+   * v4.0.3: fast-path single-table metadata. Public to satisfy DbAdapter.getTableInfo.
+   * Internally returns rich {tableInfo, tableForeignKeys}; we strip the wrapper
+   * for the interface.
    */
-  private async getTableInfo(tableName: string): Promise<{ tableInfo: TableInfo; tableForeignKeys: ForeignKeyInfo[] }> {
+  async getTableInfo(tableName: string): Promise<TableInfo | null> {
+    if (!this.conn) {
+      throw new Error('数据库未连接');
+    }
+
+    try {
+      validateIdentifier(tableName);
+    } catch {
+      return null;
+    }
+
+    try {
+      const r = await this._getTableInfo(tableName);
+      return r.tableInfo;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Internal helper — full info including FKs. Used by getSchema assembly. */
+  private async _getTableInfo(tableName: string): Promise<{ tableInfo: TableInfo; tableForeignKeys: ForeignKeyInfo[] }> {
     if (!this.conn) {
       throw new Error('数据库未连接');
     }

@@ -68,6 +68,9 @@ export class DatabaseService {
   private cacheConfig: SchemaCacheConfig;
   private cacheHitCount: number = 0;
   private cacheMissCount: number = 0;
+  // v4.0.3 per-table cache (keyed by lowercase tableName). Lives across
+  // getTableInfo calls in the same session; cleared by clearSchemaCache().
+  private tableCache: Map<string, { table: TableInfo; time: number }> = new Map();
 
   // P1-5: query timeout (default 30s)
   private queryTimeoutMs: number = 30000;
@@ -552,6 +555,36 @@ export class DatabaseService {
    * @param forceRefresh - 是否强制刷新缓存
    */
   async getTableInfo(tableName: string, forceRefresh: boolean = false): Promise<TableInfo> {
+    const startTime = Date.now();
+    const key = tableName.toLowerCase();
+
+    // v4.0.3: per-table cache hit (TTL = schemaCache.ttl)
+    if (!forceRefresh) {
+        const cached = this.tableCache.get(key);
+        if (cached && (Date.now() - cached.time) < this.cacheConfig.ttl) {
+          return {
+            ...cached.table,
+            _meta: { cacheHit: true, executionTimeMs: Date.now() - startTime, source: 'tableCache' },
+          } as any;
+        }
+    }
+
+    // v4.0.3 fast path: directly query single table via adapter (4 SQL on Oracle,
+    // not full schema scan). If adapter supports it, NEVER call getSchema().
+    if (typeof this.adapter.getTableInfo === 'function') {
+      const direct = await this.adapter.getTableInfo(tableName);
+      if (direct) {
+        this.tableCache.set(key, { table: direct, time: Date.now() });
+        return {
+          ...direct,
+          _meta: { cacheHit: false, executionTimeMs: Date.now() - startTime, source: 'adapter-direct' },
+        } as any;
+      }
+      throw new Error(`表 "${tableName}" 不存在`);
+    }
+
+    // Adapter doesn't override getTableInfo — fall back to getSchema scan
+    // (rare path; mostly Redis/MongoDB which don't expose per-table meta).
     const schema = await this.getSchema(forceRefresh);
 
     // 1. 精确匹配 name 字段（已包含 schema 前缀）
@@ -587,8 +620,12 @@ export class DatabaseService {
     if (!table) {
       throw new Error(`表 "${tableName}" 不存在`);
     }
+    this.tableCache.set(key, { table, time: Date.now() });
 
-    return table;
+    return {
+      ...table,
+      _meta: { cacheHit: !forceRefresh, executionTimeMs: Date.now() - startTime, source: 'getSchema' },
+    } as any;
   }
 
   /**
@@ -619,6 +656,7 @@ export class DatabaseService {
   clearSchemaCache(): void {
     this.schemaCache = null;
     this.schemaCacheTime = 0;
+    this.tableCache.clear();
     console.error('🗑️ Schema 缓存已清除');
   }
 

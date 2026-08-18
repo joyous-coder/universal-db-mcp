@@ -225,6 +225,145 @@ export class OracleAdapter extends BaseAdapter {
   }
 
   /**
+   * v4.0.3: Fast-path single-table metadata query. Avoids scanning the
+   * entire schema (8 dict queries on getSchema) when caller only wants
+   * one table. Issues 5 targeted queries against data dictionary filtered
+   * by TABLE_NAME / OWNER.
+   */
+  async getTableInfo(tableName: string): Promise<TableInfo | null> {
+    if (!this.pool) {
+      throw new Error('数据库未连接');
+    }
+    let owner = '';
+    let bareName = tableName;
+    if (tableName.includes('.')) {
+      const dot = tableName.indexOf('.');
+      owner = tableName.substring(0, dot).toUpperCase();
+      bareName = tableName.substring(dot + 1).toUpperCase();
+    } else {
+      bareName = tableName.toUpperCase();
+    }
+    if (!owner) {
+      // Default to current user schema
+      const u = await this.withConnection(async (conn) => {
+        const r = await conn.execute('SELECT USER FROM DUAL');
+        return Object.values(r.rows?.[0] ?? {})[0] as string;
+      });
+      owner = u.toUpperCase();
+    }
+    return this.withConnection(async (conn) => {
+      const colRes = await conn.execute(
+        `SELECT OWNER, TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
+                DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
+         FROM ALL_TAB_COLUMNS
+         WHERE OWNER = :1 AND TABLE_NAME = :2
+         ORDER BY COLUMN_ID`,
+        [owner, bareName]
+      );
+      if (!colRes.rows || colRes.rows.length === 0) return null;
+      const cmRes = await conn.execute(
+        `SELECT COLUMN_NAME, COMMENTS FROM ALL_COL_COMMENTS
+         WHERE OWNER = :1 AND TABLE_NAME = :2 AND COMMENTS IS NOT NULL`,
+        [owner, bareName]
+      );
+      const pkRes = await conn.execute(
+        `SELECT cols.COLUMN_NAME, cols.POSITION
+         FROM ALL_CONSTRAINTS cons JOIN ALL_CONS_COLUMNS cols
+           ON cons.CONSTRAINT_NAME = cols.CONSTRAINT_NAME AND cons.OWNER = cols.OWNER
+         WHERE cons.OWNER = :1 AND cons.TABLE_NAME = :2 AND cons.CONSTRAINT_TYPE = 'P'
+         ORDER BY cols.POSITION`,
+        [owner, bareName]
+      );
+      const ixRes = await conn.execute(
+        `SELECT i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
+         FROM ALL_INDEXES i JOIN ALL_IND_COLUMNS ic
+           ON i.INDEX_NAME = ic.INDEX_NAME AND i.OWNER = ic.INDEX_OWNER
+         WHERE i.OWNER = :1 AND i.TABLE_NAME = :2 AND i.INDEX_TYPE != 'LOB'
+         ORDER BY i.INDEX_NAME, ic.COLUMN_POSITION`,
+        [owner, bareName]
+      );
+      const tcRes = await conn.execute(
+        `SELECT c.COMMENTS FROM ALL_TAB_COMMENTS c
+         WHERE c.OWNER = :1 AND c.TABLE_NAME = :2`,
+        [owner, bareName]
+      );
+      // Reuse the assembly logic by collecting into a fake "all tables" set
+      const columnsByTable = new Map<string, ColumnInfo[]>();
+      const schemaByTable = new Map<string, string>();
+      const primaryKeysByTable = new Map<string, string[]>();
+      const indexesByTable = new Map<string, Map<string, { columns: string[]; unique: boolean }>>();
+      const tableCommentsByTable = new Map<string, string>();
+      const tableKey = bareName.toLowerCase();
+      columnsByTable.set(tableKey, []);
+      schemaByTable.set(tableKey, owner);
+      // Oracle's outFormat OBJECT gives column-named keys, so use direct lookup.
+      const rowObj = (r: any) => r as Record<string, unknown>;
+      const cm = new Map<string, string>();
+      for (const r of cmRes.rows ?? []) {
+        const o = rowObj(r);
+        const cn = String(o['COLUMN_NAME'] ?? '');
+        const cs = String(o['COMMENTS'] ?? '');
+        if (cn) cm.set(cn.toLowerCase(), cs);
+      }
+      for (const r of colRes.rows) {
+        const o = rowObj(r);
+        const cn = String(o['COLUMN_NAME'] ?? '');
+        const dt = o['DATA_TYPE'];
+        const dl = o['DATA_LENGTH'] as number;
+        const dp = o['DATA_PRECISION'] as number;
+        const ds = o['DATA_SCALE'] as number;
+        const nullable = String(o['NULLABLE'] ?? 'Y');
+        const defv = o['DATA_DEFAULT'];
+        columnsByTable.get(tableKey)!.push({
+          name: cn.toLowerCase(),
+          type: this.formatOracleType(dt as any, dl, dp, ds),
+          nullable: nullable === 'Y',
+          defaultValue: defv ? String(defv).trim() : undefined,
+          comment: cm.get(cn.toLowerCase()),
+        });
+      }
+      for (const r of pkRes.rows ?? []) {
+        const o = rowObj(r);
+        const cn = String(o['COLUMN_NAME'] ?? '');
+        if (!primaryKeysByTable.has(tableKey)) primaryKeysByTable.set(tableKey, []);
+        primaryKeysByTable.get(tableKey)!.push(cn.toLowerCase());
+      }
+      const ixMap = new Map<string, { columns: string[]; unique: boolean }>();
+      for (const r of ixRes.rows ?? []) {
+        const o = rowObj(r);
+        const iname = String(o['INDEX_NAME'] ?? '');
+        const uniq = String(o['UNIQUENESS'] ?? '');
+        const cn = String(o['COLUMN_NAME'] ?? '');
+        if (iname.includes('PK_') || iname.startsWith('INDEX') || iname.includes('SYS_')) continue;
+        if (!ixMap.has(iname)) {
+          ixMap.set(iname, { columns: [], unique: uniq === 'UNIQUE' });
+        }
+        ixMap.get(iname)!.columns.push(cn.toLowerCase());
+      }
+      indexesByTable.set(tableKey, ixMap);
+      const tcRow = tcRes.rows?.[0];
+      if (tcRow) {
+        const o = rowObj(tcRow);
+        const tc = o['COMMENTS'] as string;
+        if (tc) tableCommentsByTable.set(tableKey, String(tc));
+      }
+      return {
+        name: tableKey,
+        schema: owner,
+        comment: tableCommentsByTable.get(tableKey),
+        columns: columnsByTable.get(tableKey) ?? [],
+        primaryKeys: primaryKeysByTable.get(tableKey) ?? [],
+        indexes: Array.from(ixMap.entries()).map(([name, v]) => ({
+          name,
+          columns: v.columns,
+          unique: v.unique,
+        })),
+        estimatedRows: 0,
+      } as TableInfo;
+    });
+  }
+
+  /**
    * 获取数据库结构信息（批量查询优化版本）
    */
   async getSchema(): Promise<SchemaInfo> {

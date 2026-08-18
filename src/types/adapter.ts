@@ -30,6 +30,19 @@ export interface DbAdapter {
   getSchema(): Promise<SchemaInfo>;
 
   /**
+   * v4.0.3: Get metadata for a single table (fast path).
+   * Adapters that implement this method should perform targeted queries
+   * limited to `tableName` instead of scanning the entire schema. Default
+   * implementation in BaseAdapter delegates to `getSchema()` and filters
+   * in memory; adapters that support a fast path (e.g. Oracle, DM,
+   * MySQL, Postgres) should override.
+   *
+   * @param tableName - 目标表名;支持 schema.table_name 形式
+   * @returns 表元数据;如果表不存在返回 null(不要抛)
+   */
+  getTableInfo?(tableName: string): Promise<TableInfo | null>;
+
+  /**
    * 检查查询是否为写操作
    * @param query - 待检查的查询语句
    * @returns 如果是写操作返回 true

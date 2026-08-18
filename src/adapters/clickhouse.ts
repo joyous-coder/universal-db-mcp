@@ -242,7 +242,7 @@ export class ClickHouseAdapter extends BaseAdapter {
       const tableInfos: TableInfo[] = [];
 
       for (const table of tables) {
-        const tableInfo = await this.getTableInfo(table?.name);
+        const tableInfo = await this._getTableInfo(table?.name);
         tableInfos.push(tableInfo);
       }
 
@@ -260,9 +260,21 @@ export class ClickHouseAdapter extends BaseAdapter {
   }
 
   /**
-   * 获取单个表的详细信息
+   * v4.0.3: fast-path single-table metadata. Public to satisfy DbAdapter.getTableInfo.
    */
-  private async getTableInfo(tableName: string): Promise<TableInfo> {
+  async getTableInfo(tableName: string): Promise<TableInfo | null> {
+    if (!this.client) {
+      throw new Error('数据库未连接');
+    }
+    try {
+      return await this._getTableInfo(tableName);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Internal helper. */
+  private async _getTableInfo(tableName: string): Promise<TableInfo> {
     if (!this.client) {
       throw new Error('数据库未连接');
     }

@@ -293,6 +293,104 @@ export class DMAdapter extends BaseAdapter {
    * 注意：dmdb 驱动返回的列名是数字索引（"0", "1", ...），不是列名！
    * 因此需要按索引位置访问数据。
    */
+  /**
+   * v4.0.3: Fast-path single-table metadata. Issues 4 targeted queries
+   * filtered by table name/owner, avoiding full schema scan.
+   */
+  async getTableInfo(tableName: string): Promise<TableInfo | null> {
+    if (!this.connection) {
+      throw new Error('数据库未连接');
+    }
+    let owner = '';
+    let bareName = tableName;
+    if (tableName.includes('.')) {
+      const dot = tableName.indexOf('.');
+      owner = tableName.substring(0, dot).toUpperCase();
+      bareName = tableName.substring(dot + 1).toUpperCase();
+    } else {
+      bareName = tableName.toUpperCase();
+    }
+    try {
+      const [colRes, cmRes, pkRes, ixRes] = await Promise.all([
+        this.connection.execute(
+          `SELECT OWNER, TABLE_NAME, COLUMN_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION,
+                  DATA_SCALE, NULLABLE, DATA_DEFAULT, COLUMN_ID
+           FROM ALL_TAB_COLUMNS WHERE OWNER = :1 AND TABLE_NAME = :2 ORDER BY COLUMN_ID`,
+          [owner, bareName]
+        ),
+        this.connection.execute(
+          `SELECT COLUMN_NAME, COMMENTS FROM ALL_COL_COMMENTS
+           WHERE OWNER = :1 AND TABLE_NAME = :2 AND COMMENTS IS NOT NULL`,
+          [owner, bareName]
+        ),
+        this.connection.execute(
+          `SELECT cols.COLUMN_NAME FROM ALL_CONSTRAINTS cons JOIN ALL_CONS_COLUMNS cols
+             ON cons.CONSTRAINT_NAME = cols.CONSTRAINT_NAME AND cons.OWNER = cols.OWNER
+           WHERE cons.OWNER = :1 AND cons.TABLE_NAME = :2 AND cons.CONSTRAINT_TYPE = 'P'
+           ORDER BY cols.POSITION`,
+          [owner, bareName]
+        ),
+        this.connection.execute(
+          `SELECT i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
+           FROM ALL_INDEXES i JOIN ALL_IND_COLUMNS ic
+             ON i.INDEX_NAME = ic.INDEX_NAME AND i.OWNER = ic.IND_OWNER
+           WHERE i.OWNER = :1 AND i.TABLE_NAME = :2 AND i.INDEX_TYPE != 'LOB'
+           ORDER BY i.INDEX_NAME, ic.COLUMN_POSITION`,
+          [owner, bareName]
+        ),
+      ]);
+      if (!colRes.rows || colRes.rows.length === 0) return null;
+      const cm = new Map<string, string>();
+      for (const r of cmRes.rows ?? []) {
+        const cn = this.getValueByIndex(r, 0) as string;
+        const cs = this.getValueByIndex(r, 1) as string;
+        cm.set(String(cn).toLowerCase(), String(cs));
+      }
+      const columns: ColumnInfo[] = [];
+      for (const r of colRes.rows) {
+        const cn = this.getValueByIndex(r, 2) as string;
+        const dt = this.getValueByIndex(r, 3);
+        const dl = this.getValueByIndex(r, 4) as number;
+        const dp = this.getValueByIndex(r, 5) as number;
+        const ds = this.getValueByIndex(r, 6) as number;
+        const nullable = this.getValueByIndex(r, 7) as string;
+        const defv = this.getValueByIndex(r, 8);
+        columns.push({
+          name: String(cn).toLowerCase(),
+          type: this.formatDMType(dt as any, dl, dp, ds),
+          nullable: nullable === 'Y',
+          defaultValue: defv ? String(defv).trim() : undefined,
+          comment: cm.get(String(cn).toLowerCase()),
+        });
+      }
+      const primaryKeys: string[] = [];
+      for (const r of pkRes.rows ?? []) {
+        primaryKeys.push(String(this.getValueByIndex(r, 0) as string).toLowerCase());
+      }
+      const ixMap = new Map<string, { columns: string[]; unique: boolean }>();
+      for (const r of ixRes.rows ?? []) {
+        const iname = String(this.getValueByIndex(r, 0) as string);
+        const uniq = String(this.getValueByIndex(r, 1) as string);
+        const cn = String(this.getValueByIndex(r, 2) as string);
+        if (iname.includes('PK_') || iname.startsWith('INDEX') || iname.includes('SYS_')) continue;
+        if (!ixMap.has(iname)) ixMap.set(iname, { columns: [], unique: uniq === 'UNIQUE' });
+        ixMap.get(iname)!.columns.push(cn.toLowerCase());
+      }
+      const indexes = Array.from(ixMap.entries()).map(([name, v]) => ({ name, columns: v.columns, unique: v.unique }));
+      const tableKey = bareName.toLowerCase();
+      return {
+        name: tableKey,
+        schema: owner || '',
+        columns,
+        primaryKeys,
+        indexes,
+        estimatedRows: 0,
+      } as TableInfo;
+    } catch {
+      return null;
+    }
+  }
+
   async getSchema(): Promise<SchemaInfo> {
     if (!this.connection) {
       throw new Error('数据库未连接');
