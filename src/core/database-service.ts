@@ -363,21 +363,14 @@ export class DatabaseService {
 
     // Get table info
     const tableInfo = await this.getTableInfo(tableName);
-    // v4.0.3.2 Bug #17 fix: 排除 PK 列(避免 IDENTITY 列 bind 整数冲突)。
-    // DM driver 在 INSERT 含 IDENTITY PK 列时协议层报 "表或视图不存在"
-    // (即使是 INSERT 不含 bind 的字面量语句)。
-    // 排除规则:
-    // - PK column.autoIncrement === true: 必须排除(DB 自填)
-    // - PK 类型是 UUID/CHAR(36): 排除(由 generator 生成)
-    // - 其他 PK (INT/BIGINT/NUMBER): 不排除,generator 查 MAX(pk) + rowIndex + 1 填真实值
+    // v4.0.3.2 Bug #17 fix: PK 列处理策略
+    // - IDENTITY 自增 PK: 排除(列由 DB 自填,DB 拒绝手动 bind)
+    // - 其他 PK (UUID/CHAR(36)/INT/BIGINT/NUMBER): 不排除,generator 生成值
     const autoExcludePks = (tableInfo.primaryKeys ?? []).filter(pk => {
       const col = tableInfo.columns.find(c => c.name.toLowerCase() === pk.toLowerCase());
-      if (!col) return true;
+      if (!col) return true;  // 找不到列 → 排除
       if (col.autoIncrement === true) return true;  // IDENTITY → DB 自填
-      const t = col.type.toLowerCase();
-      if (t.includes('uuid') || t.includes('uniqueidentifier')) return true;  // UUID → generator 生成
-      if (t.startsWith('char') && /char\(\s*36\s*\)/.test(col.type)) return true;  // CHAR(36) → UUID
-      return false;  // INT/BIGINT/NUMBER 等 PK 不排除,由 generator 填 MAX+rowIndex
+      return false;  // 其他 PK: generator 生成 (UUID/sequence int)
     });
     const columnsToInsert = options?.columns?.length
       ? options.columns

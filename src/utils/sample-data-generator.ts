@@ -64,12 +64,13 @@ export class SampleDataGenerator {
       : new Set(context.primaryKeys ?? []);
     if (pkSet.has(column.name)) {
       const type = column.type.toLowerCase();
-      // UUID PK → uuid v4
+      // UUID PK → uuid v4 (列名/类型含 uuid)
       if (type.includes('uuid') || type.includes('uniqueidentifier')) {
         return this.faker.string.uuid();
       }
-      // CHAR(36) PK → uuid v4 (常见: UUID 存成 char(36))
-      if (type.startsWith('char') && /char\(\s*36\s*\)/.test(column.type)) {
+      // CHAR(36)/VARCHAR2(36)/VARCHAR(36) PK → uuid v4
+      // 常见: UUID 存成 char/varchar(36)
+      if (/(char|varchar2|varchar|nvarchar|nchar)\(\s*36\s*\)/i.test(column.type)) {
         return this.faker.string.uuid();
       }
       // 其他类型 PK (INT/BIGINT/NUMBER/VARCHAR 等) → 用 context.maxIntPkValues
