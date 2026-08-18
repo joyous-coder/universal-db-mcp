@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -69,5 +69,19 @@ describe('config-loader v4.2.0 defaults', () => {
     const { loadConfig } = await import('../../src/utils/config-loader.js');
     const cfg = loadConfig();
     expect(cfg.profileManager?.profilesDbPath).toBe('D:/custom/profiles.db');
+  });
+
+  it('v4.2.0: legacy credential env (DB_TYPE/DB_HOST/DB_USER/DB_PASSWORD) ignored with one-time stderr hint', async () => {
+    process.env.DB_TYPE = 'oracle';
+    process.env.DB_HOST = 'foo';
+    process.env.DB_USER = 'bar';
+    process.env.DB_PASSWORD = 'baz';
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { loadConfig } = await import('../../src/utils/config-loader.js');
+    loadConfig();
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/废弃|凭据|save_profile/i),
+    );
+    stderrSpy.mockRestore();
   });
 });

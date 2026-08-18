@@ -25,12 +25,17 @@ describe('audit-docs extractors', () => {
   it('extractEnvVars returns all DB_* env vars from config-loader.ts', async () => {
     const vars = await extractEnvVars('./src/utils/config-loader.ts');
     expect(vars.length).toBeGreaterThan(10);
-    expect(vars).toContain('DB_TYPE');
+    // v4.2.0: 凭据类 env (DB_TYPE/DB_HOST/...) 已废弃,代码里只剩 array 列名
+    // 和 comment — 不再有 process.env.DB_TYPE 等引用,所以这里不期待
+    expect(vars).not.toContain('DB_TYPE');
+    expect(vars).not.toContain('DB_HOST');
     // v4.0: DB_LAZY_LOAD_ENABLED removed (silently ignored)
     expect(vars).not.toContain('DB_LAZY_LOAD_ENABLED');
     expect(vars).not.toContain('DB_LAZY_DEFAULT_GROUP');
     expect(vars).not.toContain('DB_VISIBLE_GROUPS');
     expect(vars).not.toContain('DB_VISIBLE_TOOLS');
+    // 仍然期望真实在用的 env (DB_GLOBAL_DIR 在 global-paths.ts,不在 config-loader.ts)
+    expect(vars).toContain('DB_PROFILES_DB_PATH');
   });
 
   it('extractAdapterNames returns 17 adapters from src/adapters/*.ts', async () => {

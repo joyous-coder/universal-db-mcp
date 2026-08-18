@@ -49,8 +49,41 @@ function parsePositiveInt(val: string | undefined): number | undefined {
 
 /**
  * Load configuration from environment variables
+ *
+ * v4.2.0: 旧版 .mcp.json 凭据 env (DB_TYPE/DB_HOST/DB_USER/DB_PASSWORD/...) 已废弃。
+ * 这些 env 静默忽略(不抛错),功能失效。首次启动 stderr 打一行告警。
+ * 用 save_profile 管理凭据,use_profile 激活。
  */
+const LEGACY_CREDENTIAL_ENV_KEYS = [
+  'DB_TYPE',
+  'DB_HOST',
+  'DB_PORT',
+  'DB_USER',
+  'DB_PASSWORD',
+  'DB_DATABASE',
+  'DB_NAME',
+  'DB_SERVICE_NAME',
+  'DB_SID',
+  'DB_FILE_PATH',
+  'DB_AUTH_SOURCE',
+  'DB_ORACLE_CLIENT_PATH',
+  'DB_ALLOW_WRITE',
+] as const;
+
+function warnLegacyCredentialsOnce(): void {
+  // 单次 stderr 告警(per process)— 用 globalThis 标志避免重复
+  const g = globalThis as any;
+  if (g.__universal_db_mcp_legacy_warned) return;
+  const found = LEGACY_CREDENTIAL_ENV_KEYS.filter((k) => process.env[k] !== undefined);
+  if (found.length === 0) return;
+  g.__universal_db_mcp_legacy_warned = true;
+  console.error(
+    `⚠️ 已废弃的凭据 env 被忽略 (${found.join(', ')})。请用 save_profile 管理凭据,use_profile 激活。`,
+  );
+}
+
 export function loadFromEnv(): Partial<AppConfig> {
+  warnLegacyCredentialsOnce();
   const config: Partial<AppConfig> = {};
 
   // Mode
@@ -84,36 +117,10 @@ export function loadFromEnv(): Partial<AppConfig> {
     };
   }
 
-  // Database configuration (for single-connection mode)
-  if (process.env.DB_TYPE) {
-    // P1: Parse pool config from env (DB_POOL_SIZE / DB_POOL_MIN / DB_POOL_IDLE_TIMEOUT_MS)
-    // Only include the field if at least one of the three is provided, so adapters
-    // can fall back to their own defaults when nothing is configured.
-    const poolMax = process.env.DB_POOL_SIZE ? parseInt(process.env.DB_POOL_SIZE, 10) : undefined;
-    const poolMin = process.env.DB_POOL_MIN ? parseInt(process.env.DB_POOL_MIN, 10) : undefined;
-    const poolIdleTimeoutMs = process.env.DB_POOL_IDLE_TIMEOUT_MS
-      ? parseInt(process.env.DB_POOL_IDLE_TIMEOUT_MS, 10)
-      : undefined;
-    const hasAnyPoolEnv = poolMax !== undefined || poolMin !== undefined || poolIdleTimeoutMs !== undefined;
-
-    config.database = {
-      type: process.env.DB_TYPE as any,
-      host: process.env.DB_HOST,
-      port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : undefined,
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_DATABASE,
-      filePath: process.env.DB_FILE_PATH,
-      allowWrite: process.env.DB_ALLOW_WRITE === 'true',
-      poolConfig: hasAnyPoolEnv
-        ? {
-            max: poolMax,
-            min: poolMin,
-            idleTimeoutMs: poolIdleTimeoutMs,
-          }
-        : undefined,
-    };
-  }
+  // v4.2.0: 旧的 single-connection env 配置块已弃用
+  // connect_database 工具删除后,DB_TYPE/DB_HOST/... 等 env 无法触发连接(不报错,功能失效)
+  // 用户必须用 save_profile 管理凭据。stderr 一次性告警在 warnLegacyCredentialsOnce() 中处理。
+  // 保留此分支只为兼容旧 .mcp.json(空值/仅凭据)不让 loadFromEnv 抛错 — 直接跳过。
 
   // v3.2.8 Bug #34 fix: parse DB_ALLOWED_FILE_PATHS even when DB_TYPE is unset
   // (dynamic connect_database mode). Previously the env var was gated inside the

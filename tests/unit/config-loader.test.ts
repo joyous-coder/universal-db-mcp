@@ -34,18 +34,19 @@ describe('Configuration Loader', () => {
       expect(config.http?.apiKeys).toEqual(['key1', 'key2']);
     });
 
-    it('should load database configuration', () => {
+    it('v4.2.0: legacy DB_TYPE/DB_HOST/DB_PORT ignored (use save_profile instead)', () => {
       process.env.DB_TYPE = 'mysql';
       process.env.DB_HOST = 'localhost';
       process.env.DB_PORT = '3306';
 
       const config = loadFromEnv();
-      expect(config.database?.type).toBe('mysql');
-      expect(config.database?.host).toBe('localhost');
-      expect(config.database?.port).toBe(3306);
+      // legacy 凭据 env 静默忽略 — config.database 不再被填充
+      expect(config.database?.type).toBeUndefined();
+      expect(config.database?.host).toBeUndefined();
+      expect(config.database?.port).toBeUndefined();
     });
 
-    it('should load pool config when DB_POOL_* env vars are set', () => {
+    it('v4.2.0: legacy DB_POOL_* env also ignored', () => {
       process.env.DB_TYPE = 'mysql';
       process.env.DB_HOST = 'localhost';
       process.env.DB_PORT = '3306';
@@ -54,14 +55,10 @@ describe('Configuration Loader', () => {
       process.env.DB_POOL_IDLE_TIMEOUT_MS = '30000';
 
       const config = loadFromEnv();
-      expect(config.database?.poolConfig).toEqual({
-        max: 10,
-        min: 2,
-        idleTimeoutMs: 30000,
-      });
+      expect(config.database?.poolConfig).toBeUndefined();
     });
 
-    it('should leave poolConfig undefined when no DB_POOL_* env vars are set', () => {
+    it('v4.2.0: no pool config without DB_POOL_* (unchanged behavior)', () => {
       process.env.DB_TYPE = 'mysql';
       process.env.DB_HOST = 'localhost';
       process.env.DB_PORT = '3306';
@@ -73,7 +70,7 @@ describe('Configuration Loader', () => {
       expect(config.database?.poolConfig).toBeUndefined();
     });
 
-    it('should parse partial pool config (only some DB_POOL_* env vars)', () => {
+    it('v4.2.0: partial pool config also ignored', () => {
       process.env.DB_TYPE = 'mysql';
       process.env.DB_HOST = 'localhost';
       process.env.DB_PORT = '3306';
@@ -82,9 +79,7 @@ describe('Configuration Loader', () => {
       process.env.DB_POOL_SIZE = '5';
 
       const config = loadFromEnv();
-      expect(config.database?.poolConfig?.max).toBe(5);
-      expect(config.database?.poolConfig?.min).toBeUndefined();
-      expect(config.database?.poolConfig?.idleTimeoutMs).toBeUndefined();
+      expect(config.database?.poolConfig).toBeUndefined();
     });
   });
 
