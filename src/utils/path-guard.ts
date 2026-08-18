@@ -18,7 +18,9 @@ export interface PathGuardOptions {
  * Resolve and validate a file path against allowlist.
  * Throws Error if path is invalid or outside allowed directories.
  *
- * @returns The canonical absolute path (realpath-resolved)
+ * @returns The canonical absolute path (realpath-resolved if file exists,
+ *          otherwise the parent-validated absolute path so callers can create
+ *          the file safely).
  */
 export function resolveAndValidatePath(inputPath: string, allowedDirs: string[], cwd: string): string {
   if (!Array.isArray(allowedDirs) || allowedDirs.length === 0) {
@@ -34,22 +36,19 @@ export function resolveAndValidatePath(inputPath: string, allowedDirs: string[],
   }
 
   // 2. Resolve symlinks via realpath (also handles .. in path)
-  let realPath: string;
   try {
-    realPath = fs.realpathSync(resolved);
+    const realPath = fs.realpathSync(resolved);
+    return validateAgainstAllowlist(realPath, allowedDirs, inputPath);
   } catch (err) {
-    // File doesn't exist - check if parent dir is in allowlist
+    // File doesn't exist - validate parent dir is in allowlist
     const parentDir = path.dirname(resolved);
-    try {
-      const realParent = fs.realpathSync(parentDir);
-      // Validate parent dir instead
-      return validateAgainstAllowlist(realParent, allowedDirs, inputPath);
-    } catch {
-      throw new Error(`Path not in allowlist: ${inputPath} (cannot resolve)`);
-    }
+    const realParent = fs.realpathSync(parentDir);
+    // 关键修复 (v4.0.9): 返回**文件路径**给调用方,而不是父目录。
+    // 旧版返回 realParent → csv-writer 用此 path 创建 writeStream 时
+    // 把目录当文件 open → Windows EISDIR → 进程崩溃。
+    validateAgainstAllowlist(realParent, allowedDirs, inputPath);
+    return resolved;
   }
-
-  return validateAgainstAllowlist(realPath, allowedDirs, inputPath);
 }
 
 function validateAgainstAllowlist(realPath: string, allowedDirs: string[], originalInput: string): string {
