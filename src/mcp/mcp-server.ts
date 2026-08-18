@@ -166,6 +166,27 @@ export class DatabaseMCPServer {
       // Wire QueryAnalyzer → ProfileManager so routeQuery records history
       if (this.queryAnalyzer) pm.setQueryAnalyzer(this.queryAnalyzer);
       this.profileManager = pm;
+
+      // v4.2.0: 启动时读 <cwd>/.profile,自动激活指定 profile
+      try {
+        const { readProjectProfile } = await import('../utils/path-resolver.js');
+        const projectProfile = readProjectProfile(process.cwd());
+        if (projectProfile) {
+          try {
+            await pm.loadProfile(projectProfile.profile);
+            console.error(`[mcp] Auto-loaded profile '${projectProfile.profile}' from .profile`);
+          } catch (loadErr) {
+            console.error(
+              `[mcp] .profile references '${projectProfile.profile}' but failed: ${loadErr instanceof Error ? loadErr.message : loadErr}`,
+            );
+          }
+        } else {
+          console.error('[mcp] No profile activated. Use save_profile + use_profile to set up.');
+          console.error("[mcp] Tip: pass recordToProject: true to use_profile to bind this project to a profile.");
+        }
+      } catch (resolveErr) {
+        console.error(`[mcp] .profile resolve failed: ${resolveErr instanceof Error ? resolveErr.message : resolveErr}`);
+      }
     }
 
     // v3.1: PlanHistory — v4.2.0 用全局 profile-scoped plans.db
