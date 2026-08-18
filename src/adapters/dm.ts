@@ -310,6 +310,10 @@ export class DMAdapter extends BaseAdapter {
     } else {
       bareName = tableName.toUpperCase();
     }
+    if (!owner) {
+      // v4.0.3.1: Fall back to current user schema. DM defaults user=schema.
+      owner = String(this.config.user || '').toUpperCase();
+    }
     try {
       const [colRes, cmRes, pkRes, ixRes] = await Promise.all([
         this.connection.execute(
@@ -333,7 +337,7 @@ export class DMAdapter extends BaseAdapter {
         this.connection.execute(
           `SELECT i.INDEX_NAME, i.UNIQUENESS, ic.COLUMN_NAME, ic.COLUMN_POSITION
            FROM ALL_INDEXES i JOIN ALL_IND_COLUMNS ic
-             ON i.INDEX_NAME = ic.INDEX_NAME AND i.OWNER = ic.IND_OWNER
+             ON i.INDEX_NAME = ic.INDEX_NAME AND i.OWNER = ic.INDEX_OWNER
            WHERE i.OWNER = :1 AND i.TABLE_NAME = :2 AND i.INDEX_TYPE != 'LOB'
            ORDER BY i.INDEX_NAME, ic.COLUMN_POSITION`,
           [owner, bareName]
