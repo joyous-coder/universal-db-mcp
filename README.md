@@ -13,8 +13,8 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/universal-db-mcp"><img src="https://img.shields.io/npm/v/universal-db-mcp.svg?style=flat-square&color=blue" alt="npm version"></a>
-  <a href="https://www.npmjs.com/package/universal-db-mcp"><img src="https://img.shields.io/npm/dm/universal-db-mcp.svg?style=flat-square&color=green" alt="npm downloads"></a>
+  <a href="https://www.npmjs.com/package/@joyous-coder/universal-db-mcp"><img src="https://img.shields.io/npm/v/@joyous-coder/universal-db-mcp.svg?style=flat-square&color=blue" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@joyous-coder/universal-db-mcp"><img src="https://img.shields.io/npm/dm/@joyous-coder/universal-db-mcp.svg?style=flat-square&color=green" alt="npm downloads"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" alt="License: MIT"></a>
   <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen?style=flat-square" alt="Node.js Version"></a>
   <a href="https://github.com/Anarkh-Lee/universal-db-mcp/stargazers"><img src="https://img.shields.io/github/stars/Anarkh-Lee/universal-db-mcp?style=flat-square" alt="GitHub Stars"></a>
@@ -34,7 +34,17 @@
 
 ---
 
-## 🆕 What's New in v3.3.0 (latest)
+## 🆕 What's New in v4.0.3 (latest)
+
+- **`get_table_info` 50-100× 提速** (Oracle 60-90s → 526-866ms;DM 30-60s → 696-852ms) — 新增 `DbAdapter.getTableInfo?(tableName)` 4 SQL 单表查询路径,跳过 `getSchema` 全表扫描
+- **`generate_sample_data` 主键智能生成** — IDENTITY 列自动跳过 (DB 自填)、`CHAR(36)/VARCHAR2(36)` UUID PK 生成 uuid v4、非 IDENTITY `INT/NUMBER PK` 用 `MAX(pk) + rowIndex + 1` 避免冲突、Oracle `NUMBER` 类型 regex 修复 (`ORA-01722`)
+- **DM `get_table_info` Bug #15** — `ALL_IND_COLUMNS` join 列名错 + 裸名表 owner fallback
+- **41 tools** × Oracle + DM e2e 验证 (参见 `docs/04-reports/`);**553 unit tests** / 0 failed
+- 完整变更日志见 [CHANGELOG.md](./CHANGELOG.md);Release notes 见 [GitHub Releases](https://github.com/joyous-coder/universal-db-mcp/releases)
+
+---
+
+## 🆕 What's New in v3.3.0
 
 - **CSV Import / Export** (`export_table_csv` + `import_csv`) — stream single tables to CSV with `WHERE` / `ORDER BY` / `LIMIT` / `OFFSET` filtering; import back to existing tables in batches. RFC 4180 serialization, `DB_ALLOWED_FILE_PATHS` whitelist.
 - **11 databases × 43 tools × 2 CSV tools** = **45 tool × 11 DB** e2e coverage, 514 unit tests pass.
@@ -65,9 +75,11 @@ AI: Let me query that for you...
 
 - **17 Database Support** - MySQL, PostgreSQL, Redis, Oracle, SQL Server, MongoDB, SQLite, and 10 Chinese domestic databases
 - **55+ Platform Integrations** - Works with Claude Desktop, Cursor, VS Code, ChatGPT, Dify, and [50+ other platforms](#-supported-platforms)
+- **41 MCP Tools** - Connection, query, schema, profile, template, governance, sample-data, PII, audit ([full list](#-available-tools-41-total))
 - **Flexible Architecture** - 2 startup modes (stdio/http) with 4 access methods: MCP stdio, MCP SSE, MCP Streamable HTTP, and REST API
 - **Security First** - Read-only mode by default prevents accidental data modifications
 - **Intelligent Caching** - Schema caching with configurable TTL for blazing-fast performance
+- **50-100× `get_table_info` (v4.0.3)** - Per-table metadata path for Oracle/DM, skips full schema scan ([release notes](https://github.com/joyous-coder/universal-db-mcp/releases))
 - **Batch Query Optimization** - Up to 100x faster schema retrieval for large databases
 - **Schema Enhancement** - Table comments, implicit relationship inference for better Text2SQL accuracy
 - **Multi-Schema Support** - Automatic discovery of all user schemas (PostgreSQL, SQL Server, Oracle, DM, and more)
@@ -76,14 +88,87 @@ AI: Let me query that for you...
 - **Connection Stability** - Connection pooling, TCP Keep-Alive, and automatic reconnection for long-running sessions
 - **Production Observability** - Prometheus `/metrics` endpoint + MCP `get_metrics` tool + slow-query ring buffer, zero new dependencies ([docs](docs/03-features/observability.md))
 - **Data Governance** - Profile backup/restore (`export_profiles` / `import_profiles`), schema diff, PII masking, audit log ([docs](docs/03-features/data-governance.md))
+- **Smart Sample Data (v4.0.3)** - `generate_sample_data` auto-detects PK type: IDENTITY (skip), UUID (uuid v4), INT/NUMBER (`MAX+rowIndex+1`)
 
 ### Performance Improvements
 
-| Tables | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| 50 tables | ~5s | ~200ms | **25x faster** |
-| 100 tables | ~10s | ~300ms | **33x faster** |
-| 500 tables | ~50s | ~500ms | **100x faster** |
+| Operation | Before | After | Improvement |
+|-----------|--------|-------|-------------|
+| `get_table_info` (Oracle) | 60-90s | 526-866ms | **50-100×** |
+| `get_table_info` (DM) | 30-60s | 696-852ms | **50-100×** |
+| `get_sample_data` / `get_enum_values` | 30-60s | ~150ms | **200×** |
+| Schema cache (50 tables) | ~5s | ~200ms | **25×** |
+| Schema cache (500 tables) | ~50s | ~500ms | **100×** |
+
+## 🛠️ Available Tools (41 total)
+
+### Connection (4)
+| Tool | Description |
+|------|-------------|
+| `connect_database` | Connect to a database with credentials + permission mode (`safe` |
+| `disconnect_database` | Close the current database connection |
+| `get_connection_status` | Show connection state, schema cache hit rate, last error |
+| `get_metrics` | Prometheus-style counters + histograms + slow-query ring buffer |
+
+### Query / Schema (7)
+| Tool | Description |
+|------|-------------|
+| `execute_query` | Run SQL with bound `?` params (SQL injection safe) |
+| `execute_script` | Multi-statement SQL / PL block execution (script permission) |
+| `execute_batch` | Single SQL × multiple param sets (1000-row batch limit) |
+| `get_table_info` | Single-table metadata — **50-100× faster than v3.x** (per-table SQL path) |
+| `get_sample_data` | N sample rows with PII auto-masking |
+| `get_enum_values` | Unique values + counts for enum-like columns |
+| `clear_cache` | Invalidate the schema cache |
+
+### Data Generation / Templates (5)
+| Tool | Description |
+|------|-------------|
+| `generate_sample_data` | Smart sample data insertion — auto-detects **IDENTITY PK** (skip), **UUID PK** (uuid v4), **INT PK** (MAX+sequence);`rules` API for column-level overrides |
+| `save_template` | Save parameterized SQL template (`${name}` placeholders) |
+| `list_templates` | List templates with tag search |
+| `get_template` | Fetch one template by id |
+| `delete_template` | Delete a template |
+| `execute_template` | Run a template with params (safe substitution) |
+
+### Profile Management (6)
+| Tool | Description |
+|------|-------------|
+| `save_profile` | Save named connection profile (credentials encrypted at rest) |
+| `list_profiles` | List with role/tag/enabled filters |
+| `get_profile` | Fetch one profile |
+| `use_profile` | Switch active connection (works without current DB connection) |
+| `enable_profile` / `disable_profile` | Toggle profile active state |
+| `delete_profile` | Delete a profile |
+| `disconnect_profile` | Disconnect a profile without deleting |
+| `export_profiles` | Dump all profiles (passwords REDACTED by default) |
+| `import_profiles` | Restore profiles from YAML/JSON |
+
+### Data Governance (6)
+| Tool | Description |
+|------|-------------|
+| `set_pii_config` | Set per-table/per-column PII masking rules |
+| `get_pii_config` | View current PII rules |
+| `audit_log` | Query recorded query history (filters: db, kind, since, until, onlyErrors) |
+| `get_query_history` | Same data via analytics-friendly API |
+| `explain_query` | Get EXPLAIN plan only (no advice) |
+| `explain_query_with_advice` | EXPLAIN + index-tuning hints |
+| `lint_sql` | Static SQL analysis (issues / warnings) |
+| `list_query_plans` | List captured EXPLAIN plans by query hash |
+| `compare_query_plans` | Diff two plans for the same query hash |
+
+### SQL File / Sample Data (3)
+| Tool | Description |
+|------|-------------|
+| `execute_sql_file` | Run a `.sql` file from `DB_ALLOWED_FILE_PATHS` whitelist (script permission) |
+| `export_backup` | Dump schema as SQL DDL to a file |
+| `import_csv` / `export_table_csv` | RFC 4180 CSV import/export with `WHERE/ORDER BY/LIMIT` filter |
+
+### Legacy / Removed (v4.0)
+- ❌ `use_tool_group` — removed (lazy-load removed in v4.0)
+- ❌ `use_tool_schema` — removed (full schemas in `tools/list` now)
+
+See [tools reference](./docs/03-features/tools.md) for parameter details.
 
 ## 🚀 Quick Start
 

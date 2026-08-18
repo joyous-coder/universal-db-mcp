@@ -2,6 +2,16 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [4.0.4] - 2026-08-18
+
+### 📚 文档
+
+- **README** 增补 v4.0.3 的 What's New、性能对比、41 tools 完整清单
+  - `get_table_info` 50-100× 提速 (Oracle 60-90s → 526-866ms;DM 30-60s → 696-852ms)
+  - `generate_sample_data` 主键智能生成:IDENTITY 跳过 / UUID v4 / MAX+sequence
+  - 修复 npmjs 徽章 URL (`@joyous-coder/universal-db-mcp`)
+  - Available Tools section:Connection / Query / Template / Profile / Governance / SQL File (41 个 MCP tool 详细分类)
+
 ## [4.0.3] - 2026-08-18
 
 ### 🐛 Bug 修复
