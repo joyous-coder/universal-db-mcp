@@ -2,6 +2,16 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [4.0.6] - 2026-08-18
+
+### 📚 文档
+
+- **CLAUDE.md** 加入 **Release notes format** 指南:
+  - `release-notes.md` **不要**用 `# vX.Y.Z Release Notes` 这种标题 (`gh release create --notes-file` 自动加)
+  - 直接用 `## 摘要` / `## 改动` 等正文 section
+  - **publish workflow 403 ≠ publish 失败** 案例:v4.0.5 workflow 报告 403 但 npmjs 实际接受了 — OIDC 不让重发已 publish 版本。**核对 `npm view @scope/pkg@latest dist-tags` 确认实际状态。**
+- README 章节小幅修复 (Latest → v4.0.5 反映已发布;新 v4.0.6 段留给下次 README 更新)
+
 ## [4.0.5] - 2026-08-18
 
 ### 🔧 修复
