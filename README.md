@@ -34,6 +34,13 @@
 
 ---
 
+## 🆕 What's New in v4.0.5 (latest)
+
+- **`export_table_csv` + `import_csv` 重新启用** (v3.3 引入,v4.0 G1 重构遗漏) — 现在在 mcp-server 注册,handler dispatch 到 `csv-tools.ts`。43 tools。
+- **删除 dead code** — `src/mcp/tool-definitions.ts` (v3.x 时代,源码中无引用)
+
+## 🆕 What's New in v4.0.4
+
 ## 🆕 What's New in v4.0.3 (latest)
 
 - **`get_table_info` 50-100× 提速** (Oracle 60-90s → 526-866ms;DM 30-60s → 696-852ms) — 新增 `DbAdapter.getTableInfo?(tableName)` 4 SQL 单表查询路径,跳过 `getSchema` 全表扫描
@@ -75,7 +82,7 @@ AI: Let me query that for you...
 
 - **17 Database Support** - MySQL, PostgreSQL, Redis, Oracle, SQL Server, MongoDB, SQLite, and 10 Chinese domestic databases
 - **55+ Platform Integrations** - Works with Claude Desktop, Cursor, VS Code, ChatGPT, Dify, and [50+ other platforms](#-supported-platforms)
-- **41 MCP Tools** - Connection, query, schema, profile, template, governance, sample-data, PII, audit ([full list](#-available-tools-41-total))
+- **43 MCP Tools** - Connection, query, schema, profile, template, governance, sample-data, PII, audit, **CSV export/import** ([full list](#-available-tools-43-total))
 - **Flexible Architecture** - 2 startup modes (stdio/http) with 4 access methods: MCP stdio, MCP SSE, MCP Streamable HTTP, and REST API
 - **Security First** - Read-only mode by default prevents accidental data modifications
 - **Intelligent Caching** - Schema caching with configurable TTL for blazing-fast performance
@@ -100,7 +107,7 @@ AI: Let me query that for you...
 | Schema cache (50 tables) | ~5s | ~200ms | **25×** |
 | Schema cache (500 tables) | ~50s | ~500ms | **100×** |
 
-## 🛠️ Available Tools (41 total)
+## 🛠️ Available Tools (43 total)
 
 ### Connection (4)
 | Tool | Description |
@@ -157,12 +164,13 @@ AI: Let me query that for you...
 | `list_query_plans` | List captured EXPLAIN plans by query hash |
 | `compare_query_plans` | Diff two plans for the same query hash |
 
-### SQL File / Sample Data (3)
+### SQL File / CSV (4) ← *v4.0.5 恢复*
 | Tool | Description |
 |------|-------------|
 | `execute_sql_file` | Run a `.sql` file from `DB_ALLOWED_FILE_PATHS` whitelist (script permission) |
 | `export_backup` | Dump schema as SQL DDL to a file |
-| `import_csv` / `export_table_csv` | RFC 4180 CSV import/export with `WHERE/ORDER BY/LIMIT` filter |
+| `export_table_csv` | **Stream single table to CSV** with `WHERE` / `ORDER BY` / `LIMIT` / `OFFSET`; RFC 4180 serialization |
+| `import_csv` | **Import CSV back to existing table** in batches (APPEND mode, `DB_ALLOWED_FILE_PATHS` whitelist) |
 
 ### Legacy / Removed (v4.0)
 - ❌ `use_tool_group` — removed (lazy-load removed in v4.0)

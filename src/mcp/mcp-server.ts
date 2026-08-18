@@ -40,6 +40,7 @@ import {
   buildGetGlobalSchemaHandler,
   PROFILE_TOOL_DESCRIPTIONS,
 } from './tools/profile-tools.js';
+import { CSV_TOOL_DESCRIPTIONS } from './tools/csv-tools.js';
 import type { QueryAnalyzer } from '../core/query-analyzer.js';
 import type { ProfileManager } from '../core/profile-manager.js';
 
@@ -640,6 +641,8 @@ export class DatabaseMCPServer {
         { name: 'audit_log', description: '查询审计日志。', inputSchema: { type: 'object', properties: { actor: { type: 'string' }, severity: { type: 'string', enum: ['read', 'write', 'ddl'] }, profileName: { type: ['string', 'null'] }, since: { type: 'string' }, until: { type: 'string' }, limit: { type: 'number' } } } },
         { name: 'get_pii_config', description: '获取 PII 脱敏配置。', inputSchema: { type: 'object', properties: {} } },
         { name: 'set_pii_config', description: '设置 PII 脱敏规则。', inputSchema: { type: 'object', properties: { profileName: { type: 'string' }, rules: { type: 'array', items: { type: 'object', properties: { table: { type: 'string' }, column: { type: 'string' }, strategy: { type: 'string', enum: ['mask', 'mask_last4', 'hash', 'redact', 'passthrough'] } }, required: ['table', 'column', 'strategy'] } } }, required: ['profileName', 'rules'] } },
+        { name: 'export_table_csv', description: CSV_TOOL_DESCRIPTIONS.export_table_csv, inputSchema: { type: 'object', properties: { profileName: { type: 'string' }, table: { type: 'string' }, columns: { type: 'array', items: { type: 'string' } }, where: { type: 'string' }, orderBy: { type: 'string' }, limit: { type: 'integer', default: 0 }, offset: { type: 'integer', default: 0 }, outputPath: { type: 'string' }, batchSize: { type: 'integer', default: 5000 } }, required: ['profileName', 'table', 'outputPath'] } },
+        { name: 'import_csv', description: CSV_TOOL_DESCRIPTIONS.import_csv, inputSchema: { type: 'object', properties: { profileName: { type: 'string' }, table: { type: 'string' }, filePath: { type: 'string' }, columns: { type: 'array', items: { type: 'string' } }, dryRun: { type: 'boolean', default: false }, batchSize: { type: 'integer', default: 1000 }, hasHeader: { type: 'boolean', default: true }, nullStrings: { type: 'array', items: { type: 'string' } } }, required: ['profileName', 'table', 'filePath'] } },
         { name: 'explain_query_with_advice', description: 'EXPLAIN + 索引建议。⚠️ 不支持 ${} 模板占位符(会被作为 SQL 字面量传给 EXPLAIN → 语法错)。用字面量值或 ? + params 数组。', inputSchema: { type: 'object', properties: { sql: { type: 'string' }, profileName: { type: 'string' }, persist: { type: 'boolean', default: false, description: 'true = 持久化 plan 以便后续 compare_query_plans' } }, required: ['sql'] } },
         { name: 'compare_query_plans', description: '比较两个保存的执行计划。⚠️ 需先对相同 queryHash 跑 ≥2 次 explain_query_with_advice({persist:true})。否则返回 "need at least 2 entries with the same queryHash"。', inputSchema: { type: 'object', properties: { queryHash: { type: 'string', description: '要比较的 queryHash(query 文本 hash)' }, entryA: { type: 'number', description: 'entry id A' }, entryB: { type: 'number', description: 'entry id B' } }, required: ['queryHash', 'entryA', 'entryB'] } },
         { name: 'list_query_plans', description: '列出已保存的执行计划。', inputSchema: { type: 'object', properties: { limit: { type: 'number' }, queryHash: { type: 'string' } } } },
@@ -1168,6 +1171,14 @@ export class DatabaseMCPServer {
           case 'export_backup': {
             if (!this.profileManager) throw new Error('profileManager not configured');
             return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/data-governance.js')).buildExportBackupHandler(this.profileManager)(args as any), null, 2) }] };
+          }
+          case 'export_table_csv': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/csv-tools.js')).buildExportTableCsvHandler(this.profileManager)(args as any), null, 2) }] };
+          }
+          case 'import_csv': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/csv-tools.js')).buildImportCsvHandler(this.profileManager)(args as any), null, 2) }] };
           }
           case 'audit_log': {
             if (!this.queryAnalyzer) throw new Error('queryAnalyzer not configured');

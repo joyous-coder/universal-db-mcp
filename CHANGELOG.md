@@ -2,6 +2,14 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [4.0.5] - 2026-08-18
+
+### 🔧 修复
+
+- **v4.0 G1 重构遗留**: `src/mcp/tool-definitions.ts` 是 v3.x 时代的 tool definition 文件,v4.0 重构后已被废弃 (dead code,源码中无引用)。删除。
+- **`export_table_csv` + `import_csv` 重新注册**: v3.3 引入的 2 个 CSV tool (v4.0 G1 重构遗漏) 现在在 `mcp-server.ts` 中正确注册并 dispatch 到 `csv-tools.ts` 已有的 handler。
+- **Tools 计数**: 41 → **43** (新增 `export_table_csv` + `import_csv`)
+
 ## [4.0.4] - 2026-08-18
 
 ### 📚 文档
