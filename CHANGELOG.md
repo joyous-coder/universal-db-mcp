@@ -2,6 +2,13 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [4.0.7] - 2026-08-18
+
+### 📚 文档
+
+- **README 精简** — 删除全部 `## What's New in v4.0.X` sections (用户可能在 GitHub Releases 直接看),Features 列表去掉重复的 v4.0.3/v3.3.0 标签,改为简洁描述;末尾加一句 "See [GitHub Releases](...) for full changelog"。
+- README 安装 + Quick Start 流程不变。
+
 ## [4.0.6] - 2026-08-18
 
 ### 📚 文档

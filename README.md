@@ -34,34 +34,6 @@
 
 ---
 
-## 🆕 What's New in v4.0.5 (latest)
-
-- **`export_table_csv` + `import_csv` 重新启用** (v3.3 引入,v4.0 G1 重构遗漏) — 现在在 mcp-server 注册,handler dispatch 到 `csv-tools.ts`。43 tools。
-- **删除 dead code** — `src/mcp/tool-definitions.ts` (v3.x 时代,源码中无引用)
-
-## 🆕 What's New in v4.0.4
-
-## 🆕 What's New in v4.0.3 (latest)
-
-- **`get_table_info` 50-100× 提速** (Oracle 60-90s → 526-866ms;DM 30-60s → 696-852ms) — 新增 `DbAdapter.getTableInfo?(tableName)` 4 SQL 单表查询路径,跳过 `getSchema` 全表扫描
-- **`generate_sample_data` 主键智能生成** — IDENTITY 列自动跳过 (DB 自填)、`CHAR(36)/VARCHAR2(36)` UUID PK 生成 uuid v4、非 IDENTITY `INT/NUMBER PK` 用 `MAX(pk) + rowIndex + 1` 避免冲突、Oracle `NUMBER` 类型 regex 修复 (`ORA-01722`)
-- **DM `get_table_info` Bug #15** — `ALL_IND_COLUMNS` join 列名错 + 裸名表 owner fallback
-- **41 tools** × Oracle + DM e2e 验证 (参见 `docs/04-reports/`);**553 unit tests** / 0 failed
-- 完整变更日志见 [CHANGELOG.md](./CHANGELOG.md);Release notes 见 [GitHub Releases](https://github.com/joyous-coder/universal-db-mcp/releases)
-
----
-
-## 🆕 What's New in v3.3.0
-
-- **CSV Import / Export** (`export_table_csv` + `import_csv`) — stream single tables to CSV with `WHERE` / `ORDER BY` / `LIMIT` / `OFFSET` filtering; import back to existing tables in batches. RFC 4180 serialization, `DB_ALLOWED_FILE_PATHS` whitelist.
-- **11 databases × 43 tools × 2 CSV tools** = **45 tool × 11 DB** e2e coverage, 514 unit tests pass.
-- **ClickHouse protocol fixes (v3.2.9)** — fixed 5 production bugs: `format:JSONEachRow` breaking INSERT, named-param rewriting, UInt64→Number coercion, `execute_script`/`execute_batch` BEGIN path, `execute_batch` object-array handling.
-- **DM (达梦) export_backup (v3.2.8)** — uses `ALL_TABLES` + `ALL_TAB_COLUMNS` (replaces `INFORMATION_SCHEMA`); `generate_sample_data` no longer returns NULL for `id` columns.
-- **MongoDB auth (v3.2.7)** — auto-injects `authSource=admin`; multi-arg `db.collection.method(args)` parses.
-- **17 adapters, 11 e2e-verified** — sqlite / redis / mongodb / postgres / mysql / oracle / sqlserver / tidb / dm / clickhouse. See [e2e report](docs/09-reference/e2e-stdio-report.md).
-
----
-
 ## Why Universal DB MCP?
 
 Imagine asking your AI assistant: *"Show me the top 10 customers by order value this month"* and getting instant results from your database - no SQL writing required. Universal DB MCP makes this possible by bridging AI assistants with your databases through the Model Context Protocol (MCP) and HTTP API.
@@ -86,15 +58,18 @@ AI: Let me query that for you...
 - **Flexible Architecture** - 2 startup modes (stdio/http) with 4 access methods: MCP stdio, MCP SSE, MCP Streamable HTTP, and REST API
 - **Security First** - Read-only mode by default prevents accidental data modifications
 - **Intelligent Caching** - Schema caching with configurable TTL for blazing-fast performance
-- **50-100× `get_table_info` (v4.0.3)** - Per-table metadata path for Oracle/DM, skips full schema scan ([release notes](https://github.com/joyous-coder/universal-db-mcp/releases))
+- **50-100× faster `get_table_info`** - Per-table metadata path for Oracle/DM, skips full schema scan
+- **Smart Sample Data** - `generate_sample_data` auto-detects PK type: IDENTITY (skip), UUID (uuid v4), INT/NUMBER (`MAX+rowIndex+1`)
 - **Batch Query Optimization** - Up to 100x faster schema retrieval for large databases
 - **Schema Enhancement** - Table comments, implicit relationship inference for better Text2SQL accuracy
 - **Multi-Schema Support** - Automatic discovery of all user schemas (PostgreSQL, SQL Server, Oracle, DM, and more)
-- **Data Migration** - SQL backup (`export_backup`) + **CSV import/export (v3.3.0)** with RFC 4180 serialization, partitioned reads, batched writes ([docs](docs/03-features/data-migration.md))
+- **Data Migration** - SQL backup (`export_backup`) + **CSV import/export** with RFC 4180 serialization, partitioned reads, batched writes ([docs](docs/03-features/data-migration.md))
 - **Data Masking** - Automatic sensitive data protection (phone, email, ID card, bank card, etc.)
+- **Data Governance** - Profile backup/restore (`export_profiles` / `import_profiles`), schema diff, PII masking, audit log ([docs](docs/03-features/data-governance.md))
 - **Connection Stability** - Connection pooling, TCP Keep-Alive, and automatic reconnection for long-running sessions
 - **Production Observability** - Prometheus `/metrics` endpoint + MCP `get_metrics` tool + slow-query ring buffer, zero new dependencies ([docs](docs/03-features/observability.md))
-- **Data Governance** - Profile backup/restore (`export_profiles` / `import_profiles`), schema diff, PII masking, audit log ([docs](docs/03-features/data-governance.md))
+
+See [GitHub Releases](https://github.com/joyous-coder/universal-db-mcp/releases) for full changelog, and [docs/03-features/](./docs/03-features/) for per-feature detail.
 - **Smart Sample Data (v4.0.3)** - `generate_sample_data` auto-detects PK type: IDENTITY (skip), UUID (uuid v4), INT/NUMBER (`MAX+rowIndex+1`)
 
 ### Performance Improvements
