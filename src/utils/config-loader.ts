@@ -2,10 +2,13 @@
  * Configuration Loader
  * Unified configuration loading from multiple sources with priority:
  * CLI args > Environment variables > Config file > Defaults
+ *
+ * v4.2.0: 默认路径改全局 ~/.universal-db-mcp/ — cwd 相对 fallback 已移除
  */
 
 import { config as dotenvConfig } from 'dotenv';
 import type { AppConfig, HttpConfig } from '../types/http.js';
+import { getProfilesDbPath, getProfileDbPath } from './global-paths.js';
 
 // Load environment variables from .env file
 dotenvConfig();
@@ -168,10 +171,14 @@ export function loadFromEnv(): Partial<AppConfig> {
     qaTemplatesKey !== undefined || qaHistoryKey !== undefined ||
     qaTemplatesKeyOld !== undefined || qaHistoryKeyOld !== undefined
   ) {
+    // v4.2.0: 启动时无 active profile,默认用 _default 占位;启动后由 mcp-server
+    // 根据 active profile 重定向到 {globalDir}/{profileName}/{kind}.db
+    const defaultTemplatesPath = getProfileDbPath('_default', 'templates');
+    const defaultHistoryPath = getProfileDbPath('_default', 'history');
     config.queryAnalyzer = {
       enabled: qaEnabled === undefined ? true : /^(true|1|yes)$/i.test(qaEnabled),
-      templatesDbPath: qaTemplates || undefined,
-      historyDbPath: qaHistory || undefined,
+      templatesDbPath: qaTemplates || defaultTemplatesPath,
+      historyDbPath: qaHistory || defaultHistoryPath,
       historyTtlDays: parsePositiveInt(qaTtl) ?? 30,
       historyMaxRows: parsePositiveInt(qaMax) ?? 10000,
       explainTimeoutMs: parsePositiveInt(qaTimeout) ?? 10000,
@@ -199,7 +206,7 @@ export function loadFromEnv(): Partial<AppConfig> {
   ) {
     config.profileManager = {
       enabled: pmEnabled === undefined ? true : /^(true|1|yes)$/i.test(pmEnabled),
-      profilesDbPath: pmProfilesPath || undefined,
+      profilesDbPath: pmProfilesPath || getProfilesDbPath(),
       maxProfiles: parsePositiveInt(pmMax) ?? 50,
       defaultRole: ['primary', 'replica', 'analytics'].includes(pmDefaultRole ?? '') ? (pmDefaultRole as 'primary' | 'replica' | 'analytics') : 'primary',
       readRouting: ['round-robin', 'random', 'least-loaded'].includes(pmReadRouting ?? '') ? (pmReadRouting as 'round-robin' | 'random' | 'least-loaded') : 'round-robin',
