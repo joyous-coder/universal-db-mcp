@@ -17,6 +17,7 @@ import type { DbAdapter, DbConfig } from '../types/adapter.js';
 import type { AppConfig } from '../types/http.js';
 import { DatabaseService, SchemaCacheConfig } from '../core/database-service.js';
 import { resolvePermissions } from '../utils/safety.js';
+import { ensureGlobalDir } from '../utils/global-paths.js';
 // v4.0 G1: ToolRegistry + buildToolRegistry deleted
 import { buildInstructions } from './instructions.js';
 // (Header note: tooling above is intentionally explicit — keep)
@@ -127,6 +128,13 @@ export class DatabaseMCPServer {
    */
   async configureFromAppConfig(appConfig: AppConfig): Promise<void> {
     this.appConfig = appConfig;
+
+    // v5.0.0: ensure ~/.universal-db-mcp/ 存在 (ProfileStore / PlanHistory 都需要)
+    try {
+      ensureGlobalDir();
+    } catch (err) {
+      console.error(`[mcp] ensureGlobalDir failed: ${err instanceof Error ? err.message : err}`);
+    }
 
     // v4.0 G5: lazy-load opt-in removed (AppConfig.lazyLoad deleted in http.ts)
 
@@ -724,6 +732,8 @@ export class DatabaseMCPServer {
             const liveAdapter = (r as any).adapter;
             const liveService = (r as any).service;
             const profileConfig = (r as any).profileConfig as DbConfig;
+            // v5.0.0: 取完整 Profile 用于 permissionMode 传递(handler 返回的 r 缺字段)
+            const fullProfile = await this.profileManager.getProfile((args as any).name);
             if (!liveAdapter || !liveService || !profileConfig) {
               return {
                 content: [{
@@ -750,7 +760,8 @@ export class DatabaseMCPServer {
               ...profileConfig,
               // v4.2.0: r.type 来自 ProfileStore,创建 adapter 时已经规范化 — cast 到 DbConfig['type'] union
               type: r.type as DbConfig['type'],
-              permissionMode: profileConfig.permissionMode || 'safe',
+              // v5.0.0 修复:用 Profile.permissionMode(顶层字段),不是 config 里的
+              permissionMode: fullProfile?.permissionMode ?? 'safe',
             };
             this.databaseService = liveService;
             this.activeProfile = r.name;
