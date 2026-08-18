@@ -43,8 +43,25 @@ export function buildListProfilesHandler(pm: ProfileManager) {
 }
 
 export function buildUseProfileHandler(pm: ProfileManager) {
-  return async (args: { name: string }) => {
+  return async (args: { name: string; recordToProject?: boolean }) => {
     const live = await pm.loadProfile(args.name);
+    // v4.2.0: 用户可选择 recordToProject=true 把当前 profile 绑到 <cwd>/.profile,
+    // 下次 MCP 启动自动激活。
+    if (args.recordToProject) {
+      try {
+        const { writeProjectProfile } = await import('../../utils/path-resolver.js');
+        writeProjectProfile(process.cwd(), args.name);
+      } catch (err) {
+        // 写 .profile 失败不阻塞 use_profile — 仅 stderr 警告
+        console.error(
+          `[mcp] failed to write .profile: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    } else {
+      console.error(
+        `[mcp] profile '${args.name}' activated. Pass recordToProject: true to use_profile to bind this project.`,
+      );
+    }
     // v4.0.2 Bug #7 fix: return the entire LiveProfile (adapter + service already
     // connected by loadProfile). Caller must use these directly — do NOT call
     // createAdapter+connect again, because dmdb.createPool uses an internal alias
