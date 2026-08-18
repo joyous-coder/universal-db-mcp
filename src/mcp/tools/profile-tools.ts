@@ -12,9 +12,17 @@
 import type { ProfileManager } from '../../core/profile-manager.js';
 import type { ProfileInput } from '../../core/profile-manager.js';
 import type { ProfileStore } from '../../core/profile-store.js';
+import { isValidProfileName } from '../../core/profile-manager.js';
 
 export function buildSaveProfileHandler(pm: ProfileManager) {
   return async (args: ProfileInput) => {
+    // v4.2.0: profile name 严格正则 — 名字作为 ~/.universal-db-mcp/<name>/ 子目录,
+    // 不能含点/空格/中文/路径分隔符
+    if (!isValidProfileName(args.name)) {
+      throw new Error(
+        `invalid profile name: "${args.name}" (must match /^[a-zA-Z0-9_-]+$/)`,
+      );
+    }
     // v3.2.7 Bug #27 fix: mongodb requires authSource for SCRAM authentication.
     // Default to 'admin' if missing (the convention used by MONGO_INITDB_ROOT_USERNAME env).
     if (args.type === 'mongodb' && args.config && !(args.config as any).authSource) {
@@ -23,6 +31,7 @@ export function buildSaveProfileHandler(pm: ProfileManager) {
         config: { ...args.config, authSource: 'admin' } as any,
       };
     }
+    // v4.2.0: 透传 permissionMode (默认 'readwrite' 由 ProfileStore 处理)
     return pm.saveProfile(args, 'mcp');
   };
 }
