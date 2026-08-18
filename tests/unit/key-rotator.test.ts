@@ -6,18 +6,30 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { unlinkSync, existsSync, copyFileSync, statSync } from 'node:fs';
+import { rmSync, existsSync, copyFileSync, statSync } from 'node:fs';
 import { NativeSqliteBackend } from '../../src/utils/encrypted-sqlite.js';
 import { ProfileStore } from '../../src/core/profile-store.js';
 import { TemplateStore } from '../../src/core/template-store.js';
 import { HistoryStore } from '../../src/core/history-store.js';
 import { rotateDbKey, KeyRotationError } from '../../src/core/key-rotator.js';
 
-const ts = Date.now();
-const dbPath = `.tmp-kr-${ts}.db`;
+// v2.20 + v4.0.3.2: cleanup all possible SQLite side files. Use rmSync with
+// force:true to handle Windows file locks from better-sqlite3-multiple-ciphers
+// connections that weren't fully released.
+//
+// Each test uses its own unique dbPath (random suffix). Sharing a module-level
+// path means Windows file locks from one test's cipher connection prevent the
+// next test's cleanup from removing the encrypted file — leading to
+// `node:sqlite` open failing with "file is not a database".
+let dbPath = `.tmp-kr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.db`;
+function dbPathFor(_name: string): string {
+  return `.tmp-kr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.db`;
+}
 function cleanup(p: string) {
-  for (const suffix of ['', '-wal', '-shm', '.rotating.tmp', '.rotating.failed']) {
-    if (existsSync(p + suffix)) { try { unlinkSync(p + suffix); } catch { /* ignore */ } }
+  for (const suffix of ['', '-wal', '-shm', '-journal', '.rotating.tmp', '.rotating.failed']) {
+    try {
+      if (existsSync(p + suffix)) rmSync(p + suffix, { force: true });
+    } catch { /* ignore */ }
   }
 }
 
@@ -31,7 +43,7 @@ async function hasCipherDep(): Promise<boolean> {
 }
 
 describe('rotateDbKey (v2.20)', () => {
-  beforeEach(() => cleanup(dbPath));
+  beforeEach(() => { dbPath = dbPathFor('rotator'); cleanup(dbPath); });
   afterEach(() => cleanup(dbPath));
 
   it('plaintext → cipher rotation when dep available', async () => {

@@ -186,6 +186,9 @@ export class SQLiteAdapter extends BaseAdapter {
    * v4.0.3: fast-path single-table metadata. Public to satisfy DbAdapter.getTableInfo.
    * Internally returns rich {tableInfo, tableForeignKeys}; we strip the wrapper
    * for the interface.
+   *
+   * v4.0.3.2: Re-throw validateIdentifier errors (security check) but return
+   * null for legitimate "table not found" / other failures.
    */
   async getTableInfo(tableName: string): Promise<TableInfo | null> {
     if (!this.conn) {
@@ -194,14 +197,17 @@ export class SQLiteAdapter extends BaseAdapter {
 
     try {
       validateIdentifier(tableName);
-    } catch {
-      return null;
-    }
-
-    try {
       const r = await this._getTableInfo(tableName);
       return r.tableInfo;
-    } catch {
+    } catch (err) {
+      // Re-throw identifier validation errors so callers can distinguish
+      // malicious input from "table doesn't exist". The DatabaseService
+      // catches this and throws a user-facing "表 X 不存在" only when the
+      // table is genuinely missing (not for invalid identifiers — those
+      // surface as 400-like errors via MCP).
+      if (err instanceof Error && /invalid identifier/i.test(err.message)) {
+        throw err;
+      }
       return null;
     }
   }
