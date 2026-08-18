@@ -68,12 +68,27 @@ export class ProfileStore {
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL,
           created_by TEXT NOT NULL,
-          use_count INTEGER DEFAULT 0
+          use_count INTEGER DEFAULT 0,
+          -- v4.2.0 新增 (权限绑 profile + 探测元数据)
+          permission_mode TEXT NOT NULL DEFAULT 'readwrite',
+          category TEXT NOT NULL DEFAULT 'unknown',
+          product_name TEXT,
+          version TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_profiles_name ON profiles(name);
         CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
         CREATE INDEX IF NOT EXISTS idx_profiles_tags ON profiles(tags_json);
       `);
+      // v4.2.0 老库迁移: 添加缺失列(SQLite 不支持 IF NOT EXISTS for ADD COLUMN,靠 try/catch 吞 'duplicate column' 错误)
+      const alterStmts = [
+        `ALTER TABLE profiles ADD COLUMN permission_mode TEXT NOT NULL DEFAULT 'readwrite'`,
+        `ALTER TABLE profiles ADD COLUMN category TEXT NOT NULL DEFAULT 'unknown'`,
+        `ALTER TABLE profiles ADD COLUMN product_name TEXT`,
+        `ALTER TABLE profiles ADD COLUMN version TEXT`,
+      ];
+      for (const stmt of alterStmts) {
+        try { this.conn.exec(stmt); } catch { /* 列已存在,忽略 */ }
+      }
     })();
     return this.initPromise;
   }
@@ -85,7 +100,8 @@ export class ProfileStore {
     const role: ProfileRole = input.role ?? 'primary';
     const enabled = input.enabled ?? true;
     this.conn!.exec(
-      `INSERT INTO profiles (id, name, description, type, config_json, role, tags_json, enabled, created_at, updated_at, created_by, use_count) VALUES (${q(id)}, ${q(input.name)}, ${q(input.description)}, ${q(input.type)}, ${q(JSON.stringify(input.config))}, ${q(role)}, ${q(JSON.stringify(input.tags ?? []))}, ${enabled ? 1 : 0}, ${q(now)}, ${q(now)}, ${q(createdBy)}, 0)`
+      `INSERT INTO profiles (id, name, description, type, config_json, role, tags_json, enabled, created_at, updated_at, created_by, use_count, permission_mode, category, product_name, version)
+       VALUES (${q(id)}, ${q(input.name)}, ${q(input.description)}, ${q(input.type)}, ${q(JSON.stringify(input.config))}, ${q(role)}, ${q(JSON.stringify(input.tags ?? []))}, ${enabled ? 1 : 0}, ${q(now)}, ${q(now)}, ${q(createdBy)}, 0, ${q(input.permissionMode ?? 'readwrite')}, ${q(input.category ?? 'unknown')}, ${q(input.productName ?? null)}, ${q(input.version ?? null)})`
     );
     return {
       id, name: input.name, description: input.description, type: input.type,

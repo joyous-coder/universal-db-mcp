@@ -56,4 +56,60 @@ describe('ProfileStore', () => {
     await store.incrementUseCount('c');
     expect((await store.get('c'))?.use_count).toBe(2);
   });
+
+  // v4.2.0: legacy row 缺新字段时给默认值
+  it('legacy row (missing v4.2.0 fields) reads with defaults', async () => {
+    // 模拟老库:直接写入 12 列的 legacy row (缺 v4.2.0 字段)
+    // 通过 raw prepare().run() 而不是 INSERT INTO,因 rowToProfile 在 read 时对缺失字段用 ?? 默认
+    const Database = (await import('better-sqlite3')).default;
+    const legacyDbPath = `.tmp-legacy-${Date.now()}-${Math.random().toString(36).slice(2)}.db`;
+    const Db = new Database(legacyDbPath);
+    // 用 raw better-sqlite3 直接建老表(只 12 列)
+    Db.exec(`CREATE TABLE profiles (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, description TEXT,
+      type TEXT NOT NULL, config_json TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'primary',
+      tags_json TEXT NOT NULL DEFAULT '[]', enabled INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL, updated_at TEXT NOT NULL, created_by TEXT NOT NULL,
+      use_count INTEGER DEFAULT 0
+    )`);
+    Db.prepare(`INSERT INTO profiles (id, name, description, type, config_json, role, tags_json, enabled, created_at, updated_at, created_by, use_count)
+                VALUES ('legacy1', 'legacy-prof', 'desc', 'oracle', '{}', 'primary', '[]', 1, '2025-01-01', '2025-01-01', 'cli', 0)`).run();
+    Db.close();
+    // 强制释放文件锁(Windows 上 better-sqlite3 关闭后仍可能持有)
+    await new Promise(r => setTimeout(r, 50));
+    // 用 ProfileStore 打开这个老库 — ALTER TABLE 迁移会跑(因为 4 列缺失)
+    const legacyStore = new ProfileStore(legacyDbPath);
+    try {
+      const p = await legacyStore.get('legacy-prof');
+      expect(p).not.toBeNull();
+      expect(p!.permissionMode).toBe('readwrite');
+      expect(p!.category).toBe('unknown');
+      expect(p!.productName).toBeNull();
+      expect(p!.version).toBeNull();
+    } finally {
+      await legacyStore.close();
+      try {
+        const { unlinkSync, existsSync } = await import('node:fs');
+        if (existsSync(legacyDbPath)) unlinkSync(legacyDbPath);
+      } catch { /* ignore */ }
+    }
+  });
+
+  // v4.2.0: 新字段持久化
+  it('saves and reads back v4.2.0 metadata fields', async () => {
+    const input: ProfileInput = {
+      name: 'meta-prof', description: '', type: 'oracle',
+      config: { type: 'oracle', host: 'x', port: 1521 },
+      permissionMode: 'full',
+      category: 'rdbms',
+      productName: 'Oracle 19c',
+      version: '19.0.0.0',
+    };
+    await store.save(input);
+    const p = await store.get('meta-prof');
+    expect(p?.permissionMode).toBe('full');
+    expect(p?.category).toBe('rdbms');
+    expect(p?.productName).toBe('Oracle 19c');
+    expect(p?.version).toBe('19.0.0.0');
+  });
 });
