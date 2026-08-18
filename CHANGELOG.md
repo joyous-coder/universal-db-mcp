@@ -2,37 +2,40 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
-## [未发布]
+## [5.0.0] - 2026-08-18
+
+### 🔥 BREAKING 变更
+
+- **`connect_database` / `disconnect_database` tool 已删除** — 用 `save_profile` + `use_profile` + `disconnect_profile` 替代。所有连接必须走 profile 路径。
+- **`.mcp.json` 凭据 env 已废弃** (`DB_HOST` / `DB_USER` / `DB_PASSWORD` / `DB_TYPE` / `DB_PORT` / `DB_NAME` / `DB_SERVICE_NAME` / `DB_SID` / `DB_FILE_PATH` / `DB_AUTH_SOURCE` / `DB_ALLOW_WRITE`)。静默忽略,功能失效,首次启动 stderr 一次性告警。
+- **cwd-relative 默认路径已移除** (`profiles.db` / `history.db` / `templates.db` / `plan_history.db`)。所有持久化统一到 `~/.universal-db-mcp/`(Windows: `%USERPROFILE%\.universal-db-mcp`)。
 
 ### ✨ 改进
 
-- **`export_table_csv` / `import_csv` profileName 改为可选**
-  - 旧:每次调用必须显式传 `profileName`(即便已 `use_profile` / `connect_database`)
-  - 新:省略 `profileName` 时,自动回退到当前活跃连接 (`this.adapter`)。
-  - 行为完全向后兼容 — 仍显式传 `profileName` 时,行为不变。
-  - 用户体验:`use_profile` → `export_table_csv` 一气呵成,无需重复 profile 名。
+- **全局持久化目录** — profiles / history / templates / plans 全部移到 `~/.universal-db-mcp/`(可 `DB_GLOBAL_DIR` 覆盖)。跨项目共享 profile;history / templates / plans 按 profile 名隔离在子目录(`~/.universal-db-mcp/<profile-name>/{kind}.db`)。
+- **`<cwd>/.profile` 自动激活** — 项目根放 `profile=NAME` 文件,MCP 启动自动 load 该 profile。格式严格:`profile=<name>` 单行,name 必须匹配 `/^[a-zA-Z0-9_-]+$/`。
+- **`use_profile({name, recordToProject: true})` 新增 `recordToProject`** — 激活时写 `<cwd>/.profile`,下次 MCP 启动自动激活。
+- **`save_profile` 必填 `permissionMode`** (默认 `readwrite`,可选 `safe` / `full`),不再需要运行时传入。
+- **Profile 新增元字段** — `category` / `productName` / `version`,由对应 adapter 在首次 `use_profile` 时探测缓存。
+- **`<cwd>/sql/` 默认输出路径** — `export_table_csv` 省略 `outputPath` 时默认写到 `<cwd>/sql/<table-sanitized>.csv` 或 `query-<timestamp>.csv`。`DB_ALLOWED_FILE_PATHS` 为空时自动回退 cwd(无需配置)。
+- **`execute_sql_file` 空 env 回退 cwd** — 与 `export_table_csv` 同样的回退逻辑。
+- **CSV 工具 profileName 可选** — 省略时回退到当前活跃连接 (`this.adapter`)。
 
-### 🚀 重构
+### 🧹 清理
 
-- **`export_table_csv` 全面重构 (v4.0.9)**
-  - **移除 `LIMIT/OFFSET`** — 之前默认拼 `LIMIT N OFFSET M` 是 MySQL/PostgreSQL 语法,
-    Oracle / DM / Kingbase / GaussDB 等不支持,**直接报语法错误**。
-  - **新增 `sql` 参数** — `table` 与 `sql` 二选一。给 `sql` 时原样执行(去掉末尾分号),
-    不附加任何分页子句。用户可以写自己的方言分页,如:
-    `sql: "SELECT * FROM big_table WHERE ROWNUM <= 1000 ORDER BY id"`。
-  - **`outputPath` 改为可选** — 省略时默认写到 `<cwd>/sql/<table-sanitized>.csv`
-    (table 模式) 或 `<cwd>/sql/query-<YYYYMMDDHHMMSS>.csv` (sql 模式),自动 `mkdir -p`。
-    **需要 cwd 在 `DB_ALLOWED_FILE_PATHS` 白名单里**,否则给出明确错误提示。
-  - **单次查询,无内部分页** — 大表请用 sql 模式自带分页 (`ROWNUM` / `ROW_NUMBER()` 等)。
+- **删除 v4.0 G5 `DB_LAZY_LOAD_ENABLED` / `DB_LAZY_DEFAULT_GROUP` 死引用** — v4.0 重构后已完全无效,这次清理 config-loader / mcp-server / http.ts / mcp-index.ts 中残留的注释。
 
 ### 🐛 Bug 修复
 
-- **`path-guard` 返回父目录导致 `createWriteStream` EISDIR 进程崩溃** (v4.0.9 现场发现)
+- **`path-guard` 返回父目录导致 `createWriteStream` EISDIR 进程崩溃**
   - 文件不存在时旧实现返回 `realpathSync(parentDir)` (目录路径)
   - `csv-writer` 拿到这个"路径"去 `createWriteStream` → 在 Windows 上把目录当文件 open → EISDIR → MCP 服务崩溃
   - 修复:文件不存在时返回**用户传入的文件路径**(只要父目录在白名单)
   - 加 stream `'error'` 监听器兜底,未来类似问题不再静默崩溃
-  - 加 `tests/unit/path-guard.test.ts` 回归测试
+- **`import_csv` 对 Oracle/MySQL/PG 等占位符语法错误**
+  - 旧代码用 ClickHouse 风格的 `{col:String}` 占位符,大多数 DB 不识别(Oracle 报 "no bind placeholder named ':ID' was found")
+  - 修复:SQLite/MySQL/PG/Oracle/DM/Kingbase 等用 `?` 位置占位符 + 数组 params;仅 ClickHouse 用 `{col:String}`。列名不再用双引号包裹(quoted lowercase `"id"` 不匹配 Oracle 实际 `ID`),让 DB 自动 case fold。大小写无关列匹配。
+- **`export_table_csv` 移除 `LIMIT/OFFSET`** — Oracle/DM/Kingbase/GaussDB 不支持 MySQL/PG 语法。改用 `sql` 参数支持方言分页(如 Oracle `ROWNUM <= N`)。
 
 ### ✅ Oracle 实测验证
 
