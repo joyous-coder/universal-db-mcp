@@ -130,7 +130,7 @@ export async function startMcpServer(): Promise<void> {
           // Create server
           const server = new DatabaseMCPServer(config);
 
-          // v3.2: wire optional dependencies (QueryAnalyzer/ProfileManager/PlanHistory/lazyLoad) from env
+          // v3.2: wire optional dependencies (QueryAnalyzer/ProfileManager/PlanHistory) from env
           const appConfig = loadConfig();
           await server.configureFromAppConfig(appConfig);
 

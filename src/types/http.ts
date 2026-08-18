@@ -67,7 +67,6 @@ export interface AppConfig {
   queryAnalyzer?: QueryAnalyzerConfig;
   /** v2.18: multi-database profile manager settings */
   profileManager?: ProfileManagerConfig;
-  // v4.0 G5: DB_LAZY_LOAD_ENABLED / DB_LAZY_DEFAULT_GROUP removed; tools are always visible
 }
 
 /**

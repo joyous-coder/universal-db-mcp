@@ -1008,7 +1008,7 @@ export class DatabaseMCPServer {
           }
 
           // v3.2: 11 newly registered tools (handlers wired via ToolRegistry, but these
-          // cases handle v3.1 fallback when DB_LAZY_LOAD_ENABLED=false and tool is called).
+          // cases handle v3.1 fallback).
           case 'compare_profile_schemas': {
             if (!this.profileManager) throw new Error('profileManager not configured');
             return { content: [{ type: 'text', text: JSON.stringify(await (await import('./tools/data-governance.js')).buildCompareProfileSchemasHandler(this.profileManager)(args as any), null, 2) }] };
