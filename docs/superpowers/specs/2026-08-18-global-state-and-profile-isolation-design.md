@@ -19,7 +19,7 @@
 - **全局唯一** 持久化层,跨项目共享 profiles + history + templates + plans
 - **profile-scoped 隔离**:history / templates / plans 按 profile 拆目录(避免不同 DB 的查询历史混淆)
 - **项目级激活文件** `<cwd>/.profile` 自动加载,简化日常使用
-- **移除直连路径**:删除 `connect_database` (凭据直传) 与 `.mcp.json` 凭据 env,所有连接走 `save_profile` + `use_profile`
+- **移除直连路径**:删除 `connect_database` / `disconnect_database` (凭据直传) 与 `.mcp.json` 凭据 env,所有连接走 `save_profile` + `use_profile` + `disconnect_profile`
 - **权限绑 profile**:profile 自带 `permissionMode`,运行时不可覆盖
 
 ---
@@ -195,6 +195,7 @@ use_profile({ name: 'bbz-cq-oracle', recordToProject: true })  // 激活 + 写 .
 ### 5.2 删除的 tool
 
 **`connect_database`** — 完整移除,包括 schema、handler、dispatch case。
+**`disconnect_database`** — 完整移除。统一用 `disconnect_profile`(功能相同,且与 profile 概念一致)。
 
 ### 5.3 新增内部行为
 
@@ -232,9 +233,9 @@ use_profile({ name: 'bbz-cq-oracle', recordToProject: true })  // 激活 + 写 .
 - 不自动迁移
 - `export_profiles` 已有,但 history/templates/plans 暂无导入工具(列出为后续 spec)
 
-### 7.3 `connect_database` tool 的移除
+### 7.3 `connect_database` / `disconnect_database` tool 的移除
 
-MCP tool 列表少一项。已使用此 tool 的客户端会收到 "tool not found" 错误 — 用户需要迁移到 `save_profile` + `use_profile`。这是 breaking change,CHANGELOG 标注 **BREAKING**。
+MCP tool 列表少两项。已使用这些 tool 的客户端会收到 "tool not found" 错误 — 用户需要迁移到 `save_profile` + `use_profile` + `disconnect_profile`。这是 breaking change,CHANGELOG 标注 **BREAKING**。
 
 ---
 
@@ -287,5 +288,5 @@ MCP tool 列表少一项。已使用此 tool 的客户端会收到 "tool not fou
 1. **PR1**: Profile 模型 + 名字正则 + permissionMode 字段迁移 (DB schema 变更)
 2. **PR2**: 全局路径解析 + `.universal-db-mcp/` 默认
 3. **PR3**: 项目 `.profile` 自动激活 + use_profile recordToProject
-4. **PR4**: 删除 `connect_database` tool + 移除凭据 env (BREAKING)
+4. **PR4**: 删除 `connect_database` / `disconnect_database` tool + 移除凭据 env (BREAKING)
 5. **PR5**: 迁移提示 + 文档更新
