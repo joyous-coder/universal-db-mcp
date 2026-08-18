@@ -486,18 +486,17 @@ export class DatabaseService {
     }
 
     const allowedDirs = (this.config as any).allowedSqlFilePaths as string[] | undefined;
-    if (!allowedDirs || allowedDirs.length === 0) {
-      throw new Error(
-        'execute_sql_file 不可用:未配置 DB_ALLOWED_FILE_PATHS。\n' +
-        '请在 .mcp.json 的 env 中设置 DB_ALLOWED_FILE_PATHS=<comma-separated-dirs>'
-      );
-    }
+    // v4.0.9: env 未配置时,自动信任 cwd — 与 csv-tools 一致。
+    // 用户可显式设 DB_ALLOWED_FILE_PATHS 来更严格地限定。
+    const effectiveAllowedDirs = allowedDirs && allowedDirs.length > 0
+      ? allowedDirs
+      : [process.cwd()];
 
     // Lazy import to avoid circular deps
     const { resolveAndValidatePath } = await import('../utils/path-guard.js');
     const fs = await import('node:fs');
 
-    const realPath = resolveAndValidatePath(options.filePath, allowedDirs, process.cwd());
+    const realPath = resolveAndValidatePath(options.filePath, effectiveAllowedDirs, process.cwd());
 
     const stats = fs.statSync(realPath);
     const maxFileSize = 50 * 1024 * 1024; // 50MB

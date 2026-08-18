@@ -50,45 +50,40 @@ describe('CsvWriter', () => {
 });
 
 describe('CsvWriter.buildSelectSql', () => {
-  it('builds basic SELECT with all clauses', () => {
+  it('builds basic SELECT without LIMIT/OFFSET (v4.0.9)', () => {
     expect(buildSelectSql({
       table: 'users', columns: ['id', 'name'],
-      where: 'age > 18', orderBy: 'id ASC', limit: 100, offset: 200,
-    })).toBe('SELECT "id", "name" FROM users WHERE age > 18 ORDER BY id ASC LIMIT 100 OFFSET 200');
+      where: 'age > 18', orderBy: 'id ASC',
+    })).toBe('SELECT "id", "name" FROM users WHERE age > 18 ORDER BY id ASC');
   });
   it('omits WHERE and ORDER BY when not provided', () => {
     expect(buildSelectSql({
-      table: 'users', columns: ['*'], limit: 50, offset: 0,
-    })).toBe('SELECT * FROM users LIMIT 50 OFFSET 0');
+      table: 'users', columns: ['*'],
+    })).toBe('SELECT * FROM users');
   });
   it('rejects WHERE containing semicolon (injection guard)', () => {
     expect(() => buildSelectSql({
       table: 'users', columns: ['*'], where: '1=1; DROP TABLE users',
-      limit: 10, offset: 0,
     })).toThrow(/injection_blocked/);
   });
   it('rejects ORDER BY containing semicolon', () => {
     expect(() => buildSelectSql({
       table: 'users', columns: ['*'], orderBy: 'id; DROP TABLE x',
-      limit: 10, offset: 0,
     })).toThrow(/injection_blocked/);
   });
   it('quotes schema.table as "schema"."table"', () => {
     expect(buildSelectSql({
-      table: 'public.users', columns: ['id'], limit: 1, offset: 0,
-    })).toBe('SELECT "id" FROM "public"."users" LIMIT 1 OFFSET 0');
+      table: 'public.users', columns: ['id'],
+    })).toBe('SELECT "id" FROM "public"."users"');
   });
 });
 
 class StubAdapter {
   calls: Array<{ sql: string }> = [];
-  pages: any[][] = [];
-  callIdx = 0;
+  rows: any[] = [];
   async executeQuery(sql: string) {
     this.calls.push({ sql });
-    const rows = this.pages[this.callIdx] ?? [];
-    this.callIdx += 1;
-    return { rows, executionTime: 1 };
+    return { rows: this.rows, executionTime: 1 };
   }
 }
 
@@ -96,36 +91,75 @@ describe('CsvWriter.exportTableCsv', () => {
   const tmp = path.join(tmpdir(), 'csv-writer-test.csv');
   afterEach(() => { try { rmSync(tmp); } catch {} });
 
-  it('paginates until rows < batchSize, writes CRLF CSV with header', async () => {
+  it('table mode: writes all rows in one query (no LIMIT/OFFSET, no pagination)', async () => {
     const a = new StubAdapter() as any;
-    // batch=2: page1 (2 rows, full), page2 (2 rows, full), page3 (1 row, partial → break)
-    a.pages = [
-      [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }],
-      [{ id: 3, name: 'C' }, { id: 4, name: 'D' }],
-      [{ id: 5, name: 'E' }],
+    a.rows = [
+      { id: 1, name: 'Alice' },
+      { id: 2, name: 'Bob' },
+      { id: 3, name: 'C' },
     ];
     const result = await exportTableCsv({
       adapter: a, table: 'users',
       columns: ['id', 'name'],
-      outputPath: tmp, batchSize: 2,
-    });
-    expect(result.totalRows).toBe(5);
-    expect(a.calls.length).toBe(3);
-    expect(a.calls[0].sql).toMatch(/LIMIT 2 OFFSET 0/);
-    expect(a.calls[1].sql).toMatch(/LIMIT 2 OFFSET 2/);
-    expect(a.calls[2].sql).toMatch(/LIMIT 2 OFFSET 4/);
-    const content = readFileSync(tmp, 'utf8');
-    expect(content).toBe('id,name\r\n1,Alice\r\n2,Bob\r\n3,C\r\n4,D\r\n5,E\r\n');
-  });
-
-  it('respects user-provided limit=0 (no LIMIT clause)', async () => {
-    const a = new StubAdapter() as any;
-    a.pages = [[{ x: 1 }, { x: 2 }, { x: 3 }]];
-    const result = await exportTableCsv({
-      adapter: a, table: 'big', columns: ['*'],
-      outputPath: tmp, batchSize: 10,
+      outputPath: tmp,
     });
     expect(result.totalRows).toBe(3);
-    expect(a.calls[0].sql).toMatch(/OFFSET 0$/);  // no LIMIT because limit=0
+    expect(a.calls.length).toBe(1);            // 单次查询,不分页
+    expect(a.calls[0].sql).toBe('SELECT "id", "name" FROM users');
+    expect(a.calls[0].sql).not.toMatch(/LIMIT/i);
+    expect(a.calls[0].sql).not.toMatch(/OFFSET/i);
+    const content = readFileSync(tmp, 'utf8');
+    expect(content).toBe('id,name\r\n1,Alice\r\n2,Bob\r\n3,C\r\n');
+  });
+
+  it('sql mode: uses sql as-is (Oracle-compatible pagination)', async () => {
+    const a = new StubAdapter() as any;
+    a.rows = [{ x: 1 }, { x: 2 }];
+    const result = await exportTableCsv({
+      adapter: a,
+      sql: 'SELECT x FROM big_table WHERE ROWNUM <= 1000 ORDER BY x',
+      columns: ['x'],
+      outputPath: tmp,
+    });
+    expect(result.totalRows).toBe(2);
+    expect(a.calls[0].sql).toBe('SELECT x FROM big_table WHERE ROWNUM <= 1000 ORDER BY x');
+    // 不添加任何 LIMIT/OFFSET
+    expect(a.calls[0].sql).not.toMatch(/LIMIT/i);
+  });
+
+  it('sql mode: strips trailing semicolon', async () => {
+    const a = new StubAdapter() as any;
+    a.rows = [{ x: 1 }];
+    await exportTableCsv({
+      adapter: a,
+      sql: 'SELECT x FROM t;',
+      columns: ['x'],
+      outputPath: tmp,
+    });
+    expect(a.calls[0].sql).toBe('SELECT x FROM t');
+  });
+
+  it('rejects when neither table nor sql provided', async () => {
+    const a = new StubAdapter() as any;
+    await expect(exportTableCsv({
+      adapter: a, columns: ['x'], outputPath: tmp,
+    })).rejects.toThrow(/table.*sql/);
+  });
+
+  it('rejects when both table and sql provided', async () => {
+    const a = new StubAdapter() as any;
+    await expect(exportTableCsv({
+      adapter: a, table: 't', sql: 'SELECT * FROM t', columns: ['x'], outputPath: tmp,
+    })).rejects.toThrow(/不能同时/);
+  });
+
+  it('infers CSV header from first row when columns=["*"]', async () => {
+    const a = new StubAdapter() as any;
+    a.rows = [{ id: 1, name: 'A' }];
+    await exportTableCsv({
+      adapter: a, table: 't', columns: ['*'], outputPath: tmp,
+    });
+    const content = readFileSync(tmp, 'utf8');
+    expect(content.startsWith('id,name\r\n')).toBe(true);
   });
 });

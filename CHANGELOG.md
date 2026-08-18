@@ -2,6 +2,61 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [未发布]
+
+### ✨ 改进
+
+- **`export_table_csv` / `import_csv` profileName 改为可选**
+  - 旧:每次调用必须显式传 `profileName`(即便已 `use_profile` / `connect_database`)
+  - 新:省略 `profileName` 时,自动回退到当前活跃连接 (`this.adapter`)。
+  - 行为完全向后兼容 — 仍显式传 `profileName` 时,行为不变。
+  - 用户体验:`use_profile` → `export_table_csv` 一气呵成,无需重复 profile 名。
+
+### 🚀 重构
+
+- **`export_table_csv` 全面重构 (v4.0.9)**
+  - **移除 `LIMIT/OFFSET`** — 之前默认拼 `LIMIT N OFFSET M` 是 MySQL/PostgreSQL 语法,
+    Oracle / DM / Kingbase / GaussDB 等不支持,**直接报语法错误**。
+  - **新增 `sql` 参数** — `table` 与 `sql` 二选一。给 `sql` 时原样执行(去掉末尾分号),
+    不附加任何分页子句。用户可以写自己的方言分页,如:
+    `sql: "SELECT * FROM big_table WHERE ROWNUM <= 1000 ORDER BY id"`。
+  - **`outputPath` 改为可选** — 省略时默认写到 `<cwd>/sql/<table-sanitized>.csv`
+    (table 模式) 或 `<cwd>/sql/query-<YYYYMMDDHHMMSS>.csv` (sql 模式),自动 `mkdir -p`。
+    **需要 cwd 在 `DB_ALLOWED_FILE_PATHS` 白名单里**,否则给出明确错误提示。
+  - **单次查询,无内部分页** — 大表请用 sql 模式自带分页 (`ROWNUM` / `ROW_NUMBER()` 等)。
+
+### 🐛 Bug 修复
+
+- **`path-guard` 返回父目录导致 `createWriteStream` EISDIR 进程崩溃** (v4.0.9 现场发现)
+  - 文件不存在时旧实现返回 `realpathSync(parentDir)` (目录路径)
+  - `csv-writer` 拿到这个"路径"去 `createWriteStream` → 在 Windows 上把目录当文件 open → EISDIR → MCP 服务崩溃
+  - 修复:文件不存在时返回**用户传入的文件路径**(只要父目录在白名单)
+  - 加 stream `'error'` 监听器兜底,未来类似问题不再静默崩溃
+  - 加 `tests/unit/path-guard.test.ts` 回归测试
+
+### ✅ Oracle 实测验证
+
+所有改动在 BBZ_CQ/ORCL 实测:
+- table 模式 (无 LIMIT/OFFSET) — Oracle 不再语法错误
+- sql 模式 — `ROWNUM <= 1000` 分页正常工作
+- 默认输出路径不在白名单 — 给出清晰的修复提示
+- 大表 (187K 行取 1000) — 851ms / 482KB
+- 中文 / UUID / ISO 时间戳序列化正常
+- **空 `DB_ALLOWED_FILE_PATHS` 自动回退 cwd** — 无需配置即可用默认路径 (`<cwd>/sql/`)
+- **`execute_sql_file` 同样应用空 env 回退** (`src/core/database-service.ts`) — MCP 和 HTTP 路由共享同一逻辑,行为一致
+
+### 🐛 Bug 修复
+
+- **`import_csv` 对 Oracle/MySQL/PG/DM 等占位符语法错误 (现场发现)**
+  - 旧代码用 ClickHouse 风格的 `{col:String}` 占位符 + 对象 params,但大多数 DB 不识别 — Oracle 报 "no bind placeholder named ':ID' was found"
+  - 修复:SQLite/MySQL/PG/Oracle/DM/Kingbase/GaussDB 等用 `?` 位置占位符 + 数组 params;仅 ClickHouse 用 `{col:String}` + 对象 params
+  - Oracle 列名大小写:不再用双引号包裹(quoted lowercase `"id"` 跟实际 `ID` 不匹配),让 DB 自动 case fold
+  - 表/列大小写无关匹配:CSV 列名 `id` 也能匹配 DB 列 `ID`
+- **`import_csv` 新增大小写无关列匹配** (CSV `id` ↔ DB `ID` 都能匹配)
+- **占位符语法按 DB 类型分发**:
+  - SQLite/MySQL/PG/Oracle/DM/Kingbase/Vastbase/HighGo/OceanBase/TiDB/GoldenDB/PoloDB → `?` (位置)
+  - ClickHouse → `{col:String}` (named with type)
+
 ## [4.0.7] - 2026-08-18
 
 ### 📚 文档

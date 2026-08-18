@@ -60,28 +60,25 @@ function quoteIdent(ident: string): string {
 }
 
 /**
- * 拼 SELECT SQL (含 LIMIT/OFFSET 分页)。
+ * 拼 SELECT SQL (v4.0.9: 移除 LIMIT/OFFSET — 兼容 Oracle/DM 等不支持的标准 SQL 方言)
  *
  * - columns=['*'] 直接用 *,否则逐个 quoteIdent 拼出 "col1","col2",...
  * - table 接受 "schema.table" 或 "table",前者 schema 与 name 都 quote
  * - where / orderBy 是字符串 SQL 片段(trusted path,只在白名单内用)
  *   含 ';' 视为注入,拒绝
+ * - 不再 emit LIMIT/OFFSET — 需要分页请用 exportTableCsv 的 sql 参数自带
  */
 export function buildSelectSql(opts: {
   table: string;
   columns: string[];
   where?: string;
   orderBy?: string;
-  limit: number;
-  offset: number;
 }): string {
   const { schema, name } = parseTableName(opts.table);
   const cols =
     opts.columns.length === 1 && opts.columns[0] === '*'
       ? '*'
       : opts.columns.map(quoteIdent).join(', ');
-  // v3.3: 当 schema 存在时双 quote schema 与 name;无 schema 时 name 保留原样
-  // (向后兼容 — CH/DM 适配器对未 quote 表名大小写不敏感,统一表名处理在 adapter 层)
   const tbl = schema ? `${quoteIdent(schema)}.${quoteIdent(name)}` : name;
 
   if (opts.where && /;/.test(opts.where)) {
@@ -94,19 +91,20 @@ export function buildSelectSql(opts: {
   const parts: string[] = [`SELECT ${cols} FROM ${tbl}`];
   if (opts.where) parts.push(`WHERE ${opts.where}`);
   if (opts.orderBy) parts.push(`ORDER BY ${opts.orderBy}`);
-  if (opts.limit > 0) parts.push(`LIMIT ${opts.limit}`);
-  parts.push(`OFFSET ${opts.offset}`);
   return parts.join(' ');
 }
+
 /**
- * 流式导出单表到 CSV 文件。
+ * 流式导出单表 (或自定义 SQL) 到 CSV 文件 (v4.0.9 重构)
  *
- * 翻页循环:
- *   offset = 0; do { page = adapter.executeQuery(SELECT ... LIMIT N OFFSET offset);
- *                    write rows; offset += page.length; } while (page.length === N)
+ * 两种模式 (二选一,不能同时给):
+ *   1. table 模式: 给 table [+ columns + where + orderBy] → 全表导出
+ *      - 拼 SELECT cols FROM "schema"."table" [WHERE ...] [ORDER BY ...]
+ *      - **不** 加 LIMIT/OFFSET (跨 DB 方言兼容)
+ *   2. sql 模式: 给 sql → 原样执行 (用于 Oracle/DM 等特殊语法或带分页的查询)
+ *      - 去掉末尾分号,其他保持不变
  *
- * 大表内存可控(每次只持有 batchSize 行)。
- * limit=0 → 不拼 LIMIT 子句(整表导出);否则 LIMIT = min(batchSize, limit)。
+ * 单次查询,无内部分页循环 — 大表请用 sql 模式自带 WHERE ROWNUM <= N 等方言分页。
  */
 export async function exportTableCsv(opts: {
   adapter: {
@@ -115,14 +113,12 @@ export async function exportTableCsv(opts: {
       params?: unknown[]
     ): Promise<{ rows: unknown[]; executionTime?: number }>;
   };
-  table: string;
+  table?: string;
   columns?: string[];
   where?: string;
   orderBy?: string;
-  limit?: number;
-  offset?: number;
+  sql?: string;
   outputPath: string;
-  batchSize?: number;
 }): Promise<{
   totalRows: number;
   bytesWritten: number;
@@ -130,46 +126,55 @@ export async function exportTableCsv(opts: {
   batches: number;
 }> {
   const start = Date.now();
+
+  if (!opts.table && !opts.sql) {
+    throw new Error('exportTableCsv: 需要 table 或 sql 二选一');
+  }
+  if (opts.table && opts.sql) {
+    throw new Error('exportTableCsv: table 与 sql 不能同时给');
+  }
+
   const columns = opts.columns ?? ['*'];
-  const userLimit = opts.limit ?? 0;
-  const offset0 = opts.offset ?? 0;
-  const batchSize = opts.batchSize ?? 5000;
-  // limit=0 → 不拼 LIMIT;否则 LIMIT = min(batchSize, userLimit)
-  const pageLimit = userLimit > 0 ? Math.min(batchSize, userLimit) : batchSize;
-
-  const stream = createWriteStream(opts.outputPath, { encoding: 'utf8' });
-  let bytesWritten = 0;
-  const writeChunk = (s: string) =>
-    new Promise<void>((res, rej) => {
-      stream.write(s, 'utf8', (err) => (err ? rej(err) : res()));
-      bytesWritten += Buffer.byteLength(s, 'utf8');
-    });
-  // header
-  await writeChunk(columns.join(',') + '\r\n');
-
-  let totalRows = 0;
-  let offset = offset0;
-  let batches = 0;
-  while (true) {
-    const sql = buildSelectSql({
-      table: opts.table,
+  let sql: string;
+  if (opts.sql) {
+    sql = opts.sql.trim().replace(/;\s*$/, '');
+  } else {
+    sql = buildSelectSql({
+      table: opts.table!,
       columns,
       where: opts.where,
       orderBy: opts.orderBy,
-      limit: pageLimit,
-      offset,
     });
-    const result = await opts.adapter.executeQuery(sql);
-    batches += 1;
-    const rows = result.rows as Array<Record<string, unknown>>;
-    if (rows.length === 0) break;
-    for (const row of rows) {
-      await writeChunk(rowToCsv(row, columns) + '\r\n');
-      totalRows += 1;
-    }
-    if (rows.length < pageLimit) break;
-    if (userLimit > 0 && totalRows >= userLimit) break;
-    offset += rows.length;
+  }
+
+  const result = await opts.adapter.executeQuery(sql);
+  const rows = result.rows as Array<Record<string, unknown>>;
+
+  const stream = createWriteStream(opts.outputPath, { encoding: 'utf8' });
+  // v4.0.9: 必须监听 'error' — 否则底层 file open 失败 (EISDIR/EPERM/...) 会让进程崩溃
+  let streamError: Error | null = null;
+  stream.on('error', (err) => {
+    streamError = err;
+  });
+  let bytesWritten = 0;
+  const writeChunk = (s: string) =>
+    new Promise<void>((res, rej) => {
+      if (streamError) return rej(streamError);
+      stream.write(s, 'utf8', (err) => (err ? rej(err) : res()));
+      bytesWritten += Buffer.byteLength(s, 'utf8');
+    });
+
+  // CSV header — columns=['*'] 时从首行推断列名
+  const headerCols =
+    columns.length === 1 && columns[0] === '*' && rows.length > 0
+      ? Object.keys(rows[0])
+      : columns;
+  await writeChunk(headerCols.join(',') + '\r\n');
+
+  let totalRows = 0;
+  for (const row of rows) {
+    await writeChunk(rowToCsv(row, headerCols) + '\r\n');
+    totalRows += 1;
   }
 
   await new Promise<void>((res) => stream.end(res));
@@ -177,6 +182,6 @@ export async function exportTableCsv(opts: {
     totalRows,
     bytesWritten,
     durationMs: Date.now() - start,
-    batches,
+    batches: 1,
   };
 }
