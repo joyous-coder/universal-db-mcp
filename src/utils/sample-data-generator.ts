@@ -11,9 +11,16 @@ export interface GenerateContext {
    * generator 据此识别 PK 列,对不同类型主键采用不同生成策略:
    * - IDENTITY 自增 PK (column.autoIncrement=true): 跳过,让 DB 自填
    * - UUID/CHAR(36) PK: 生成 uuid v4
-   * - 其他 PK: 生成 sequence int
+   * - 其他 PK: 用 context.maxIntPkValues[pkName] (databaseService 提前查的 MAX(pk))
+   *   + rowIndex + 1 作为 sequence,避免主键冲突
    */
   primaryKeys?: Set<string> | string[];
+  /**
+   * v4.0.3.2 Bug #17 fix: 非 IDENTITY INT PK 列的当前 MAX 值。
+   * 由 databaseService 在生成前查 `SELECT MAX(pk) FROM table` 注入。
+   * 序列从 maxValue + rowIndex + 1 开始,既不冲突也真实。
+   */
+  maxIntPkValues?: Record<string, number>;
 }
 
 export class SampleDataGenerator {
@@ -65,10 +72,13 @@ export class SampleDataGenerator {
       if (type.startsWith('char') && /char\(\s*36\s*\)/.test(column.type)) {
         return this.faker.string.uuid();
       }
-      // 其他类型 PK (INT/BIGINT/VARCHAR 等) → sequence int 避免冲突
+      // 其他类型 PK (INT/BIGINT/NUMBER/VARCHAR 等) → 用 context.maxIntPkValues
+      // (databaseService 已查 SELECT MAX(pk) FROM table) 作为序列起点
+      // + rowIndex + 1,确保不与既有数据冲突且数值真实递增。
       if (type.includes('int') || type.includes('serial') || type.includes('numeric') ||
           type.includes('decimal') || type.includes('number')) {
-        return (rowIndex + 1) * 1 + Math.floor(Math.random() * 1000);
+        const maxVal = context.maxIntPkValues?.[column.name] ?? 0;
+        return maxVal + rowIndex + 1;
       }
     }
 
@@ -170,7 +180,11 @@ export class SampleDataGenerator {
 
   private fallbackByType(column: ColumnInfo): unknown {
     const type = column.type.toLowerCase();
-    if (/int|serial|numeric/.test(type)) return this.faker.number.int({ min: 1, max: 10000 });
+    // v4.0.3.2 Bug #17 fix: `number` 是 Oracle/DM/Postgres 通用数值类型名,
+    // 之前 regex 只匹配 `int|serial|numeric`,漏掉 `number` → generator
+    // 给 NUMBER 列返回 lorem sentence 字符串 → bind Oracle NUMBER 列报
+    // ORA-01722 invalid number。
+    if (/int|serial|numeric|number/.test(type)) return this.faker.number.int({ min: 1, max: 10000 });
     if (/float|double|decimal|real/.test(type)) {
       return this.faker.number.float({ min: 0, max: 10000, fractionDigits: 2 });
     }

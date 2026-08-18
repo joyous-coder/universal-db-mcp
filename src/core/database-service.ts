@@ -363,13 +363,13 @@ export class DatabaseService {
 
     // Get table info
     const tableInfo = await this.getTableInfo(tableName);
-    // v4.0.3.2 Bug #17 fix: 默认排除 PK 列(避免 IDENTITY 列 bind 整数冲突)。
+    // v4.0.3.2 Bug #17 fix: 排除 PK 列(避免 IDENTITY 列 bind 整数冲突)。
     // DM driver 在 INSERT 含 IDENTITY PK 列时协议层报 "表或视图不存在"
-    // (即使是 INSERT 不含 bind 的字面量语句)。为了安全:
-    // - 如果 PK 列 column.autoIncrement === true: 必须排除
-    // - 如果 PK 列类型是 UUID/CHAR(36): 应排除(由 generator 生成)
-    // - 其他 PK 列(INT/BIGINT 等)默认排除,用户显式 include via options.columns
-    const userSpecifiedColumns = !!options?.columns;
+    // (即使是 INSERT 不含 bind 的字面量语句)。
+    // 排除规则:
+    // - PK column.autoIncrement === true: 必须排除(DB 自填)
+    // - PK 类型是 UUID/CHAR(36): 排除(由 generator 生成)
+    // - 其他 PK (INT/BIGINT/NUMBER): 不排除,generator 查 MAX(pk) + rowIndex + 1 填真实值
     const autoExcludePks = (tableInfo.primaryKeys ?? []).filter(pk => {
       const col = tableInfo.columns.find(c => c.name.toLowerCase() === pk.toLowerCase());
       if (!col) return true;
@@ -377,7 +377,7 @@ export class DatabaseService {
       const t = col.type.toLowerCase();
       if (t.includes('uuid') || t.includes('uniqueidentifier')) return true;  // UUID → generator 生成
       if (t.startsWith('char') && /char\(\s*36\s*\)/.test(col.type)) return true;  // CHAR(36) → UUID
-      return !userSpecifiedColumns;  // 其他 PK 列只在用户没指定 columns 时排除
+      return false;  // INT/BIGINT/NUMBER 等 PK 不排除,由 generator 填 MAX+rowIndex
     });
     const columnsToInsert = options?.columns?.length
       ? options.columns
@@ -389,8 +389,28 @@ export class DatabaseService {
     const { SampleDataGenerator } = await import('../utils/sample-data-generator.js');
     const generator = new SampleDataGenerator({ seed: options?.seed });
     // v4.0.3.2 Bug #17: 把主键集合传给 generator,让 PK 列按类型生成
-    // (IDENTITY 跳过 / UUID → uuid / 其他 → sequence int)
+    // (IDENTITY 跳过 / UUID → uuid / 其他 → MAX(pk) + sequence)
     const pkSet = new Set((tableInfo.primaryKeys ?? []).map(p => p.toLowerCase()));
+    // v4.0.3.2 Bug #17: 对每个非 IDENTITY 的 INT/NUMBER PK 列,提前查 SELECT MAX(pk)
+    // 让 sequence 从 maxValue+1 开始,避免主键冲突且数值真实。
+    const maxIntPkValues: Record<string, number> = {};
+    for (const pkName of pkSet) {
+      const col = tableInfo.columns.find(c => c.name.toLowerCase() === pkName.toLowerCase());
+      if (!col || col.autoIncrement === true) continue;
+      const t = col.type.toLowerCase();
+      if (!/int|serial|numeric|number|decimal/.test(t)) continue;
+      try {
+        const pkIdent = this.quoteIdentifier(tableName);
+        const pkColIdent = this.quoteIdentifier(pkName);
+        const maxRes = await this.executeQuery(
+          `SELECT COALESCE(MAX(${pkColIdent}), 0) AS M FROM ${pkIdent}`
+        );
+        maxIntPkValues[pkName] = Number(maxRes.rows?.[0]?.['m'] ?? 0);
+      } catch {
+        // 表可能是空的 (no rows yet) 或 MAX 失败,默认 0
+        maxIntPkValues[pkName] = 0;
+      }
+    }
     const rowsToInsert: unknown[][] = [];
 
     for (let i = 0; i < safeCount; i++) {
@@ -413,6 +433,7 @@ export class DatabaseService {
           rule,
           rowContext,
           primaryKeys: pkSet,
+          maxIntPkValues,
         }, i);
 
         // v3.2.6 Bug #25 fix: node:sqlite rejects binding `undefined` to ? placeholders.

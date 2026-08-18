@@ -266,6 +266,19 @@ export class OracleAdapter extends BaseAdapter {
          WHERE OWNER = :1 AND TABLE_NAME = :2 AND COMMENTS IS NOT NULL`,
         [owner, bareName]
       );
+      // v4.0.3.2 Bug #17: 查 ALL_TAB_IDENTITY_COLS (Oracle 12c+) 标记 IDENTITY 列
+      let identityCols = new Set<string>();
+      try {
+        const idRes = await conn.execute(
+          `SELECT COLUMN_NAME FROM ALL_TAB_IDENTITY_COLS WHERE OWNER = :1 AND TABLE_NAME = :2`,
+          [owner, bareName]
+        );
+        for (const r of idRes.rows ?? []) {
+          identityCols.add(String((r as Record<string, unknown>)['COLUMN_NAME'] ?? '').toLowerCase());
+        }
+      } catch {
+        // 视图不可用/老版本 — fallback 到 generator 的 PK+type 启发式
+      }
       const pkRes = await conn.execute(
         `SELECT cols.COLUMN_NAME, cols.POSITION
          FROM ALL_CONSTRAINTS cons JOIN ALL_CONS_COLUMNS cols
@@ -320,6 +333,8 @@ export class OracleAdapter extends BaseAdapter {
           nullable: nullable === 'Y',
           defaultValue: defv ? String(defv).trim() : undefined,
           comment: cm.get(cn.toLowerCase()),
+          // v4.0.3.2 Bug #17: 标记 IDENTITY 自增列
+          autoIncrement: identityCols.has(cn.toLowerCase()),
         });
       }
       for (const r of pkRes.rows ?? []) {
@@ -505,6 +520,20 @@ export class OracleAdapter extends BaseAdapter {
         console.error('获取外键信息失败，跳过:', error instanceof Error ? error.message : String(error));
       }
 
+      // v4.0.3.2 Bug #17: 查 ALL_TAB_IDENTITY_COLS 标记 IDENTITY 列 (Oracle 12c+)
+      let allIdentityCols: any[] = [];
+      try {
+        const allIdentityColsResult = await connection.execute(
+          `SELECT OWNER, TABLE_NAME, COLUMN_NAME FROM ALL_TAB_IDENTITY_COLS
+           WHERE OWNER NOT IN ('SYS', 'SYSTEM', 'SYSAUX', 'XDB', 'CTXSYS', 'MDSYS',
+                                'OLAPSYS', 'APEX_030200', 'ORDDATA', 'WMSYS')`,
+          []
+        );
+        allIdentityCols = allIdentityColsResult.rows || [];
+      } catch {
+        // 视图不存在 / 老版本 Oracle — skip
+      }
+
       return this.assembleSchema(
         databaseName,
         version,
@@ -514,6 +543,7 @@ export class OracleAdapter extends BaseAdapter {
         allIndexesResult.rows || [],
         allStatsResult.rows || [],
         allForeignKeys,
+        allIdentityCols,
         currentUser
       );
     });
@@ -535,8 +565,20 @@ export class OracleAdapter extends BaseAdapter {
     allIndexes: any[],
     allStats: any[],
     allForeignKeys: any[],
+    allIdentityCols: any[] = [],
     currentUser: string
   ): SchemaInfo {
+    // v4.0.3.2 Bug #17: 按 tableKey 索引 IDENTITY 列
+    const identityByTable = new Map<string, Set<string>>();
+    for (const ic of allIdentityCols) {
+      const owner = String(ic.OWNER ?? '');
+      const tableName = String(ic.TABLE_NAME ?? '');
+      const columnName = String(ic.COLUMN_NAME ?? '');
+      if (!tableName || !columnName) continue;
+      const tableKey = this.makeTableKey(owner, tableName, currentUser);
+      if (!identityByTable.has(tableKey)) identityByTable.set(tableKey, new Set());
+      identityByTable.get(tableKey)!.add(columnName.toLowerCase());
+    }
     // 按表名分组列信息
     const columnsByTable = new Map<string, ColumnInfo[]>();
     const schemaByTable = new Map<string, string>();
@@ -568,6 +610,8 @@ export class OracleAdapter extends BaseAdapter {
         ),
         nullable: col.NULLABLE === 'Y',
         defaultValue: col.DATA_DEFAULT?.trim() || undefined,
+        // v4.0.3.2 Bug #17: IDENTITY 自增标记
+        autoIncrement: identityByTable.get(tableKey)?.has(columnName.toLowerCase()),
       });
     }
 
