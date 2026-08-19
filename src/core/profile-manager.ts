@@ -358,25 +358,16 @@ export class ProfileManager {
 
   async loadProfile(name: string): Promise<LiveProfile> {
     if (!this.enabled) throw new Error('multi-db disabled');
-    // v5.0.0 Bug N2: 缓存命中时,如果 store 里的 updated_at 比 cache 里的新,
-    // 说明 profile 被 update 过,先 unload 再重建以避免返回 stale LiveProfile
-    const existing = this.liveProfiles.get(name);
-    if (existing) {
-      const stored = await this.store.get(name);
-      if (stored) {
-        const storedTs = Date.parse(stored.updated_at ?? '');
-        const cachedTs = Date.parse(existing.profile.updated_at ?? '');
-        if (!Number.isNaN(storedTs) && !Number.isNaN(cachedTs) && storedTs > cachedTs) {
-          await this.unloadProfile(name);
-        } else {
-          this.touchLRU(name);
-          return existing;
-        }
-      } else {
-        this.touchLRU(name);
-        return existing;
-      }
-    }
+    // v5.0.1: 总是 unload + reload(放弃 N2 cache hit 路径)。
+    //
+    // 原因:N2 修复让 cache hit 直接 return existing,但 mcp-server.activateProfile
+    // 切换其他 profile 时会断开 this.adapter — 这会留下 cache 里的死引用。
+    // 之后 use_profile 切回原 profile 命中 cache,返回的 LiveProfile.adapter/service
+    // 仍是旧引用,execute_query 调用会失败("Database is closed" / "数据库未连接")。
+    //
+    // LRU cache 的复用价值在 SQL DB 上不显著(SQLite/Postgres reconnect 100ms 级)。
+    // 总是 rebuild 保证 consistency,代价是一次额外 reconnect。
+    await this.unloadProfile(name);
     const profile = await this.store.get(name);
     if (!profile) throw new Error(`profile not found: ${name}`);
     if (!profile.enabled) throw new Error(`profile disabled: ${name}`);
