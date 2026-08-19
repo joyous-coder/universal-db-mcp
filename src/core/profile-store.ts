@@ -139,13 +139,15 @@ export class ProfileStore {
     const now = new Date().toISOString();
     const role: ProfileRole = input.role ?? existing.role;
     const enabled = input.enabled ?? existing.enabled;
+    // v5.0.0 Bug N1: PATCH 语义 — 省略的 tags 保留原值,显式 tags:[] 才清空
+    const tags: string[] = input.tags !== undefined ? input.tags : existing.tags;
     this.conn!.exec(
       `UPDATE profiles SET
          description = ${q(input.description)},
          type = ${q(input.type)},
          config_json = ${q(JSON.stringify(input.config))},
          role = ${q(role)},
-         tags_json = ${q(JSON.stringify(input.tags ?? []))},
+         tags_json = ${q(JSON.stringify(tags))},
          enabled = ${enabled ? 1 : 0},
          updated_at = ${q(now)},
          permission_mode = ${q(input.permissionMode ?? existing.permissionMode)},
@@ -160,7 +162,7 @@ export class ProfileStore {
       type: input.type,
       config: input.config,
       role,
-      tags: input.tags ?? [],
+      tags,
       enabled,
       updated_at: now,
       permissionMode: input.permissionMode ?? existing.permissionMode,

@@ -112,4 +112,42 @@ describe('ProfileStore', () => {
     expect(p?.productName).toBe('Oracle 19c');
     expect(p?.version).toBe('19.0.0.0');
   });
+
+  // v5.0.0 Bug N1: update 不传 tags 时应保留原值(PATCH 语义),不能清空
+  it('update preserves tags when input.tags is undefined', async () => {
+    const input: ProfileInput = {
+      name: 'tags-prof', description: 'orig', type: 'sqlite',
+      config: { type: 'sqlite', filePath: ':memory:' },
+      tags: ['prod', 'critical'],
+    };
+    await store.create(input);
+    const updated = await store.update({
+      name: 'tags-prof', description: 'new desc', type: 'sqlite',
+      config: { type: 'sqlite', filePath: ':memory:' },
+      // tags 故意省略 → 应保留 ['prod', 'critical']
+    });
+    expect(updated.tags).toEqual(['prod', 'critical']);
+    expect(updated.description).toBe('new desc');
+    // 持久化验证
+    const fetched = await store.get('tags-prof');
+    expect(fetched?.tags).toEqual(['prod', 'critical']);
+  });
+
+  // v5.0.0 Bug N1: update 显式传 tags: [] 时,允许清空(显式空 ≠ 省略)
+  it('update honors explicit empty tags array', async () => {
+    const input: ProfileInput = {
+      name: 'tags-empty', description: '', type: 'sqlite',
+      config: { type: 'sqlite', filePath: ':memory:' },
+      tags: ['will-clear'],
+    };
+    await store.create(input);
+    const updated = await store.update({
+      name: 'tags-empty', description: '', type: 'sqlite',
+      config: { type: 'sqlite', filePath: ':memory:' },
+      tags: [],
+    });
+    expect(updated.tags).toEqual([]);
+    const fetched = await store.get('tags-empty');
+    expect(fetched?.tags).toEqual([]);
+  });
 });

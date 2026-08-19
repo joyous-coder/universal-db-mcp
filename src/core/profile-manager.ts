@@ -346,8 +346,25 @@ export class ProfileManager {
 
   async loadProfile(name: string): Promise<LiveProfile> {
     if (!this.enabled) throw new Error('multi-db disabled');
+    // v5.0.0 Bug N2: 缓存命中时,如果 store 里的 updated_at 比 cache 里的新,
+    // 说明 profile 被 update 过,先 unload 再重建以避免返回 stale LiveProfile
     const existing = this.liveProfiles.get(name);
-    if (existing) { this.touchLRU(name); return existing; }
+    if (existing) {
+      const stored = await this.store.get(name);
+      if (stored) {
+        const storedTs = Date.parse(stored.updated_at ?? '');
+        const cachedTs = Date.parse(existing.profile.updated_at ?? '');
+        if (!Number.isNaN(storedTs) && !Number.isNaN(cachedTs) && storedTs > cachedTs) {
+          await this.unloadProfile(name);
+        } else {
+          this.touchLRU(name);
+          return existing;
+        }
+      } else {
+        this.touchLRU(name);
+        return existing;
+      }
+    }
     const profile = await this.store.get(name);
     if (!profile) throw new Error(`profile not found: ${name}`);
     if (!profile.enabled) throw new Error(`profile disabled: ${name}`);
