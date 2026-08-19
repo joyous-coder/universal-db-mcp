@@ -61,7 +61,7 @@ function safeIdent(name: string): string {
 }
 
 /** Get list of tables in a profile via sqlite_master or information_schema. */
-async function listTables(profile: ProfileManager, profileName: string): Promise<string[]> {
+export async function listTables(profile: ProfileManager, profileName: string): Promise<string[]> {
   const live = await profile.loadProfile(profileName);
   const dbType = live.profile.type;
   let result: QueryResult;
@@ -74,8 +74,14 @@ async function listTables(profile: ProfileManager, profileName: string): Promise
       `SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY table_name`
     );
   } else if (POSTGRES_TYPES.has(dbType)) {
+    // v5.0.1 Bug N13: 之前 `table_schema = current_schema()` 只查当前默认 schema。
+    // 改成排除系统 schema + 限定 BASE TABLE,返回 table_schema 让下游拼 schema.name。
+    // 注意:information_schema 自身在 PG 上是 'information_schema' 名,这里排除。
     result = await live.adapter.executeQuery(
-      `SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema() ORDER BY table_name`
+      `SELECT table_schema, table_name AS name FROM information_schema.tables
+       WHERE table_schema NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+         AND table_type = 'BASE TABLE'
+       ORDER BY table_schema, table_name`
     );
   } else if (DM_TYPES.has(dbType)) {
     // v3.2.8 Bug #46 fix: 达梦无 information_schema,用 ALL_TABLES(system schemas 排除)
@@ -89,9 +95,10 @@ async function listTables(profile: ProfileManager, profileName: string): Promise
     throw new Error(`unsupported db type for backup: ${dbType} (MVP supports sqlite/mysql/postgresql/dm)`);
   }
   return (result.rows ?? []).map((r: any) => {
+    // v5.0.1 Bug N13: PG 用 table_schema,DM 用 OWNER;MySQL/SQLite 用 name
+    const schema = String((r as Record<string, unknown>).table_schema ?? (r as Record<string, unknown>).owner ?? '');
     const name = String((r as Record<string, unknown>).name ?? r.table_name ?? '');
-    const owner = String((r as Record<string, unknown>).owner ?? '');
-    return owner ? `${owner}.${name}` : name;
+    return schema ? `${schema}.${name}` : name;
   }).filter(Boolean);
 }
 
@@ -115,10 +122,42 @@ async function readCreateTable(profile: ProfileManager, profileName: string, tab
     // column 0 = table name, column 1 = create statement
     stmt = String(Object.values(row ?? {})[1] ?? '');
   } else if (POSTGRES_TYPES.has(dbType)) {
+    // v5.0.1 Bug N13: PG 没有 `pg_get_ddl()`(那不是 PG 真实函数,本来会报错)。
+    // 改用 information_schema.columns + string_agg 拼 CREATE TABLE。
+    // 限制:仅重建表结构 + 列级约束(PRIMARY KEY/NOT NULL/DEFAULT),INDEX/FK/CHECK/TRIGGER 需用 pg_dump。
+    const dotIdx = table.indexOf('.');
+    const tableSchema = dotIdx > 0 ? table.substring(0, dotIdx) : 'public';
+    const tblName = dotIdx > 0 ? table.substring(dotIdx + 1) : table;
     res = await live.adapter.executeQuery(
-      `SELECT pg_get_ddl('TABLE', '${table}') AS ddl`
+      `SELECT column_name, data_type, character_maximum_length, is_nullable, column_default
+       FROM information_schema.columns
+       WHERE table_schema = $1 AND table_name = $2
+       ORDER BY ordinal_position`,
+      [tableSchema, tblName]
     );
-    stmt = String((res.rows as any)?.[0]?.ddl ?? '');
+    const cols = (res.rows ?? []).map((r: any) => {
+      const cn = String(r.column_name);
+      let dt = String(r.data_type);
+      const maxLen = r.character_maximum_length;
+      if (maxLen && (dt === 'character varying' || dt === 'character' || dt === 'text')) {
+        dt = dt === 'character varying' ? `VARCHAR(${maxLen})` : dt === 'character' ? `CHAR(${maxLen})` : 'TEXT';
+      } else {
+        dt = dt.toUpperCase();
+      }
+      const nullable = String(r.is_nullable) === 'NO' ? ' NOT NULL' : '';
+      const def = r.column_default ? ` DEFAULT ${String(r.column_default).trim()}` : '';
+      return `  "${cn}" ${dt}${nullable}${def}`;
+    });
+    // PK columns
+    const pkRes = await live.adapter.executeQuery(
+      `SELECT a.attname FROM pg_index i
+       JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+       WHERE i.indrelid = ($1 || '.' || $2)::regclass AND i.indisprimary`,
+      [tableSchema, tblName]
+    );
+    const pkCols = (pkRes.rows ?? []).map((r: any) => String(r.attname));
+    const pkClause = pkCols.length > 0 ? `,\n  PRIMARY KEY (${pkCols.map((c) => `"${c}"`).join(', ')})` : '';
+    stmt = `CREATE TABLE "${tableSchema}"."${tblName}" (\n${cols.join(',\n')}${pkClause}\n)`;
   } else if (DM_TYPES.has(dbType)) {
     // v3.2.8 Bug #46 fix: 达梦 DBMS_METADATA.GET_DDL 需要 DBA 权限,普通 user 多报 [-26008]。
     // 改用 getTableInfo 重建 CREATE TABLE(从 ALL_TAB_COLUMNS + ALL_CONS_COLUMNS + ALL_TAB_COMMENTS)
