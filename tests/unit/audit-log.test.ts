@@ -76,6 +76,35 @@ describe('AuditLog (v3.x)', () => {
     expect(meta.requestId).toBe('abc-123');
   });
 
+  // v5.0.1 Bug N15: 切换 profile 后 getHistory 必须跟到 active profile 的 history.db
+  it('getHistory follows active profile path resolver', async () => {
+    const ts2 = Date.now();
+    const altPath = `.tmp-audit-alt-${ts2}-${Math.random().toString(36).slice(2)}.db`;
+    cleanup(altPath);
+    try {
+      // 写入原 path 一条,验证存在
+      await AuditLog.record(qa, 'SELECT 99', 'sqlite', 'select', { actor: 'orig-actor', severity: 'read' });
+      const before = await AuditLog.query(qa, { actor: 'orig-actor' });
+      expect(before.length).toBe(1);
+
+      // 模拟 use_profile('alt'): 切换 path resolver + profile provider
+      qa.setProfileProvider(() => 'alt');
+      qa.setProfilePathResolver(() => ({ history: altPath, templates: tplPath }));
+
+      // getHistory(经 audit-log 转发)必须从 altPath 读 — 拿不到 orig-actor(因为 altPath 是新空 db)
+      const after = await AuditLog.query(qa, { actor: 'orig-actor' });
+      expect(after.length).toBe(0);
+
+      // 在 altPath 写一条,再 getHistory 应拿到
+      await AuditLog.record(qa, 'SELECT 100', 'sqlite', 'select', { actor: 'alt-actor', severity: 'read' });
+      const after2 = await AuditLog.query(qa, { actor: 'alt-actor' });
+      expect(after2.length).toBe(1);
+      expect(after2[0].sql).toContain('SELECT 100');
+    } finally {
+      cleanup(altPath);
+    }
+  });
+
   it('filter by severity returns only matching rows', async () => {
     await AuditLog.record(qa, 'SELECT 1', 'sqlite', 'select', { actor: 'a', severity: 'read' });
     await AuditLog.record(qa, 'UPDATE t SET x = 1', 'sqlite', 'update', { actor: 'a', severity: 'write' });

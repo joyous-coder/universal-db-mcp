@@ -137,13 +137,122 @@ export class Explainer {
       }
     }
 
+    // v5.0.1 Bug N7: MySQL/PG 用 EXPLAIN <sql> + binary protocol + bound params 时,
+    // server 端不返回 plan 行(返回空 rows)。改用 FORMAT=JSON 让 server 返回 JSON 文本。
+    // JSON 解析走已有的 parseMysqlJson / parsePgJson(`src/core/explain-parser.ts`)。
     const explainSql = this.buildExplainSql(sql);
     const result = await this.adapter.executeQuery(explainSql, params);
     const rows = (result.rows ?? []) as Array<Record<string, unknown>>;
+    const isJsonFormat = this.usesJsonFormat();
+
+    if (isJsonFormat) {
+      // JSON 形式:rows 通常 1 行,某列含 JSON 文本
+      const jsonText = this.extractJsonColumn(rows);
+      const raw = jsonText ?? rows.map(r => Object.values(r).join('|')).join('\n');
+      const plan = jsonText ? this.parseJsonPlan(jsonText) : [];
+      return {
+        db: this.dbType, sql, plan, raw,
+        format: 'json', duration_ms: Date.now() - start,
+      };
+    }
+
     const raw = rows.map(r => Object.values(r).join('|')).join('\n');
     const plan = this.parsePlan(rows);
     const format: ExplainResult['format'] = this.dbType === 'sqlserver' ? 'xml' : 'tabular';
     return { db: this.dbType, sql, plan, raw, format, duration_ms: Date.now() - start };
+  }
+
+  private usesJsonFormat(): boolean {
+    return this.dbType === 'mysql' || this.dbType === 'mariadb'
+      || this.dbType === 'postgres' || this.dbType === 'kingbase'
+      || this.dbType === 'gaussdb' || this.dbType === 'vastbase'
+      || this.dbType === 'highgo' || this.dbType === 'tidb'
+      || this.dbType === 'oceanbase' || this.dbType === 'polardb'
+      || this.dbType === 'goldendb';
+  }
+
+  /**
+   * 从 rows 中提取 JSON 字符串列。MySQL `EXPLAIN FORMAT=JSON` 返回 1 行 1 列,
+   * 列名 `EXPLAIN`;PG `EXPLAIN (FORMAT JSON)` 返回 1 行 1 列,列名 `QUERY PLAN`。
+   * 兜底:任何 row 的任何 string value 都试一下 JSON.parse。
+   */
+  private extractJsonColumn(rows: Array<Record<string, unknown>>): string | null {
+    for (const row of rows) {
+      for (const v of Object.values(row)) {
+        if (typeof v === 'string') {
+          const s = v.trim();
+          if (s.startsWith('{') || s.startsWith('[')) {
+            // PG `QUERY PLAN` 在外面包了一层 {...},可能直接是对象字符串
+            try { JSON.parse(s); return s; } catch { /* keep looking */ }
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /** 把 JSON plan 解析成扁平的 ExplainRow[](顶层算子),便于 LLM 看到结构。 */
+  private parseJsonPlan(jsonText: string): ExplainRow[] {
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (this.dbType === 'mysql' || this.dbType === 'mariadb') {
+        const root = parsed.query_block;
+        if (!root) return [];
+        const out: ExplainRow[] = [];
+        this.walkMysqlPlan(root, out, 1);
+        return out;
+      }
+      // PG 家族
+      const arr = Array.isArray(parsed) ? parsed : [parsed];
+      const root = arr[0]?.Plan ?? arr[0];
+      if (!root) return [];
+      const out: ExplainRow[] = [];
+      this.walkPgPlan(root, out, 1);
+      return out;
+    } catch {
+      return [];
+    }
+  }
+
+  private walkMysqlPlan(node: any, out: ExplainRow[], level: number): void {
+    const op = Object.keys(node).find(k => k !== 'cost_info' && k !== 'rows' && k !== 'table');
+    const table = node.table?.table_name ?? node.table?.table;
+    const index = node.table?.key;
+    const cost = node.cost_info?.query_cost;
+    const rows = node.rows;
+    if (op) {
+      out.push({
+        id: level,
+        select_type: op.toUpperCase(),
+        table,
+        type: index ? 'ref' : 'ALL',
+        key: index,
+        rows: typeof rows === 'number' ? rows : undefined,
+        Extra: typeof cost === 'number' ? `cost=${cost}` : undefined,
+      });
+    }
+    for (const v of Object.values(node)) {
+      if (Array.isArray(v)) v.forEach(c => { if (typeof c === 'object') this.walkMysqlPlan(c, out, level + 1); });
+      else if (typeof v === 'object' && v !== node.table && v !== node.cost_info) {
+        this.walkMysqlPlan(v, out, level + 1);
+      }
+    }
+  }
+
+  private walkPgPlan(node: any, out: ExplainRow[], level: number): void {
+    if (!node || typeof node !== 'object') return;
+    out.push({
+      id: level,
+      select_type: String(node['Node Type'] ?? 'UNKNOWN'),
+      table: node['Relation Name'],
+      type: node['Index Name'] ? 'index' : 'seq',
+      key: node['Index Name'],
+      rows: typeof node['Plan Rows'] === 'number' ? node['Plan Rows'] : undefined,
+      Extra: typeof node['Total Cost'] === 'number' ? `cost=${node['Total Cost']}` : undefined,
+    });
+    if (Array.isArray(node.Plans)) {
+      node.Plans.forEach((c: any) => this.walkPgPlan(c, out, level + 1));
+    }
   }
 
   private buildExplainSql(sql: string): string {
@@ -153,6 +262,9 @@ export class Explainer {
         return `EXPLAIN QUERY PLAN ${trimmed}`;
       case 'mysql':
       case 'mariadb':
+        // v5.0.1 Bug N7: tabular EXPLAIN + bound params 在 binary protocol 下返回空 rows,
+        // 改用 FORMAT=JSON 让 server 返回 JSON 文本
+        return `EXPLAIN FORMAT=JSON ${trimmed}`;
       case 'postgres':
       case 'kingbase':
       case 'gaussdb':
@@ -162,6 +274,8 @@ export class Explainer {
       case 'oceanbase':
       case 'polardb':
       case 'goldendb':
+        // v5.0.1 Bug N7: PG 同上,FORMAT JSON 让 server 返回 JSON 文本
+        return `EXPLAIN (FORMAT JSON) ${trimmed}`;
       case 'dm':
       case 'clickhouse':
         return `EXPLAIN ${trimmed}`;
