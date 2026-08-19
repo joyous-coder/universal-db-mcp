@@ -192,6 +192,15 @@ export class ProfileManager {
     }
 
     for (const p of doc.profiles) {
+      // v5.0.1: SQLite profile 只接受 ":memory:" 字面量作为 filePath(同 create_profile 规则)
+      if (p.type === 'sqlite' && p.config && (p.config as any).filePath &&
+          (p.config as any).filePath !== ':memory:') {
+        result.skipped++;
+        result.errors.push(
+          `profile ${p.name || '?'}: SQLite profile 不接受 config.filePath="${(p.config as any).filePath}"(强制 ~/.universal-db-mcp/${p.name}/data.db,仅 ":memory:" 例外)`,
+        );
+        continue;
+      }
       // v5.0.1 Bug N4: dryRun 时跳过 ProfileSerializer.validate。
       // validate 强制 role/enabled 等字段存在,即使 dryRun 也报错会误导用户。
       // dryRun 路径只统计 inserted/updated/skipped,不应被结构合法性拦截。
@@ -371,7 +380,24 @@ export class ProfileManager {
     const profile = await this.store.get(name);
     if (!profile) throw new Error(`profile not found: ${name}`);
     if (!profile.enabled) throw new Error(`profile disabled: ${name}`);
-    const adapter = createAdapter({ ...profile.config, type: profile.type } as any);
+    // v5.0.1: SQLite profile 的 filePath 强制重写到 ~/.universal-db-mcp/<name>/data.db
+    // (除了 `:memory:` 字面量,这是 SQLite 内存模式标识不是路径,保留 user 原值)。
+    // 这样所有 profile 的 SQLite 文件统一在 ~/.universal-db-mcp 下,与其他持久化文件
+    // (profiles.db/templates.db/history.db)一致的 per-profile 目录布局。
+    // handler 层 (create/update/import) 已经拒绝 user 传非 `:memory:` 的 filePath,
+    // 这里只做缺失时的默认生成。
+    let effectiveConfig: any = { ...profile.config, type: profile.type };
+    if (profile.type === 'sqlite') {
+      const userFilePath = (profile.config as any)?.filePath;
+      if (!userFilePath) {
+        const { getGlobalDir, ensureProfileDir } = await import('../utils/global-paths.js');
+        const nodePath = await import('node:path');
+        try { ensureProfileDir(profile.name); } catch { /* mkdir 失败由 sqlite 报错暴露 */ }
+        effectiveConfig = { ...effectiveConfig, filePath: nodePath.join(getGlobalDir(), profile.name, 'data.db') };
+      }
+      // userFilePath === ':memory:' 或其他非空值,保留原值(handler 已确保非空值只能为 :memory:)
+    }
+    const adapter = createAdapter(effectiveConfig);
     await adapter.connect();
     // v5.0.0 修复:DatabaseService 内部依赖 this.config.type 做方言分支(appendLimit /
     // quoteSimpleIdentifier 等)。profile.config 里没有 type(type 在 profile.type 上),

@@ -27,6 +27,19 @@ export function buildCreateProfileHandler(pm: ProfileManager) {
         `invalid profile name: "${args.name}" (must match /^[a-zA-Z0-9_-]+$/)`,
       );
     }
+    // v5.0.1: SQLite profile 不接受 user 自定路径。
+    // SQLite 数据文件统一在 ~/.universal-db-mcp/<name>/data.db(profile-manager 自动生成)。
+    // 例外: `:memory:` 是 SQLite 内存数据库特殊标识(不是路径),允许传。
+    if (args.type === 'sqlite' && args.config && (args.config as any).filePath) {
+      const fp = (args.config as any).filePath;
+      if (fp !== ':memory:') {
+        throw new Error(
+          `SQLite profile 不接受 config.filePath="${fp}"。` +
+          `SQLite 数据文件自动放在 ~/.universal-db-mcp/${args.name}/data.db,无需手动指定。` +
+          `(仅 ":memory:" 字面量可用,表示内存数据库)`,
+        );
+      }
+    }
     // v3.2.7 Bug #27 fix: mongodb requires authSource for SCRAM authentication.
     // Default to 'admin' if missing (the convention used by MONGO_INITDB_ROOT_USERNAME env).
     if (args.type === 'mongodb' && args.config && !(args.config as any).authSource) {
@@ -66,6 +79,15 @@ export function buildUpdateProfileHandler(pm: ProfileManager) {
       throw new Error(
         `invalid profile name: "${args.name}" (must match /^[a-zA-Z0-9_-]+$/)`,
       );
+    }
+    // v5.0.1: 同 createProfile — SQLite profile 只接受 ":memory:" 字面量
+    if (args.type === 'sqlite' && args.config && (args.config as any).filePath) {
+      const fp = (args.config as any).filePath;
+      if (fp !== ':memory:') {
+        throw new Error(
+          `SQLite profile 不接受 config.filePath="${fp}"。文件固定在 ~/.universal-db-mcp/${args.name}/data.db。`,
+        );
+      }
     }
     if (args.type === 'mongodb' && args.config && !(args.config as any).authSource) {
       args = {
@@ -248,8 +270,10 @@ export function buildDisconnectProfileHandler(pm: ProfileManager) {
 
 export const PROFILE_TOOL_DESCRIPTIONS = {
   // v5.0.0 BREAKING: rename save_profile → create_profile (INSERT-only)
-  create_profile: '新建 profile 到 profiles.db(INSERT-only)。已存在同名 profile 抛 UNIQUE 约束错误,改用 update_profile。[group: profiles]',
-  update_profile: '修改已存在的 profile(UPDATE-only)。profile 不存在抛错。use_count/created_at/created_by/id 不变。[group: profiles]',
+  // v5.0.1: SQLite profile 的 filePath 由工具自动管理(放 ~/.universal-db-mcp/<name>/data.db),
+  // 不要在 config 里传 filePath(传了会报错)。其他 DB 类型正常传 host/port/database 等。
+  create_profile: '新建 profile 到 profiles.db(INSERT-only)。已存在同名 profile 抛 UNIQUE 约束错误,改用 update_profile。SQLite 类型不要传 config.filePath。[group: profiles]',
+  update_profile: '修改已存在的 profile(UPDATE-only)。profile 不存在抛错。use_count/created_at/created_by/id 不变。SQLite 类型不要传 config.filePath。[group: profiles]',
   list_profiles: '列出 profile。支持 role/tag/enabled 过滤。[group: profiles]',
   use_profile: '切换活跃连接到已存 profile。必要时加载。[group: profiles]',
   get_global_schema: '合并所有启用 profile 的 schema (并行)。[group: profiles]',
