@@ -105,7 +105,18 @@ export class MySQLAdapter extends BaseAdapter {
     const startTime = Date.now();
 
     try {
-      const [rows, fields] = await withRetry(() => this.pool!.execute(query, params as any[]));
+      // v5.0.1 Bug N6: 无 params 时走 text protocol (`pool.query`),有 params 时走
+      // prepared-statement protocol (`pool.execute`)。mysql2 在 execute 路径
+      // 要求 params 数组长度与 `?` 占位符匹配,否则抛 "Incorrect arguments to
+      // COM_STMT_EXECUTE"。query 路径执行 SQL 但不绑定参数,适合占位符不匹配
+      // 或无参数场景(用户已预解析的 SQL、含 `?` 字面字符的 SQL 等)。
+      const hasParams = Array.isArray(params) && params.length > 0;
+      const runner = hasParams ? this.pool!.execute : this.pool!.query;
+      const [rows, fields] = await withRetry(() =>
+        hasParams
+          ? runner.call(this.pool!, query, params as any[])
+          : runner.call(this.pool!, query),
+      );
       const executionTime = Date.now() - startTime;
 
       // 处理不同类型的查询结果
@@ -494,7 +505,13 @@ export class MySQLAdapter extends BaseAdapter {
       const tx: TransactionContext = {
         executeQuery: async (query: string, params?: unknown[]) => {
           const startTime = Date.now();
-          const [rows, fields] = await conn.execute(query, params as any[]);
+          // v5.0.1 Bug N6: 同 executeQuery — 无 params 走 conn.query text protocol
+          const hasParams = Array.isArray(params) && params.length > 0;
+          const [rows, fields] = await (
+            hasParams
+              ? conn.execute(query, params as any[])
+              : conn.query(query)
+          );
           const executionTime = Date.now() - startTime;
           if (Array.isArray(rows)) {
             return {
