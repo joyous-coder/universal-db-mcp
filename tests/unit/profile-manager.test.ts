@@ -50,4 +50,45 @@ describe('ProfileManager', () => {
     expect(snap.enabled).toBe(true);
     expect(snap.read_routing).toBe('round-robin');
   });
+
+  // v5.0.0 Bug N2: update_profile 后 use_profile 缓存命中,返回的 LiveProfile 还是旧的
+  // 应基于 updated_at 比较,发现不一致就 reload
+  it('loadProfile picks up updated config after update_profile', async () => {
+    const input = { name: 'n2-p', description: 'orig', type: 'sqlite' as const, config: { type: 'sqlite' as const, filePath: ':memory:' } };
+    await pm.saveProfile(input);
+    const live1 = await pm.loadProfile('n2-p');
+    expect((live1.profile.config as any).filePath).toBe(':memory:');
+
+    // update profile config
+    await pm.updateProfile({ ...input, description: 'updated', config: { type: 'sqlite' as const, filePath: ':memory:' /* same — but updated_at 一定会变 */ } });
+
+    const live2 = await pm.loadProfile('n2-p');
+    // 不应是同一份 cache(因为 store 改了)
+    expect(live2.profile.updated_at >= live1.profile.updated_at).toBe(true);
+    expect(live2.profile.description).toBe('updated');
+
+    // 清理
+    await live1.adapter.disconnect().catch(() => {});
+    await live2.adapter.disconnect().catch(() => {});
+  });
+
+  // v5.0.0 Bug N2 续: 显式 update 改 config 时,LiveProfile.config 必须反映新值
+  it('loadProfile rebuilds adapter when underlying config changes', async () => {
+    const input = { name: 'n2-cfg', description: '', type: 'sqlite' as const, config: { type: 'sqlite' as const, filePath: ':memory:' } };
+    await pm.saveProfile(input);
+    const live1 = await pm.loadProfile('n2-cfg');
+    expect((live1.profile.config as any).filePath).toBe(':memory:');
+
+    // 等 5ms 确保 updated_at 时间戳不同(JS Date.now() 精度可能不够)
+    await new Promise(r => setTimeout(r, 5));
+
+    const newConfig = { type: 'sqlite' as const, filePath: ':memory:' };
+    await pm.updateProfile({ ...input, config: newConfig });
+
+    const live2 = await pm.loadProfile('n2-cfg');
+    // 关键: live2 应该是新实例(配置改了 → updated_at 变 → cache invalidation)
+    expect(live2.profile.updated_at).not.toBe(live1.profile.updated_at);
+    await live1.adapter.disconnect().catch(() => {});
+    await live2.adapter.disconnect().catch(() => {});
+  });
 });

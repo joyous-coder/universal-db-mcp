@@ -265,6 +265,11 @@ export class DatabaseMCPServer {
     };
     this.databaseService = liveService;
     this.activeProfile = name;
+    // v5.0.1 Bug N8: 把新 adapter 接到 queryAnalyzer 的 Explainer,
+    // 否则 explain_query 返回空 plan、list_query_plans 的 dbType 永远是空字符串
+    if (this.queryAnalyzer && liveAdapter) {
+      this.queryAnalyzer.attachAdapter(liveAdapter, handlerReturn.type ?? '');
+    }
     return true;
   }
 

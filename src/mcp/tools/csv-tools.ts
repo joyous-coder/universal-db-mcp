@@ -65,6 +65,22 @@ function defaultOutputPath(args: { table?: string; sql?: string }, cwd: string):
   return path.join(sqlDir, `query-${stamp}.csv`);
 }
 
+/**
+ * v5.0.1 Bug N9/N11: 在 resolveAdapter 后,先判断是否 NoSQL。
+ * NoSQL adapter(redis / mongodb)没有表/列概念,export_table_csv 会拼 SELECT 语句
+ * 发给 Redis 触发 `SELECT` 命令错误,import_csv 会调 getTableInfo 返回 null 后
+ * null.map() NPE。提前抛清晰错误更友好。
+ */
+function rejectNoSql(adapter: any, op: string): void {
+  const dbType = (adapter as any)?.config?.type;
+  if (dbType === 'redis' || dbType === 'mongodb' || dbType === 'mongo') {
+    throw new Error(
+      `${op} 不支持 ${dbType}:NoSQL adapter 没有表/列结构。` +
+      `Redis 用 SCAN + GET,MongoDB 用 find() cursor,请直接用 execute_query。`,
+    );
+  }
+}
+
 export function buildExportTableCsvHandler(pm: any, getActiveAdapter: () => any) {
   return async (args: {
     profileName?: string;
@@ -99,6 +115,7 @@ export function buildExportTableCsvHandler(pm: any, getActiveAdapter: () => any)
     }
 
     const adapter = await resolveAdapter(pm, getActiveAdapter, args.profileName);
+    rejectNoSql(adapter, 'export_table_csv'); // v5.0.1 Bug N9
 
     return exportTableCsv({
       adapter,
@@ -131,6 +148,7 @@ export function buildImportCsvHandler(pm: any, getActiveAdapter: () => any) {
     const safePath = resolveAndValidatePath(args.filePath, allowedDirs, process.cwd());
 
     const adapter = await resolveAdapter(pm, getActiveAdapter, args.profileName);
+    rejectNoSql(adapter, 'import_csv'); // v5.0.1 Bug N11
     const nullStrings = args.nullStrings ? new Set(args.nullStrings) : undefined;
     return importCsv({
       adapter,

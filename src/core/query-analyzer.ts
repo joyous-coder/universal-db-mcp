@@ -164,6 +164,10 @@ export class QueryAnalyzer {
     filter?: HistoryFilter,
   ): Promise<QueryHistoryEntry[] | ProfileHistoryAggregate[]> {
     if (!this.enabled) return [];
+    // v5.0.1 Bug N15: 跟其他方法(recordQuery/saveTemplate 等)一致,在读 history 前
+    // 调一次 ensureStoresAtActivePath,让 HistoryStore 跟当前 active profile 切换。
+    // 否则切到 test-mysql 后再 get_history 仍读到 test-pg 的 entries。
+    await this.ensureStoresAtActivePath();
     return this.history.query(filter ?? {});
   }
 

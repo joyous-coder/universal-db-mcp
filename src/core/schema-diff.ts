@@ -52,7 +52,10 @@ interface FlatTable {
 function flatten(schema: ProfileSchema): Map<string, FlatTable> {
   const out = new Map<string, FlatTable>();
   for (const t of schema.tables) {
-    const fullName = t.schema ? `${t.schema}.${t.name}` : t.name;
+    // v5.0.1 Bug N5: PG adapter 已在 `name` 字段返回 "schema.table"(`schema` 字段单独也有),
+    // 直接拼成 "schema.schema.table" 双前缀。其他 adapter(MySQL/Oracle/DM)的 t.name
+    // 不含点,才需要 `${t.schema}.${t.name}` 拼装。统一规则: t.name 已含 . 时直接用。
+    const fullName = t.schema && !t.name.includes('.') ? `${t.schema}.${t.name}` : t.name;
     const cols = new Map<string, SchemaColumn>();
     for (const c of t.columns) {
       cols.set(c.name, { name: c.name, type: c.type, nullable: c.nullable });

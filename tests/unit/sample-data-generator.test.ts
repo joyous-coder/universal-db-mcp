@@ -56,4 +56,49 @@ describe('SampleDataGenerator', () => {
     expect(typeof custIdVal).toBe('number');
     expect(custIdVal).toBeGreaterThan(0);
   });
+
+  // v5.0.1 Bug N14: status 列默认值超过 VARCHAR(20)
+  it('status column returns short enum-like value (≤20 chars)', () => {
+    const generator = new SampleDataGenerator({ seed: 42 });
+    for (let i = 0; i < 10; i++) {
+      const v = generator.generateValue(column('status', 'varchar(20)'));
+      expect(typeof v).toBe('string');
+      expect((v as string).length).toBeLessThanOrEqual(20);
+    }
+  });
+
+  // v5.0.1 Bug N14: VARCHAR(N) 字符串截断
+  it('truncates string values to varchar(N) maxLen', () => {
+    const generator = new SampleDataGenerator({ seed: 42 });
+    // 没匹配任何 heuristic 的列 + VARCHAR(20) → 走 fallbackByType 返回 lorem sentence
+    // (超过 20 字符) → 应被截断到 20
+    const v = generator.generateValue(column('description', 'varchar(20)'));
+    expect(typeof v).toBe('string');
+    expect((v as string).length).toBeLessThanOrEqual(20);
+  });
+
+  // v5.0.1 Bug N14: VARCHAR(100) 不截断
+  it('does not truncate when length is within varchar(N)', () => {
+    const generator = new SampleDataGenerator({ seed: 42 });
+    const v = generator.generateValue(column('description', 'varchar(100)'));
+    expect(typeof v).toBe('string');
+    // 任何 lorem sentence 都应小于 100
+    expect((v as string).length).toBeLessThanOrEqual(100);
+  });
+
+  // v5.0.1 Bug N14: TEXT/无长度类型不截断
+  it('does not truncate for text/unlimited types', () => {
+    const generator = new SampleDataGenerator({ seed: 42 });
+    const v = generator.generateValue(column('body', 'text'));
+    expect(typeof v).toBe('string');
+    // text 不应被截断
+    expect((v as string).length).toBeGreaterThan(0);
+  });
+
+  // v5.0.1 Bug N14: numeric 列不被截断(虽然 type 含括号长度)
+  it('does not truncate numeric columns (only strings)', () => {
+    const generator = new SampleDataGenerator({ seed: 42 });
+    const v = generator.generateValue(column('amount', 'decimal(10,2)'));
+    expect(typeof v).toBe('number');
+  });
 });

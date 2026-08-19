@@ -2,6 +2,55 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [5.0.1] - 2026-08-20
+
+### 🐛 Bug 修复(冒烟测试发现 — Redis + MySQL + PostgreSQL + SQLite)
+
+15 个 bug + 1 个 follow-up 全部修复,源自 2026-08-19 冒烟测试(`docs/smoke-test-v5.0.0-redis-mysql-pg.md` + `docs/smoke-test-v5.0.0-sqlite-mongodb.md`):
+
+#### Profile 生命周期
+- **N1** `update_profile` 不再清空 tags:PATCH 语义,`tags !== undefined` 才覆盖(P2)
+- **N2** `loadProfile` 按 `updated_at` 比对决定 reload,避免 update 后 stale config(P2)
+- **F1** `loadProfile` 总是 unload + reload,避免 use_profile A→B→A 死引用(原 N2 follow-up,P2)
+
+#### Schema 工具
+- **N3** `get_global_schema` 把 schema 查询错误推到 `ProfileSchema.warnings` 字段,不再静默吞错(P1)
+- **N5** `schema-diff` 检测 `t.name.includes('.')` 避免双前缀(PG adapter 已含 schema 前缀)(P1)
+- **N13** `BackupWriter.listTables` PG 排除系统 schema + 用 `table_schema` 拼名,扫所有 user schema(P1)
+
+#### EXPLAIN
+- **N7** MySQL/PG `explain_query` 改用 `EXPLAIN FORMAT=JSON` / `EXPLAIN (FORMAT JSON)`,parseMysqlJson/parsePgJson 解析 JSON plan(P0)
+- **N8** `activateProfile` 末尾调 `queryAnalyzer.attachAdapter(adapter, type)`,`list_query_plans` 的 `dbType` 不再空(P2)
+- **N15** `QueryAnalyzer.getHistory` 加 `ensureStoresAtActivePath`,history 跟 active profile 切换(P0)
+
+#### CSV/Backup/NoSQL guard
+- **N9** `csv-tools.rejectNoSql` 早抛 "不支持 redis:NoSQL adapter 没有表/列结构"(P2)
+- **N10** PG adapter 新增 `executeBatch` override,把 `?` → `$1..$N`(PG driver 不支持 `?`)(P1)
+- **N11** `csv-reader.importCsv` 加 `getTableInfo returned null` 兜底,NoSQL adapter 不再 NPE(P2)
+- **N12** `buildExportBackupHandler` 用 `path-guard` + `fs.writeFileSync` 真正写盘到 `outputPath`(P1)
+
+#### Adapter 改进
+- **N4** `importProfiles` dryRun=true 时跳过 `ProfileSerializer.validate`(P2)
+- **N6** MySQL adapter `executeQuery`/`tx.executeQuery` 在无 params 时走 `conn.query` text protocol,避免 `Incorrect arguments to COM_STMT_EXECUTE`(P2)
+- **N14** `SampleDataGenerator.generateValue` 从 `column.type` 提取 `maxLen` 截断字符串 + 新增 `status` heuristic(P0)
+
+#### TS / 工具改进
+- `adapter-factory.ts` 统一注入 `type` 到所有 adapter config(N9 follow-up,fix N9 guard 不识别非 SQLite adapter)
+- `src/adapters/{mysql,postgres}.ts` 修正 `ExecuteBatchOptions`/`BatchResult` 类型 import
+- `src/utils/sample-data-generator.ts` 增加 `truncateByColumnType` helper,所有字符串 heuristic 输出统一截断
+
+### 🛠 SQLite profile 设计变更
+
+- **SQLite profile 不接受 `config.filePath`** — `create_profile` / `update_profile` / `import_profiles` handler 检测到非 `:memory:` 的 filePath 直接报错。SQLite 数据文件由 `ProfileManager.loadProfile` 自动生成 `~/.universal-db-mcp/<profile-name>/data.db`,统一跟其他持久化文件(`profiles.db` / `templates.db` / `history.db` / `plans.db`)布局。其他 16 种 DB 类型行为不变。
+
+### 📊 测试覆盖
+
+- 单元测试:**80 文件 / 654 测试 全 PASS**(`npm test`)
+- 集成测试(Redis + MySQL + PG + SQLite):**42 tool 全 PASS**(MCP 手动验证)
+- MongoDB:WSL2 docker + Windows firewall 拦 inbound,**未连上测试**,所有 MongoDB 列待手动验证(见 `docs/smoke-test-v5.0.0-sqlite-mongodb.md` §A M1)
+
+---
+
 ## [5.0.0] - 2026-08-19
 
 ### 🔥 BREAKING 变更

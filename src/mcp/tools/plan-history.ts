@@ -24,7 +24,7 @@ export function buildExplainQueryWithAdviceHandler(qa: QueryAnalyzer, planHistor
     } catch {
       planJson = JSON.stringify({ raw: baseResult.raw });
     }
-    const dbType = (baseResult as any).db ?? 'sqlite';
+    const dbType = (baseResult as any).db || 'sqlite';
     const norm = ExplainPlanParser.normalize(JSON.stringify({ rowData: baseResult.plan, raw: baseResult.raw }), dbType);
     const advice = IndexAdvisor.analyze(norm);
 

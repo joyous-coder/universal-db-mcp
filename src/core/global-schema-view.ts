@@ -20,6 +20,11 @@ export interface ProfileSchema {
     indexes: unknown[];
     comment?: string;
   }>;
+  /**
+   * v5.0.1 Bug N3: 当 loadProfile 或 getSchema 失败时,把错误消息推到 warnings。
+   * 之前 catch 块静默吞掉所有错误返回 tables:[]。现在 LLM 能在 warnings 看到根因。
+   */
+  warnings?: string[];
 }
 
 export interface GlobalSchemaView {
@@ -33,16 +38,19 @@ export async function buildGlobalSchemaView(pm: ProfileManager): Promise<GlobalS
     profiles.map(async (p) => {
       try {
         const live = await pm.loadProfile(p.name);
-        return { profile: p, live };
-      } catch {
-        return { profile: p, live: null };
+        return { profile: p, live, loadError: null as string | null };
+      } catch (err) {
+        return { profile: p, live: null, loadError: err instanceof Error ? err.message : String(err) };
       }
     })
   );
   const profileSchemas: ProfileSchema[] = [];
-  for (const { profile, live } of liveEntries) {
+  for (const { profile, live, loadError } of liveEntries) {
     if (!live) {
-      profileSchemas.push({ name: profile.name, type: profile.type, role: profile.role, tables: [] });
+      profileSchemas.push({
+        name: profile.name, type: profile.type, role: profile.role, tables: [],
+        warnings: loadError ? [loadError] : ['profile not loaded'],
+      });
       continue;
     }
     try {
@@ -64,8 +72,15 @@ export async function buildGlobalSchemaView(pm: ProfileManager): Promise<GlobalS
           comment: t.comment,
         })),
       });
-    } catch {
-      profileSchemas.push({ name: profile.name, type: profile.type, role: profile.role, tables: [] });
+    } catch (err) {
+      // v5.0.1 Bug N3: 之前这里静默吞错返回 tables:[]。现在把错误消息推到 warnings
+      profileSchemas.push({
+        name: profile.name,
+        type: profile.type,
+        role: profile.role,
+        tables: [],
+        warnings: [err instanceof Error ? err.message : String(err)],
+      });
     }
   }
   return { generatedAt: new Date().toISOString(), profiles: profileSchemas };

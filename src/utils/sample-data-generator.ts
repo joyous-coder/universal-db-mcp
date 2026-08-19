@@ -95,9 +95,29 @@ export class SampleDataGenerator {
     }
 
     const heuristic = this.matchHeuristic(column);
-    if (heuristic !== null) return heuristic;
+    if (heuristic !== null) return this.truncateByColumnType(heuristic, column);
 
-    return this.fallbackByType(column);
+    return this.truncateByColumnType(this.fallbackByType(column), column);
+  }
+
+  /**
+   * v5.0.1 Bug N14: 从列类型提取最大长度,截断超长字符串。
+   * 之前 `fallbackByType` 对所有字符串类型一律返回 `faker.lorem.sentence()`(~70+ 字符),
+   * 直接超过 `VARCHAR(20)` 等短列宽,MySQL/PG 报 "Data too long"。
+   */
+  private truncateByColumnType(value: unknown, column: ColumnInfo): unknown {
+    if (typeof value !== 'string') return value;
+    const maxLen = this.extractMaxLen(column.type);
+    if (maxLen === null) return value;
+    return value.length > maxLen ? value.slice(0, maxLen) : value;
+  }
+
+  /** 从 column.type 提取 (N) 中的 N,没有显式长度返回 null(无限制)。 */
+  private extractMaxLen(type: string): number | null {
+    const m = /\(\s*(\d{1,6})\s*\)/.exec(type);
+    if (!m) return null;
+    const n = parseInt(m[1], 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
   }
 
   private applyRule(column: ColumnInfo, rule: any, context: GenerateContext, rowIndex: number): unknown {
@@ -183,6 +203,13 @@ export class SampleDataGenerator {
     }
     if (/created_?at|created_?time|insert_?time/i.test(name)) return this.faker.date.recent({ days: 90 });
     if (/updated_?at|updated_?time|modify_?time/i.test(name)) return this.faker.date.recent({ days: 30 });
+    // v5.0.1 Bug N14: status/state/record_status 等枚举列 — 返回短字符串
+    // (避免 fallbackByType 给 70+ 字符 lorem sentence → 超过 VARCHAR(20))
+    if (/^(status|state|record_?status|order_?status|task_?status|user_?status|account_?status)$/i.test(name)) {
+      return this.faker.helpers.arrayElement([
+        'active', 'inactive', 'pending', 'completed', 'archived', 'failed', 'paid', 'shipped',
+      ]);
+    }
     return null;
   }
 

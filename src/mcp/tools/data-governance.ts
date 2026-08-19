@@ -32,10 +32,27 @@ export function buildExportBackupHandler(pm: ProfileManager) {
     outputPath?: string;
   }) => {
     const { BackupWriter } = await import('../../core/backup-writer.js');
-    return BackupWriter.dump(pm, args.profileName, {
+    const result = await BackupWriter.dump(pm, args.profileName, {
       schemaOnly: args.schemaOnly,
       tables: args.tables,
     });
+    // v5.0.1 Bug N12: 之前 handler 接收 outputPath 但完全忽略 — BackupWriter.dump
+    // 只构造字符串,从没触盘。现在:路径白名单校验 + mkdir + writeFile,并返回
+    // writtenTo 让调用方确认落盘位置(避免返回巨大 content 字段导致 OOM,
+    // 所以写盘后清空 content)。
+    if (args.outputPath) {
+      const fs = await import('node:fs');
+      const path = await import('node:path');
+      const { resolveAndValidatePath } = await import('../../utils/path-guard.js');
+      const cwd = process.cwd();
+      const rawAllowed = (process.env.DB_ALLOWED_FILE_PATHS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+      const allowedDirs = rawAllowed.length > 0 ? rawAllowed : [cwd];
+      const safePath = resolveAndValidatePath(args.outputPath, allowedDirs, cwd);
+      fs.mkdirSync(path.dirname(safePath), { recursive: true });
+      fs.writeFileSync(safePath, result.content, 'utf8');
+      return { ...result, writtenTo: safePath, content: undefined };
+    }
+    return result;
   };
 }
 

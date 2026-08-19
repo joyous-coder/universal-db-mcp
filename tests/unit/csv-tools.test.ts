@@ -189,4 +189,57 @@ describe('csv-tools handlers', () => {
       await fs.unlink(outPath).catch(() => {});
     }
   });
+
+  // v5.0.1 Bug N9: redis adapter 不支持 export_table_csv,handler 应早抛清晰错误
+  it('export_table_csv rejects redis adapter with clear message', async () => {
+    const pm = { loadProfile: vi.fn() } as any;
+    const redisAdapter = { config: { type: 'redis' }, executeQuery: vi.fn() } as any;
+    const handler = buildExportTableCsvHandler(pm, () => redisAdapter);
+    const outPath = path.join(tmpRoot, '.tmp-csv-redis-export.csv');
+    fsSync.writeFileSync(outPath, '', 'utf8');
+    try {
+      await expect(handler({ table: 'keys_string', outputPath: outPath })).rejects.toThrow(
+        /不支持.*redis|nosql/i,
+      );
+    } finally {
+      await fs.unlink(outPath).catch(() => {});
+    }
+  });
+
+  // v5.0.1 Bug N11: redis adapter 不支持 import_csv,handler 应早抛清晰错误
+  it('import_csv rejects redis adapter with clear message', async () => {
+    const pm = { loadProfile: vi.fn() } as any;
+    const redisAdapter = { config: { type: 'redis' } } as any;
+    const handler = buildImportCsvHandler(pm, () => redisAdapter);
+    const inPath = path.join(tmpRoot, '.tmp-csv-redis-import.csv');
+    fsSync.writeFileSync(inPath, '', 'utf8');
+    try {
+      await expect(handler({ table: 'k', filePath: inPath })).rejects.toThrow(
+        /不支持.*redis|nosql/i,
+      );
+    } finally {
+      await fs.unlink(inPath).catch(() => {});
+    }
+  });
+
+  // v5.0.1 Bug N11 兜底: import_csv 内部 csv-reader 在 getTableInfo 返回 null 时
+  // 抛清晰错误(而不是 null.map NPE)
+  it('import_csv surfaces clear error when adapter.getTableInfo returns null', async () => {
+    const pm = { loadProfile: vi.fn() } as any;
+    // adapter 不是 redis(避免被 NoSQL guard 拦下),但 getTableInfo 返回 null
+    const fakeAdapter = {
+      config: { type: 'sqlite' },
+      getTableInfo: vi.fn().mockResolvedValue(null),
+    } as any;
+    const handler = buildImportCsvHandler(pm, () => fakeAdapter);
+    const inPath = path.join(tmpRoot, '.tmp-csv-null-tableinfo.csv');
+    fsSync.writeFileSync(inPath, '', 'utf8');
+    try {
+      await expect(handler({ table: 't', filePath: inPath, dryRun: true })).rejects.toThrow(
+        /getTableInfo returned null|NoSQL/i,
+      );
+    } finally {
+      await fs.unlink(inPath).catch(() => {});
+    }
+  });
 });

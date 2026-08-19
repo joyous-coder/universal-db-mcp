@@ -120,4 +120,27 @@ profiles:
     expect(result.skipped).toBe(1);
     expect(result.errors[0]).toMatch(/unknown profile type/);
   });
+
+  // v5.0.1 Bug N4: dryRun=true 时不应触发 ProfileSerializer.validate
+  // (validate 强制 role/enabled 存在,但用户用 dryRun 只是想看效果,不应被结构错误拦下)
+  it('dryRun=true skips validate for incomplete entries', async () => {
+    const incomplete = `version: 1
+profiles:
+  - name: dryrun-minimal
+    description: 'd'
+    type: mysql
+    config:
+      type: mysql
+      host: db.x
+      port: 3306
+      user: app
+      password: x
+`;
+    const result = await pm.importProfiles(incomplete, { dryRun: true });
+    // dryRun 不验证 → 没有 errors
+    expect(result.errors).toEqual([]);
+    // 没真插入 profile
+    const list = await pm.listProfiles();
+    expect(list.map(p => p.name).sort()).toEqual(['prod-mysql', 'staging']);
+  });
 });

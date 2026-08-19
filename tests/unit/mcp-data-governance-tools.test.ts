@@ -62,4 +62,30 @@ describe('data-governance MCP tool handlers', () => {
     );
     expect(result).toEqual({ success: true, profileName: 'prod', ruleCount: 1 });
   });
+
+  // v5.0.1 Bug N12: export_backup handler 之前忽略 outputPath, 现在写盘并返回 writtenTo
+  it('buildExportBackupHandler writes content to outputPath when provided', async () => {
+    const path = await import('node:path');
+    const fs = await import('node:fs');
+    const { unlinkSync } = await import('node:fs');
+    const tmpFile = path.join(process.cwd(), '.tmp-bk-handler-test.sql');
+    try { unlinkSync(tmpFile); } catch { /* ignore */ }
+    process.env.DB_ALLOWED_FILE_PATHS = process.cwd();
+    try {
+      const handler = buildExportBackupHandler({} as any);
+      const result = await handler({ profileName: 'any', outputPath: tmpFile });
+      expect(result.writtenTo).toBeTruthy();
+      const onDisk = fs.readFileSync(tmpFile, 'utf8');
+      expect(onDisk).toBe('-- dump --');
+    } finally {
+      try { unlinkSync(tmpFile); } catch { /* ignore */ }
+    }
+  });
+
+  it('buildExportBackupHandler without outputPath returns content unchanged', async () => {
+    const handler = buildExportBackupHandler({} as any);
+    const result = await handler({ profileName: 'any' });
+    expect(result.content).toBe('-- dump --');
+    expect(result.writtenTo).toBeUndefined();
+  });
 });

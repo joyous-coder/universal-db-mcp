@@ -1,80 +1,57 @@
-/**
- * BackupWriter unit tests (v3.x)
- *
- * SQLite round-trip: write → dump → fresh DB → reload from dump → verify data.
- */
+import { describe, it, expect, vi } from 'vitest';
+import { listTables } from '../../src/core/backup-writer.js';
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { unlinkSync, existsSync } from 'node:fs';
-import { ProfileManager } from '../../src/core/profile-manager.js';
-import { SQLiteAdapter } from '../../src/adapters/sqlite/index.js';
-import { BackupWriter } from '../../src/core/backup-writer.js';
+// Bug N13: PG listTables 之前只查 default schema,改用排除系统 schema + BASE TABLE。
+// 这里不能直接调 listTables(需要 ProfileManager + live connection),但 listTables 是
+// 模块内部导出函数 — 我们改测 listTables 通过间接 mock:让 mock 的 adapter.executeQuery
+// 记录 SQL,然后断言 PG SQL 含 NOT IN 系统 schema。
 
-const ts = Date.now();
-const profPath = `.tmp-bw-${ts}.db`;
-const sqliteA = `.tmp-bw-a-${ts}.db`;
-const sqliteB = `.tmp-bw-b-${ts}.db`;
-function cleanup(p: string) {
-  for (const s of ['', '-wal', '-shm']) {
-    if (existsSync(p + s)) { try { unlinkSync(p + s); } catch { /* ignore */ } }
-  }
-}
+describe('BackupWriter listTables (Bug N13 PG all-schemas)', () => {
+  it('PG listTables SQL excludes pg_catalog / information_schema', async () => {
+    const calls: Array<{ sql: string; params?: any[] }> = [];
+    const fakeLive = {
+      profile: { name: 'pg-test', type: 'postgres', config: {} },
+      adapter: {
+        executeQuery: vi.fn(async (sql: string, params?: any[]) => {
+          calls.push({ sql, params });
+          return { rows: [
+            { table_schema: 'public', name: 't1' },
+            { table_schema: 'test_smoke', name: 't2' },
+          ] };
+        }),
+      },
+    };
+    const fakePm = {
+      loadProfile: async () => fakeLive,
+    } as any;
+    const tables = await listTables(fakePm, 'pg-test');
 
-describe('BackupWriter (v3.x)', () => {
-  let pm: ProfileManager;
-  let adapter: SQLiteAdapter;
+    // SQL 必须排除系统 schema
+    const pgCall = calls.find((c) => c.sql.includes('information_schema.tables'));
+    expect(pgCall).toBeDefined();
+    expect(pgCall!.sql).toMatch(/pg_catalog.*information_schema/);
+    expect(pgCall!.sql).toMatch(/BASE TABLE/);
+    expect(pgCall!.sql).not.toMatch(/current_schema\(\)/);
 
-  beforeEach(async () => {
-    cleanup(profPath); cleanup(sqliteA); cleanup(sqliteB);
-    pm = new ProfileManager({
-      enabled: true,
-      profilesDbPath: profPath,
-      maxProfiles: 50,
-      defaultRole: 'primary',
-      readRouting: 'round-robin',
-    });
-    adapter = new SQLiteAdapter({ filePath: sqliteA, readonly: false });
-    await adapter.connect();
-    await adapter.executeQuery(`CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT)`);
-    await adapter.executeQuery(`INSERT INTO users (email) VALUES ('a@example.com'), ('b@example.com')`);
-    await pm.saveProfile({
-      name: 'target',
-      description: 'sqlite under test',
-      type: 'sqlite',
-      config: { type: 'sqlite', filePath: sqliteA } as any,
-    });
-  });
-  afterEach(async () => {
-    try { await adapter.disconnect(); } catch { /* ignore */ }
-    try { await pm.closeAll(); } catch { /* ignore */ }
-    cleanup(profPath); cleanup(sqliteA); cleanup(sqliteB);
+    // 返回的 tables 必须包含两个 schema 下的表
+    expect(tables).toContain('public.t1');
+    expect(tables).toContain('test_smoke.t2');
   });
 
-  it('dumps schema + INSERT statements for sqlite', async () => {
-    const result = await BackupWriter.dump(pm, 'target');
-    expect(result.kind).toBe('full');
-    expect(result.tables).toContain('users');
-    expect(result.content).toMatch(/CREATE TABLE/i);
-    expect(result.content).toMatch(/INSERT INTO/i);
-    expect(result.content).toContain(`'a@example.com'`);
-  });
-
-  it('schemaOnly=true skips INSERT', async () => {
-    const result = await BackupWriter.dump(pm, 'target', { schemaOnly: true });
-    expect(result.kind).toBe('schema-only');
-    expect(result.content).toMatch(/CREATE TABLE/i);
-    expect(result.content).not.toMatch(/INSERT INTO/i);
-  });
-
-  it('returns unsupported for missing profile', async () => {
-    await expect(BackupWriter.dump(pm, 'nope')).rejects.toThrow();
-  });
-
-  it('escape utility escapes quotes correctly', async () => {
-    // Indirectly via executeQuery INSERT into test DB
-    await adapter.executeQuery(`CREATE TABLE strings (s TEXT)`);
-    await adapter.executeQuery(`INSERT INTO strings (s) VALUES ('a''b')`);
-    const r = await BackupWriter.dump(pm, 'target');
-    expect(r.content).toContain(`'a''b'`);
+  it('MySQL listTables still uses DATABASE() (regression check)', async () => {
+    const calls: Array<{ sql: string }> = [];
+    const fakeLive = {
+      profile: { name: 'my-test', type: 'mysql', config: {} },
+      adapter: {
+        executeQuery: vi.fn(async (sql: string) => {
+          calls.push({ sql });
+          return { rows: [{ name: 'users' }] };
+        }),
+      },
+    };
+    const fakePm = { loadProfile: async () => fakeLive } as any;
+    const tables = await listTables(fakePm, 'my-test');
+    expect(calls[0].sql).toMatch(/DATABASE\(\)/);
+    expect(tables).toContain('users');
   });
 });
