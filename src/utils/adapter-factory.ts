@@ -120,80 +120,85 @@ export function createAdapter(config: DbConfig): DbAdapter {
   const dbType = normalizeDbType(config.type);
 
   // Create adapter based on type
+  // v5.0.1: 在 config 里注入 type 字段(除了 SQLite adapter 自己在 constructor 注入,
+  // 这里给所有 adapter 统一注入)。下游(如 csv-tools.ts rejectNoSql) 需要靠
+  // adapter.config.type 识别 NoSQL,Redis/MySQL/Postgres 之前没注入导致 N9 guard 失效。
+  const normalizedConfig = { ...config, type: dbType };
+  const adapter = ((): DbAdapter => {
   switch (dbType) {
     case 'mysql':
       return new MySQLAdapter({
-        host: config.host!,
-        port: config.port!,
-        user: config.user,
-        password: config.password,
-        database: config.database,
-        poolConfig: config.poolConfig,
+        host: normalizedConfig.host!,
+        port: normalizedConfig.port!,
+        user: normalizedConfig.user,
+        password: normalizedConfig.password,
+        database: normalizedConfig.database,
+        poolConfig: normalizedConfig.poolConfig,
       });
 
     case 'postgres':
       return new PostgreSQLAdapter({
-        host: config.host!,
-        port: config.port!,
-        user: config.user,
-        password: config.password,
-        database: config.database,
-        poolConfig: config.poolConfig,
+        host: normalizedConfig.host!,
+        port: normalizedConfig.port!,
+        user: normalizedConfig.user,
+        password: normalizedConfig.password,
+        database: normalizedConfig.database,
+        poolConfig: normalizedConfig.poolConfig,
       });
 
     case 'redis':
       return new RedisAdapter({
-        host: config.host!,
-        port: config.port!,
-        password: config.password,
-        database: config.database,
+        host: normalizedConfig.host!,
+        port: normalizedConfig.port!,
+        password: normalizedConfig.password,
+        database: normalizedConfig.database,
       });
 
     case 'oracle':
       return new OracleAdapter({
-        host: config.host!,
-        port: config.port!,
-        user: config.user,
-        password: config.password,
-        database: config.database,
-        oracleClientPath: config.oracleClientPath,
-        poolConfig: config.poolConfig,
+        host: normalizedConfig.host!,
+        port: normalizedConfig.port!,
+        user: normalizedConfig.user,
+        password: normalizedConfig.password,
+        database: normalizedConfig.database,
+        oracleClientPath: normalizedConfig.oracleClientPath,
+        poolConfig: normalizedConfig.poolConfig,
       });
 
     case 'dm':
       return new DMAdapter({
-        host: config.host!,
-        port: config.port!,
-        user: config.user,
-        password: config.password,
-        database: config.database,
-        poolConfig: config.poolConfig,
+        host: normalizedConfig.host!,
+        port: normalizedConfig.port!,
+        user: normalizedConfig.user,
+        password: normalizedConfig.password,
+        database: normalizedConfig.database,
+        poolConfig: normalizedConfig.poolConfig,
       });
 
     case 'sqlserver':
       return new SQLServerAdapter({
-        host: config.host!,
-        port: config.port!,
-        user: config.user,
-        password: config.password,
-        database: config.database,
-        poolConfig: config.poolConfig,
+        host: normalizedConfig.host!,
+        port: normalizedConfig.port!,
+        user: normalizedConfig.user,
+        password: normalizedConfig.password,
+        database: normalizedConfig.database,
+        poolConfig: normalizedConfig.poolConfig,
       });
 
     case 'mongodb':
       return new MongoDBAdapter({
-        host: config.host!,
-        port: config.port!,
-        user: config.user,
-        password: config.password,
-        database: config.database,
-        authSource: (config as any).authSource,
+        host: normalizedConfig.host!,
+        port: normalizedConfig.port!,
+        user: normalizedConfig.user,
+        password: normalizedConfig.password,
+        database: normalizedConfig.database,
+        authSource: (normalizedConfig as any).authSource,
       });
 
     case 'sqlite':
       return new SQLiteAdapter({
-        filePath: config.filePath!,
-        readonly: !config.allowWrite,
+        filePath: normalizedConfig.filePath!,
+        readonly: !normalizedConfig.allowWrite,
       });
 
     case 'kingbase':
@@ -288,4 +293,9 @@ export function createAdapter(config: DbConfig): DbAdapter {
     default:
       throw new Error(`不支持的数据库类型: ${dbType}`);
   }
+  })();
+  // v5.0.1: 给所有 adapter 的 config 注入 type(SQLite 在 constructor 已注入,其他 adapter 需要后置)。
+  // 下游 (csv-tools rejectNoSql, csv-reader null guard 等) 都靠 adapter.config.type 识别。
+  (adapter as any).config = { ...((adapter as any).config ?? {}), type: dbType };
+  return adapter;
 }
