@@ -7,7 +7,7 @@
  */
 
 import pg from 'pg';
-import { BaseAdapter, ExecuteScriptOptions, TransactionContext } from './base.js';
+import { BaseAdapter, ExecuteScriptOptions, ExecuteBatchOptions, TransactionContext, type BatchResult } from './base.js';
 import type {
   QueryResult,
   SchemaInfo,

@@ -110,12 +110,13 @@ export class MySQLAdapter extends BaseAdapter {
       // 要求 params 数组长度与 `?` 占位符匹配,否则抛 "Incorrect arguments to
       // COM_STMT_EXECUTE"。query 路径执行 SQL 但不绑定参数,适合占位符不匹配
       // 或无参数场景(用户已预解析的 SQL、含 `?` 字面字符的 SQL 等)。
+      // 用 if/else 分开写,mysql2 的 query/execute 第二个参数类型不一致
+      // (query 接受 QueryOptions,execute 接受 unknown[]),无法用 .call 统一调用。
       const hasParams = Array.isArray(params) && params.length > 0;
-      const runner = hasParams ? this.pool!.execute : this.pool!.query;
       const [rows, fields] = await withRetry(() =>
         hasParams
-          ? runner.call(this.pool!, query, params as any[])
-          : runner.call(this.pool!, query),
+          ? this.pool!.execute(query, params as any[])
+          : this.pool!.query(query),
       );
       const executionTime = Date.now() - startTime;
 
