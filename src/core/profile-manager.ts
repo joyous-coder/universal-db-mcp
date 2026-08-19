@@ -192,7 +192,10 @@ export class ProfileManager {
     }
 
     for (const p of doc.profiles) {
-      const errs = ProfileSerializer.validate(p);
+      // v5.0.1 Bug N4: dryRun 时跳过 ProfileSerializer.validate。
+      // validate 强制 role/enabled 等字段存在,即使 dryRun 也报错会误导用户。
+      // dryRun 路径只统计 inserted/updated/skipped,不应被结构合法性拦截。
+      const errs = dryRun ? [] : ProfileSerializer.validate(p);
       if (errs.length > 0) {
         result.skipped++;
         result.errors.push(`profile ${p.name || '?'}: ${errs.join('; ')}`);
