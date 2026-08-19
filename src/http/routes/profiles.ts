@@ -21,7 +21,8 @@ export async function setupProfileRoutes(fastify: FastifyInstance, pm: ProfileMa
 
   fastify.post('/api/profiles', async (request) => {
     const body = request.body as any;
-    return { success: true, data: await pm.saveProfile(body) };
+    // v5.0.0: POST = create(INSERT-only)。修改现有 profile 用 PATCH/PUT。
+    return { success: true, data: await pm.createProfile(body) };
   });
 
   fastify.get<{ Params: { name: string } }>('/api/profiles/:name', async (request, reply) => {

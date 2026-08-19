@@ -410,14 +410,20 @@ export class DatabaseService {
       const rowContext: Record<string, unknown> = {};
       const row: unknown[] = [];
 
+      // v5.0.0 Bug-fix: case-insensitive column lookup. Oracle adapter returns column
+      // names as lowercase (oracle.ts:339 `cn.toLowerCase()`), but LLM users typically
+      // pass uppercase column names per Oracle convention. Without case-insensitive
+      // lookup, `c.name === colName` returns undefined → row stays empty → 0 values
+      // bound to N placeholders → NJS-098 "0 bind values were provided" on Oracle.
+      const colLower = new Map(tableInfo.columns.map(c => [c.name.toLowerCase(), c]));
       for (const colName of columnsToInsert) {
-        const col = tableInfo.columns.find(c => c.name === colName);
+        const col = colLower.get(colName.toLowerCase());
         if (!col) continue;
 
-        // Find applicable rule (exact columnName or columnNamePattern)
+        // Find applicable rule (exact columnName or columnNamePattern — case-insensitive too)
         const rule = options?.rules?.find((r: any) => {
-          if (r.match?.columnName === colName) return true;
-          if (r.match?.columnNamePattern && new RegExp(r.match.columnNamePattern).test(colName)) return true;
+          if (r.match?.columnName && r.match.columnName.toLowerCase() === colName.toLowerCase()) return true;
+          if (r.match?.columnNamePattern && new RegExp(r.match.columnNamePattern, 'i').test(colName)) return true;
           return false;
         });
 
@@ -819,9 +825,17 @@ export class DatabaseService {
     const hasMore = result.rows.length > safeLimit;
     const rows = hasMore ? result.rows.slice(0, safeLimit) : result.rows;
 
-    const values = rows.map(row => row.value as string | number | null);
+    // v5.0.0 Bug #61: case-insensitive row key lookup. Oracle returns column names
+    // uppercase (e.g. {"VALUE": "pending"}), MySQL/Postgres preserve case. After v5.0
+    // removed `k.toLowerCase()` from oracle adapter (Bug #38), row keys are DB-native
+    // case. Without case-insensitive lookup, Oracle returns null values here.
+    const pickKey = (row: Record<string, unknown>, lowerName: string): unknown => {
+      const key = Object.keys(row).find(k => k.toLowerCase() === lowerName);
+      return key !== undefined ? row[key] : row[lowerName];
+    };
+    const values = rows.map(row => pickKey(row, 'value') as string | number | null);
     const valueCounts = includeCount
-      ? Object.fromEntries(rows.map(row => [String(row.value), Number(row.count)]))
+      ? Object.fromEntries(rows.map(row => [String(pickKey(row, 'value')), Number(pickKey(row, 'count'))]))
       : undefined;
 
     return {

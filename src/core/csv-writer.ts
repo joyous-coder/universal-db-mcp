@@ -29,11 +29,26 @@ export function quoteField(value: unknown): string {
 }
 
 /**
+ * v5.0.0: case-insensitive lookup。Adapter 之间对 row keys 大小写处理不一致
+ * (Oracle 之前主动 lowercase,MySQL/Postgres/SQLite 保留原 case)。CSV writer
+ * 用小写 lookup 表兜底,确保用户传 uppercase 列名也能命中 DB 返回的 lowercase keys
+ * (或反过来)。
+ */
+function buildRowLookup(row: Record<string, unknown>): Map<string, unknown> {
+  const m = new Map<string, unknown>();
+  for (const [k, v] of Object.entries(row)) {
+    m.set(k.toLowerCase(), v);
+  }
+  return m;
+}
+
+/**
  * 把一行记录转成 CSV 行(不含末尾换行符)。
- * columns 决定列序;row 中缺失列输出空字符串。
+ * columns 决定列序;row 中缺失列输出空字符串。v5.0.0 起大小写不敏感。
  */
 export function rowToCsv(row: Record<string, unknown>, columns: string[]): string {
-  return columns.map((col) => quoteField(row[col])).join(',');
+  const lookup = buildRowLookup(row);
+  return columns.map((col) => quoteField(lookup.get(col.toLowerCase()))).join(',');
 }
 
 /**

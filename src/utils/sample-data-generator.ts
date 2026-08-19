@@ -49,8 +49,15 @@ export class SampleDataGenerator {
    * 非 PK 列走原 heuristic + fallbackByType 路径。
    */
   generateValue(column: ColumnInfo, context: GenerateContext = {}, rowIndex: number = 0): unknown {
-    if (context.overrides?.[column.name] !== undefined) {
-      return context.overrides[column.name];
+    // v5.0.0 Bug #60: case-insensitive override lookup. Oracle adapter returns column
+    // names as lowercase but LLM users pass uppercase. Build a lowercase→value map once.
+    if (context.overrides) {
+      const overrideKey = Object.keys(context.overrides).find(
+        k => k.toLowerCase() === column.name.toLowerCase()
+      );
+      if (overrideKey !== undefined) {
+        return context.overrides[overrideKey];
+      }
     }
 
     // v4.0.3.2 Bug #17: adapter 标记了 autoIncrement 列 → 跳过,DB 自填

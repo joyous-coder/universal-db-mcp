@@ -104,9 +104,19 @@ export function _toAdapterBatch(
   const isSqlite = dbType === 'sqlite';
   const isClickHouse = dbType === 'clickhouse';
   if (pendingBatch.length === 0) return pendingBatch;
+  // v5.0.0: CSV row keys 可能跟 tableColumnNames 大小写不一致(CSV header 是用户写的,
+  // tableColumnNames 是 getTableInfo 返回的 DB 实际 case)。先建 lowercase lookup map。
+  const getValue = (row: Record<string, unknown>, key: string): unknown => {
+    if (key in row) return row[key];
+    const lowerKey = key.toLowerCase();
+    for (const [rk, rv] of Object.entries(row)) {
+      if (rk.toLowerCase() === lowerKey) return rv;
+    }
+    return undefined;
+  };
   if (isSqlite) {
     // SQLite: positional ? placeholders, params 是按列顺序的值数组
-    return pendingBatch.map((row) => tableColumnNames.map((k) => row[k]));
+    return pendingBatch.map((row) => tableColumnNames.map((k) => getValue(row, k)));
   }
   if (isClickHouse) {
     // ClickHouse: {col:String} named params,params 是 {col: value} 对象
@@ -114,7 +124,7 @@ export function _toAdapterBatch(
   }
   // v4.0.9: 其他 DB (MySQL/PG/Oracle/DM/Kingbase/...) — 用 ? 占位符 (位置绑定),
   // params 是按列顺序的值数组
-  return pendingBatch.map((row) => tableColumnNames.map((k) => row[k]));
+  return pendingBatch.map((row) => tableColumnNames.map((k) => getValue(row, k)));
 }
 
 /**

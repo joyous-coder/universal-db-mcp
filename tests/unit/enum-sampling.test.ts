@@ -12,6 +12,89 @@ import { describe, it, expect } from 'vitest';
 import { DatabaseService } from '../../src/core/database-service';
 import type { DbAdapter, DbConfig, SchemaInfo, TableInfo } from '../../src/types/adapter';
 
+// v5.0.0 Bug #61 regression: Oracle returns row keys uppercase (e.g. {"VALUE": ...}),
+// MySQL/Postgres preserve case. After Bug #38 removed `k.toLowerCase()` from oracle
+// adapter, row keys are DB-native case. getEnumValues previously did `row.value`
+// (lowercase), returning undefined for Oracle. Fix: case-insensitive row key lookup.
+describe('DatabaseService.getEnumValues - v5.0.0 Bug #61 case-insensitive row key', () => {
+  it('reads uppercase VALUE key returned by Oracle', async () => {
+    const adapter = {
+      executeQuery: async () => ({
+        rows: [
+          { VALUE: 'pending' },
+          { VALUE: 'paid' },
+          { VALUE: 'shipped' },
+        ],
+        executionTime: 0,
+      }),
+      getTableInfo: async () => ({
+        name: 'orders',
+        primaryKeys: ['id'],
+        columns: [
+          { name: 'id', type: 'number', nullable: false },
+          { name: 'status', type: 'varchar2', nullable: true },
+        ],
+      }),
+    } as any as DbAdapter;
+    const config: DbConfig = { type: 'oracle', host: 'h', port: 1, user: 'u', password: 'p' };
+    const service = new DatabaseService(adapter, config);
+
+    const result = await service.getEnumValues('orders', 'status', 50, false);
+    expect(result.values).toEqual(['pending', 'paid', 'shipped']);
+  });
+
+  it('still reads lowercase value key returned by MySQL/Postgres', async () => {
+    const adapter = {
+      executeQuery: async () => ({
+        rows: [
+          { value: 'pending' },
+          { value: 'paid' },
+        ],
+        executionTime: 0,
+      }),
+      getTableInfo: async () => ({
+        name: 'orders',
+        primaryKeys: ['id'],
+        columns: [
+          { name: 'id', type: 'int', nullable: false },
+          { name: 'status', type: 'text', nullable: true },
+        ],
+      }),
+    } as any as DbAdapter;
+    const config: DbConfig = { type: 'mysql', host: 'h', port: 1, user: 'u', password: 'p' };
+    const service = new DatabaseService(adapter, config);
+
+    const result = await service.getEnumValues('orders', 'status', 50, false);
+    expect(result.values).toEqual(['pending', 'paid']);
+  });
+
+  it('reads uppercase VALUE + COUNT keys when includeCount=true (Oracle)', async () => {
+    const adapter = {
+      executeQuery: async () => ({
+        rows: [
+          { VALUE: 'pending', COUNT: 10 },
+          { VALUE: 'paid', COUNT: 5 },
+        ],
+        executionTime: 0,
+      }),
+      getTableInfo: async () => ({
+        name: 'orders',
+        primaryKeys: ['id'],
+        columns: [
+          { name: 'id', type: 'number', nullable: false },
+          { name: 'status', type: 'varchar2', nullable: true },
+        ],
+      }),
+    } as any as DbAdapter;
+    const config: DbConfig = { type: 'oracle', host: 'h', port: 1, user: 'u', password: 'p' };
+    const service = new DatabaseService(adapter, config);
+
+    const result = await service.getEnumValues('orders', 'status', 50, true);
+    expect(result.values).toEqual(['pending', 'paid']);
+    expect(result.valueCounts).toEqual({ pending: 10, paid: 5 });
+  });
+});
+
 /**
  * Stub adapter that returns a fixed table info (no real DB).
  * Schema-info only - getEnumValues doesn't actually need to call into the adapter

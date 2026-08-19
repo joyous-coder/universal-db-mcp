@@ -12,6 +12,7 @@
  */
 
 import type { DbConfig } from '../types/adapter.js';
+import { getProfileDbPath } from '../utils/global-paths.js';
 
 export type ProfileRole = 'primary' | 'replica' | 'analytics';
 export type ReadRouting = 'round-robin' | 'random' | 'least-loaded';
@@ -205,7 +206,7 @@ export class ProfileManager {
       }
       const existing = await this.getProfile(p.name);
       if (!dryRun) {
-        await this.saveProfile({
+        await this.createProfile({
           name: p.name,
           description: p.description,
           type: p.type,
@@ -226,13 +227,24 @@ export class ProfileManager {
 
   isEnabled(): boolean { return this.enabled; }
 
-  async saveProfile(input: ProfileInput, createdBy = 'mcp'): Promise<Profile> {
+  async createProfile(input: ProfileInput, createdBy = 'mcp'): Promise<Profile> {
     if (!this.enabled) throw new Error('multi-db disabled');
     const existing = await this.listProfiles();
     if (existing.length >= this.maxProfiles && !existing.find(p => p.name === input.name)) {
       throw new Error(`max profiles (${this.maxProfiles}) reached`);
     }
-    return this.store.save({ ...input, role: input.role ?? this.defaultRole }, createdBy);
+    // v5.0.0: 重命名自 saveProfile,语义化为 create (INSERT-only)。ProfileStore.create 抛 UNIQUE 约束错误
+    // 表示同名 profile 已存在 — 用户应改用 updateProfile()。
+    return this.store.create({ ...input, role: input.role ?? this.defaultRole }, createdBy);
+  }
+
+  /**
+   * v5.0.0: 修改已存在的 profile(UPDATE-only)。profile 不存在抛 'profile ... does not exist'。
+   * 不会动 use_count / created_at / created_by / id。
+   */
+  async updateProfile(input: ProfileInput): Promise<Profile> {
+    if (!this.enabled) throw new Error('multi-db disabled');
+    return this.store.update({ ...input, role: input.role ?? this.defaultRole });
   }
 
   async listProfiles(filter?: { role?: string; tag?: string; enabled?: boolean }): Promise<Profile[]> {
@@ -245,10 +257,77 @@ export class ProfileManager {
     return this.store.get(name);
   }
 
-  async deleteProfile(name: string): Promise<boolean> {
+  async deleteProfile(name: string, opts?: { confirm?: boolean }): Promise<boolean> {
     if (!this.enabled) return false;
+    // v5.0.0: 二次确认。默认返回 false + 列出 ~/.universal-db-mcp/<name>/ 子目录内容,
+    // 用户传 confirm: true 才会真正删除。防止误删 templates / history / plans 数据。
+    if (!opts?.confirm) {
+      const preview = await this.previewProfileDelete(name);
+      if (preview) {
+        throw new Error(
+          `delete_profile('${name}') 是破坏性操作,会同时删除:\n` +
+          `  - ~/.universal-db-mcp/profiles.db 中的 profile 行\n` +
+          `  - ${preview.subdir} 子目录(包含 templates/history/plans)\n` +
+          (preview.contents?.length
+            ? `    内容:\n${preview.contents.map((c) => `      - ${c}`).join('\n')}\n`
+            : `    (子目录不存在或为空)\n`) +
+          `重新调用并传 confirm: true 以确认删除。`,
+        );
+      }
+      // 子目录不存在也没内容 — 但还是要求 confirm,避免误删 profiles.db 行
+      throw new Error(
+        `delete_profile('${name}') 是破坏性操作。` +
+        `重新调用并传 confirm: true 以确认删除。`,
+      );
+    }
     await this.unloadProfile(name);
+    // v5.0.0: 删 profile 同时清理 ~/.universal-db-mcp/<name>/ 子目录
+    // (templates.db / history.db / plans.db),避免成为孤儿。
+    try {
+      const { removeProfileDir } = await import('../utils/global-paths.js');
+      removeProfileDir(name);
+    } catch (err) {
+      // 清理失败不阻塞删除 — 至少 profiles.db 行已被移除。
+      console.error(
+        `[profile] failed to remove profile dir for '${name}': ${err instanceof Error ? err.message : err}`,
+      );
+    }
     return this.store.delete(name);
+  }
+
+  /**
+   * v5.0.0: 预览 delete_profile 会清理哪些文件。返回 null 表示 profile 不存在。
+    * 不传 confirm 时被 deleteProfile 调用,作为错误消息的一部分告知用户。
+    */
+  private async previewProfileDelete(name: string): Promise<{
+    subdir: string;
+    contents: string[];
+  } | null> {
+    const profile = await this.store.get(name);
+    if (!profile) return null;
+    const { getGlobalDir } = await import('../utils/global-paths.js');
+    const path = (await import('node:path')).default.join(getGlobalDir(), name);
+    const contents: string[] = [];
+    try {
+      const fs = await import('node:fs');
+      const entries = fs.readdirSync(path, { withFileTypes: true });
+      for (const e of entries) {
+        if (e.isFile()) {
+          const stat = fs.statSync((await import('node:path')).default.join(path, e.name));
+          contents.push(`${e.name} (${stat.size}B)`);
+        } else {
+          contents.push(`${e.name}/`);
+        }
+      }
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.error(`[profile] preview delete: readdir failed: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+    return {
+      subdir: path,
+      contents: contents.sort(),
+    };
   }
 
   async loadProfile(name: string): Promise<LiveProfile> {
@@ -260,13 +339,29 @@ export class ProfileManager {
     if (!profile.enabled) throw new Error(`profile disabled: ${name}`);
     const adapter = createAdapter({ ...profile.config, type: profile.type } as any);
     await adapter.connect();
-    const service = new DatabaseService(adapter, profile.config as any, this.cacheConfig);
+    // v5.0.0 修复:DatabaseService 内部依赖 this.config.type 做方言分支(appendLimit /
+    // quoteSimpleIdentifier 等)。profile.config 里没有 type(type 在 profile.type 上),
+    // 不传过去会让 DatabaseService 的 config.type === undefined → 默认 fallback
+    // 到 PostgreSQL/SQLite 方言(LIMIT + lowercase 双引号),Oracle/DM/SQL Server 全部报错。
+    const service = new DatabaseService(adapter, { ...profile.config, type: profile.type } as any, this.cacheConfig);
     // v2.19: forward QA + active-profile provider to the per-profile
     // DatabaseService so history rows executed via this profile get the
     // right profile_name.
     if (this.queryAnalyzer) {
       service.setQueryAnalyzer(this.queryAnalyzer);
       service.setActiveProfileProvider(() => name);
+    }
+    // v5.0.0: forward active-profile to QueryAnalyzer so templates/history
+    // paths follow the active profile (per-profile subdir isolation).
+    if (this.queryAnalyzer) {
+      this.queryAnalyzer.setProfileProvider(() => name);
+      this.queryAnalyzer.setProfilePathResolver(() => {
+        if (!name) return null;
+        return {
+          templates: getProfileDbPath(name, 'templates'),
+          history: getProfileDbPath(name, 'history'),
+        };
+      });
     }
     const live: LiveProfile = { profile, adapter, service, connectedAt: new Date() };
     this.liveProfiles.set(name, live);

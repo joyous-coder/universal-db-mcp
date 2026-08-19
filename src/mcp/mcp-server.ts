@@ -34,7 +34,8 @@ import {
   TOOL_DESCRIPTIONS,
 } from './tools/query-tools.js';
 import {
-  buildSaveProfileHandler,
+  buildCreateProfileHandler,
+  buildUpdateProfileHandler,
   buildListProfilesHandler,
   buildUseProfileHandler,
   buildGetGlobalSchemaHandler,
@@ -174,17 +175,26 @@ export class DatabaseMCPServer {
       if (this.queryAnalyzer) pm.setQueryAnalyzer(this.queryAnalyzer);
       this.profileManager = pm;
 
-      // v4.2.0: 启动时读 <cwd>/.profile,自动激活指定 profile
+      // v5.0.0: 启动时读 <cwd>/.db-profile(从 .profile 改名),自动激活并**完整连接**
+      // (this.adapter + this.config + this.databaseService + this.activeProfile)。
+      // 之前只调用 pm.loadProfile 但不 wire mcp-server 的状态,导致 get_active_profile
+      // 显示 connected:false,实际数据库 tool 也用不了。
       try {
         const { readProjectProfile } = await import('../utils/path-resolver.js');
         const projectProfile = readProjectProfile(process.cwd());
         if (projectProfile) {
           try {
-            await pm.loadProfile(projectProfile.profile);
-            console.error(`[mcp] Auto-loaded profile '${projectProfile.profile}' from .profile`);
+            const live = await pm.loadProfile(projectProfile.profile);
+            await this.activateProfile(projectProfile.profile, {
+              adapter: live.adapter,
+              service: live.service,
+              profileConfig: live.profile.config,
+              type: live.profile.type,
+            });
+            console.error(`[mcp] Auto-loaded + connected profile '${projectProfile.profile}' from .db-profile`);
           } catch (loadErr) {
             console.error(
-              `[mcp] .profile references '${projectProfile.profile}' but failed: ${loadErr instanceof Error ? loadErr.message : loadErr}`,
+              `[mcp] .db-profile references '${projectProfile.profile}' but failed: ${loadErr instanceof Error ? loadErr.message : loadErr}`,
             );
           }
         } else {
@@ -192,7 +202,7 @@ export class DatabaseMCPServer {
           console.error("[mcp] Tip: pass recordToProject: true to use_profile to bind this project to a profile.");
         }
       } catch (resolveErr) {
-        console.error(`[mcp] .profile resolve failed: ${resolveErr instanceof Error ? resolveErr.message : resolveErr}`);
+        console.error(`[mcp] .db-profile resolve failed: ${resolveErr instanceof Error ? resolveErr.message : resolveErr}`);
       }
     }
 
@@ -218,6 +228,44 @@ export class DatabaseMCPServer {
   /** v2.18: get the active profile name (null if none). */
   getActiveProfile(): string | null {
     return this.activeProfile;
+  }
+
+  /**
+   * v5.0.0: 激活 profile 并建立完整连接(复用 ProfileManager.loadProfile 已建立的
+   * adapter + service,不重复 createPool)。供 use_profile dispatch 和 MCP 启动时
+   * .db-profile 自动激活共用。
+   *
+   * 必须在 profileManager 设置过之后才能用(否则 throw)。
+   *
+   * @returns true 表示成功,this.adapter / this.config / this.databaseService / this.activeProfile 全部更新;
+   *          false 表示 profile 配置缺失(不应该发生)。
+   */
+  private async activateProfile(name: string, handlerReturn: any): Promise<boolean> {
+    if (!this.profileManager) throw new Error('profileManager not configured');
+    const liveAdapter = handlerReturn?.adapter;
+    const liveService = handlerReturn?.service;
+    const profileConfig = handlerReturn?.profileConfig as DbConfig | undefined;
+    if (!liveAdapter || !liveService || !profileConfig) return false;
+    // v5.0.0: 取完整 Profile 用于 permissionMode 传递(handler 返回的 r 缺字段)
+    const fullProfile = await this.profileManager.getProfile(name);
+    // 断开旧 adapter(如果还在连着)
+    if (this.adapter && this.adapter !== liveAdapter) {
+      try {
+        await this.adapter.disconnect();
+      } catch (err) {
+        console.error('断开旧适配器时出错:', err instanceof Error ? err.message : String(err));
+      }
+    }
+    // 切换到 loadProfile 已经建好的 adapter + service
+    this.adapter = liveAdapter;
+    this.config = {
+      ...profileConfig,
+      type: handlerReturn.type as DbConfig['type'],
+      permissionMode: fullProfile?.permissionMode ?? 'safe',
+    };
+    this.databaseService = liveService;
+    this.activeProfile = name;
+    return true;
   }
 
   // v4.0 G5: setLazyLoadEnabled() removed
@@ -388,9 +436,11 @@ export class DatabaseMCPServer {
           },
           // v4.2.0 BREAKING: connect_database / disconnect_database 已删除
           // 用 save_profile + use_profile + disconnect_profile 替代
+          // v5.0.0: 重命名为 get_active_profile,语义聚焦"激活的 profile"。
+          // 返回:activeProfile 名 + profile 元数据 + 连接详情 + schema 缓存。
           {
-            name: 'get_connection_status',
-            description: '获取当前数据库连接状态。返回是否已连接、数据库类型、地址、数据库名、权限模式等信息。',
+            name: 'get_active_profile',
+            description: 'v5.0.0 (重命名自 get_connection_status):返回当前激活的 profile 名 + 完整 profile 元数据 + 连接状态 + schema 缓存。未激活时返回 null + 提示信息。',
             inputSchema: {
               type: 'object',
               properties: {},
@@ -469,10 +519,16 @@ export class DatabaseMCPServer {
             inputSchema: { type: 'object', properties: { id: { type: 'string' }, params: { type: 'object' } }, required: ['id'] },
           },
           // v2.18: multi-DB profile management
+          // v5.0.0: 重命名 save_profile → create_profile(INSERT-only),新增 update_profile(UPDATE-only)
           {
-            name: 'save_profile',
-            description: PROFILE_TOOL_DESCRIPTIONS.save_profile,
-            inputSchema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, type: { type: 'string' }, config: { type: 'object' }, role: { type: 'string', enum: ['primary', 'replica', 'analytics'] }, tags: { type: 'array' }, enabled: { type: 'boolean' } }, required: ['name', 'type', 'config'] },
+            name: 'create_profile',
+            description: PROFILE_TOOL_DESCRIPTIONS.create_profile,
+            inputSchema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, type: { type: 'string' }, config: { type: 'object' }, role: { type: 'string', enum: ['primary', 'replica', 'analytics'] }, tags: { type: 'array' }, enabled: { type: 'boolean' }, permissionMode: { type: 'string', enum: ['safe', 'readwrite', 'full'], description: 'v5.0.0: 权限预设。设了之后会自动展开为 config.permissions(read/insert/update/delete/ddl/script/batch 之一)' } }, required: ['name', 'type', 'config'] },
+          },
+          {
+            name: 'update_profile',
+            description: PROFILE_TOOL_DESCRIPTIONS.update_profile,
+            inputSchema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, type: { type: 'string' }, config: { type: 'object' }, role: { type: 'string', enum: ['primary', 'replica', 'analytics'] }, tags: { type: 'array' }, enabled: { type: 'boolean' }, permissionMode: { type: 'string', enum: ['safe', 'readwrite', 'full'] } }, required: ['name', 'type', 'config'] },
           },
           {
             name: 'list_profiles',
@@ -627,7 +683,7 @@ export class DatabaseMCPServer {
         { name: 'export_profiles', description: '导出 profiles 为 YAML/JSON。', inputSchema: { type: 'object', properties: { format: { type: 'string', enum: ['yaml', 'json'] }, includeSecrets: { type: 'boolean' } } } },
         { name: 'import_profiles', description: '从 YAML/JSON 导入 profiles。', inputSchema: { type: 'object', properties: { input: { type: 'string' }, format: { type: 'string', enum: ['yaml', 'json'] }, mode: { type: 'string', enum: ['merge', 'replace'] }, dryRun: { type: 'boolean' } }, required: ['input'] } },
         { name: 'get_profile', description: '获取指定 profile 的配置。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
-        { name: 'delete_profile', description: '删除指定 profile。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+        { name: 'delete_profile', description: '删除指定 profile。[group: profiles] ⚠️ v5.0.0: 破坏性操作,默认走 preview 路径(返回子目录内容摘要),需要 confirm=true 才真正删除 profiles.db 行 + ~/.universal-db-mcp/<name>/ 子目录。', inputSchema: { type: 'object', properties: { name: { type: 'string' }, confirm: { type: 'boolean', default: false, description: 'v5.0.0: 二次确认。默认 false 返回预览,传 true 才执行删除。' } }, required: ['name'] } },
         { name: 'enable_profile', description: '启用 profile。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
         { name: 'disable_profile', description: '禁用 profile。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
         { name: 'disconnect_profile', description: '断开指定 profile 的连接。', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
@@ -713,9 +769,13 @@ export class DatabaseMCPServer {
           }
 
           // v2.18: profile tools
-          case 'save_profile': {
+          case 'create_profile': {
             if (!this.profileManager) throw new Error('profileManager not configured');
-            return { content: [{ type: 'text', text: JSON.stringify(await buildSaveProfileHandler(this.profileManager)(args as any), null, 2) }] };
+            return { content: [{ type: 'text', text: JSON.stringify(await buildCreateProfileHandler(this.profileManager)(args as any), null, 2) }] };
+          }
+          case 'update_profile': {
+            if (!this.profileManager) throw new Error('profileManager not configured');
+            return { content: [{ type: 'text', text: JSON.stringify(await buildUpdateProfileHandler(this.profileManager)(args as any), null, 2) }] };
           }
           case 'list_profiles': {
             if (!this.profileManager) throw new Error('profileManager not configured');
@@ -724,17 +784,9 @@ export class DatabaseMCPServer {
           case 'use_profile': {
             if (!this.profileManager) throw new Error('profileManager not configured');
             const r = await buildUseProfileHandler(this.profileManager)(args as any);
-            // v4.0 Bug #4 fix: use_profile 之前只设 this.activeProfile 但不切 adapter。
-            // v4.0.2 Bug #7 fix: 不要重复 createAdapter + connect!ProfileManager.loadProfile
-            // 已经做了。第一次连成功后 dmdb 内部用 (host+port+user) 生成 pool alias,第二次
-            // createPool 同 alias 会抛 "[20006] 连接池别名已存在"。所以这里直接复用
-            // loadProfile 返回的 live.adapter + live.service。
-            const liveAdapter = (r as any).adapter;
-            const liveService = (r as any).service;
-            const profileConfig = (r as any).profileConfig as DbConfig;
-            // v5.0.0: 取完整 Profile 用于 permissionMode 传递(handler 返回的 r 缺字段)
-            const fullProfile = await this.profileManager.getProfile((args as any).name);
-            if (!liveAdapter || !liveService || !profileConfig) {
+            // v5.0.0: 抽到 activateProfile() 共享方法,MCP 启动 .db-profile 自动激活也用它。
+            const activated = await this.activateProfile((args as any).name, r);
+            if (!activated) {
               return {
                 content: [{
                   type: 'text',
@@ -746,25 +798,6 @@ export class DatabaseMCPServer {
                 isError: true,
               };
             }
-            // 断开旧 adapter(如果还在连着)
-            if (this.adapter && this.adapter !== liveAdapter) {
-              try {
-                await this.adapter.disconnect();
-              } catch (err) {
-                console.error('断开旧适配器时出错:', err instanceof Error ? err.message : String(err));
-              }
-            }
-            // 切换到 loadProfile 已经建好的 adapter + service
-            this.adapter = liveAdapter;
-            this.config = {
-              ...profileConfig,
-              // v4.2.0: r.type 来自 ProfileStore,创建 adapter 时已经规范化 — cast 到 DbConfig['type'] union
-              type: r.type as DbConfig['type'],
-              // v5.0.0 修复:用 Profile.permissionMode(顶层字段),不是 config 里的
-              permissionMode: fullProfile?.permissionMode ?? 'safe',
-            };
-            this.databaseService = liveService;
-            this.activeProfile = r.name;
             return {
               content: [{
                 type: 'text',
@@ -773,10 +806,12 @@ export class DatabaseMCPServer {
                   message: `已切换到 profile: ${r.name}`,
                   connection: {
                     type: r.type,
-                    host: profileConfig.host,
-                    port: profileConfig.port,
-                    permissionMode: this.config.permissionMode,
+                    host: (r.profileConfig as any).host,
+                    port: (r.profileConfig as any).port,
+                    permissionMode: this.config!.permissionMode,
                   },
+                  // v5.0.0: use_profile handler 在 .profile 缺失/不匹配时填的 hint
+                  profileRecordHint: (r as any).profileRecordHint,
                 }, null, 2),
               }],
             };
@@ -786,39 +821,73 @@ export class DatabaseMCPServer {
             return { content: [{ type: 'text', text: JSON.stringify(await buildGetGlobalSchemaHandler(this.profileManager)(), null, 2) }] };
           }
 
-          case 'get_connection_status': {
-            if (!this.adapter || !this.config) {
+          case 'get_active_profile': {
+            // v5.0.0: 重命名自 get_connection_status。语义从"连接状态"转向"激活的 profile",
+            // 因为 v5.0.0 删了 connect_database/disconnect_database,所有连接都通过 use_profile 走。
+            // 响应包含:激活的 profile 名 + profile 元数据 + 连接详情 + schema 缓存状态。
+            if (!this.activeProfile) {
               return {
                 content: [{
                   type: 'text',
                   text: JSON.stringify({
+                    activeProfile: null,
                     connected: false,
-                    message: '当前未连接任何数据库。请使用 use_profile 工具激活 profile。',
+                    message: '当前未激活任何 profile。请使用 use_profile 工具激活 profile。',
+                    hint: '想给当前项目固定激活某个 profile?调用 use_profile({name, recordToProject: true}) 写 <cwd>/.profile。',
                   }, null, 2),
                 }],
               };
             }
 
+            const fullProfile = this.profileManager
+              ? await this.profileManager.getProfile(this.activeProfile)
+              : null;
+
+            const isConnected = !!(this.adapter && this.config && this.databaseService);
             const status: Record<string, any> = {
-              connected: true,
-              type: this.config.type,
-              permissionMode: this.config.permissionMode || 'safe',
+              activeProfile: this.activeProfile,
+              connected: isConnected,
+              profile: fullProfile
+                ? {
+                    name: fullProfile.name,
+                    description: fullProfile.description,
+                    type: fullProfile.type,
+                    role: fullProfile.role,
+                    tags: fullProfile.tags,
+                    enabled: fullProfile.enabled,
+                    permissionMode: fullProfile.permissionMode,
+                    category: fullProfile.category,
+                    productName: fullProfile.productName,
+                    version: fullProfile.version,
+                    createdAt: fullProfile.created_at,
+                    updatedAt: fullProfile.updated_at,
+                    useCount: fullProfile.use_count,
+                  }
+                : null,
             };
 
-            if (this.config.type === 'sqlite') {
-              status.filePath = this.config.filePath;
-            } else {
-              status.host = this.config.host;
-              status.port = this.config.port;
-              status.database = this.config.database;
-            }
-
-            if (this.databaseService) {
+            if (isConnected && this.config) {
+              status.connection = {
+                type: this.config.type,
+                permissionMode: this.config.permissionMode || 'safe',
+              };
+              if (this.config.type === 'sqlite') {
+                status.connection.filePath = (this.config as any).filePath;
+              } else {
+                status.connection.host = (this.config as any).host;
+                status.connection.port = (this.config as any).port;
+                status.connection.database = (this.config as any).database;
+              }
               const cacheStats = this.databaseService!.getCacheStats();
               status.schemaCache = {
                 cached: cacheStats.isCached,
+                cachedAt: cacheStats.cachedAt?.toISOString() ?? null,
                 hitRate: this.databaseService!.getCacheHitRate() + '%',
               };
+            } else {
+              status.connection = null;
+              status.schemaCache = null;
+              status.message = `profile '${this.activeProfile}' 已激活但未连接(可能已被 disable 或 disconnect_profile)。重新调用 use_profile 重连。`;
             }
 
             return {
@@ -1077,7 +1146,18 @@ export class DatabaseMCPServer {
           case 'disconnect_profile': {
             if (!this.profileManager) throw new Error('profileManager not configured');
             const r = await (await import('./tools/profile-tools.js')).buildDisconnectProfileHandler(this.profileManager)(args as any);
-            if (r.disconnected && this.activeProfile === (args as any).name) this.activeProfile = null;
+            // v5.0.0 Bug #62 fix: clear full mcpServer state, not just this.activeProfile.
+            // Previously only `this.activeProfile = null` was set, but this.adapter /
+            // this.databaseService / this.config still pointed to the disconnected
+            // LiveProfile. Subsequent tools (execute_query, get_active_profile, etc.)
+            // either got `isConnected: true` but failing queries, or hit the
+            // `if (!this.databaseService ...)` guard with a stale-but-non-null ref.
+            if (r.disconnected && this.activeProfile === (args as any).name) {
+              this.adapter = null;
+              this.databaseService = null;
+              this.config = null;
+              this.activeProfile = null;
+            }
             return { content: [{ type: 'text', text: JSON.stringify(r, null, 2) }] };
           }
           case 'explain_query_with_advice': {

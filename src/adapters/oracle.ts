@@ -203,14 +203,22 @@ export class OracleAdapter extends BaseAdapter {
     try {
       return await this.withRetry(() => this.withConnection(async (connection) => {
         let cleanQuery = query.trim();
-        if (cleanQuery.endsWith(';')) cleanQuery = cleanQuery.slice(0, -1).trim();
+        // v5.0.0: PL/SQL 块(`BEGIN...END;` 或 `DECLARE...BEGIN...END;`)必须以 `;` 结尾
+        // — oracledb 严格要求 trailing `;`。只对非 PL/SQL 语句剥 `;`。
+        const looksLikePlsqlBlock = /^\s*(BEGIN|DECLARE)\b/i.test(cleanQuery) && /\bEND\s*;?\s*$/i.test(cleanQuery);
+        if (!looksLikePlsqlBlock && cleanQuery.endsWith(';')) {
+          cleanQuery = cleanQuery.slice(0, -1).trim();
+        }
         // v4.0.2 Bug #12: convert ? to :1, :2, ... for oracledb named binds.
         const oracledbSql = convertQuestionMarks(cleanQuery);
         const result = await connection.execute(oracledbSql, params || [], { autoCommit: true, outFormat: oracledb.OUT_FORMAT_OBJECT });
         const executionTime = Date.now() - startTime;
         if (result.rows && result.rows.length > 0) {
-          const rows = result.rows.map((row: any) => { const r: Record<string, unknown> = {}; for (const [k, v] of Object.entries(row)) { r[k.toLowerCase()] = v; } return r; });
-          return { rows, executionTime, metadata: { columnCount: result.metaData?.length || 0 } };
+          // v5.0.0: 去掉 k.toLowerCase() — 现在 row keys 按 DB 原 case 返回(Oracle 默认 uppercase)。
+          // 之前 lowercase 是为了和 MySQL/Postgres 等保持一致,但破坏了 CSV writer 等需要
+          // 大小写敏感查找的工具。统一行为由 consumer 层(csv-writer / csv-reader)做
+          // case-insensitive lookup 来兼容所有 DB。
+          return { rows: result.rows as Array<Record<string, unknown>>, executionTime, metadata: { columnCount: result.metaData?.length || 0 } };
         } else if (result.rowsAffected !== undefined && result.rowsAffected > 0) {
           return { rows: [], affectedRows: result.rowsAffected, executionTime };
         } else {
@@ -893,7 +901,11 @@ export class OracleAdapter extends BaseAdapter {
         executeQuery: async (query: string, params?: unknown[]) => {
           const startTime = Date.now();
           let cleanQuery = query.trim();
-          if (cleanQuery.endsWith(';')) cleanQuery = cleanQuery.slice(0, -1).trim();
+          // v5.0.0: PL/SQL 块(`BEGIN...END;`)必须保留 trailing `;`,只对非 PL/SQL 语句剥。
+          const looksLikePlsqlBlock = /^\s*(BEGIN|DECLARE)\b/i.test(cleanQuery) && /\bEND\s*;?\s*$/i.test(cleanQuery);
+          if (!looksLikePlsqlBlock && cleanQuery.endsWith(';')) {
+            cleanQuery = cleanQuery.slice(0, -1).trim();
+          }
           // v4.0.2 Bug #12: convert ? to :1, :2, ... for oracledb named binds.
           const oracledbSql = convertQuestionMarks(cleanQuery);
           const result = await connection.execute(oracledbSql, params || [], {

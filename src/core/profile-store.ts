@@ -93,8 +93,10 @@ export class ProfileStore {
     return this.initPromise;
   }
 
-  async save(input: ProfileInput, createdBy = 'cli'): Promise<Profile> {
+  async create(input: ProfileInput, createdBy = 'cli'): Promise<Profile> {
     await this.init();
+    // v5.0.0: 重命名自 save()。create() 仅 INSERT,已存在同名 profile 抛 UNIQUE 约束错误。
+    // 想修改现有 profile 用 update(input) — 语义清晰,不会误覆盖。
     const now = new Date().toISOString();
     const id = nanoid(8);
     const role: ProfileRole = input.role ?? 'primary';
@@ -107,11 +109,55 @@ export class ProfileStore {
       id, name: input.name, description: input.description, type: input.type,
       config: input.config, role, tags: input.tags ?? [], enabled,
       created_at: now, updated_at: now, created_by: createdBy, use_count: 0,
-      // v4.2.0 新增字段,save() 写入由 Task 1.2 的 INSERT 同步
       permissionMode: input.permissionMode ?? 'readwrite',
       category: input.category ?? 'unknown',
       productName: input.productName ?? null,
       version: input.version ?? null,
+    };
+  }
+
+  /**
+   * v5.0.0: 修改已存在的 profile(只 UPDATE,profile 名不存在则抛错)。
+   * 注意:profile 名是 primary key,但通常不会改 name(改了所有引用都失效)。
+   * use_count / created_at / created_by / id 不变。
+   */
+  async update(input: ProfileInput): Promise<Profile> {
+    await this.init();
+    const existing = await this.get(input.name);
+    if (!existing) {
+      throw new Error(`update_profile: profile '${input.name}' does not exist. Use create_profile to insert new.`);
+    }
+    const now = new Date().toISOString();
+    const role: ProfileRole = input.role ?? existing.role;
+    const enabled = input.enabled ?? existing.enabled;
+    this.conn!.exec(
+      `UPDATE profiles SET
+         description = ${q(input.description)},
+         type = ${q(input.type)},
+         config_json = ${q(JSON.stringify(input.config))},
+         role = ${q(role)},
+         tags_json = ${q(JSON.stringify(input.tags ?? []))},
+         enabled = ${enabled ? 1 : 0},
+         updated_at = ${q(now)},
+         permission_mode = ${q(input.permissionMode ?? existing.permissionMode)},
+         category = ${q(input.category ?? existing.category)},
+         product_name = ${q(input.productName ?? existing.productName)},
+         version = ${q(input.version ?? existing.version)}
+       WHERE name = ${q(input.name)}`
+    );
+    return {
+      ...existing,
+      description: input.description,
+      type: input.type,
+      config: input.config,
+      role,
+      tags: input.tags ?? [],
+      enabled,
+      updated_at: now,
+      permissionMode: input.permissionMode ?? existing.permissionMode,
+      category: input.category ?? existing.category,
+      productName: input.productName ?? existing.productName,
+      version: input.version ?? existing.version,
     };
   }
 

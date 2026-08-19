@@ -41,7 +41,26 @@ export function getProfilesDbPath(): string {
 }
 
 /**
- * profile-scoped DB 路径(history/templates/plans)
+ * v5.0.0: 确保某个 profile 的子目录存在 ~/.universal-db-mcp/<name>/。
+ * save_template / recordQuery / persistPlan 都需要在打开 SQLite 前调用,
+ * 否则 better-sqlite3 会报 "unable to open database file"。
+ */
+export function ensureProfileDir(profileName: string): void {
+  fs.mkdirSync(path.join(getGlobalDir(), profileName), { recursive: true });
+}
+
+/**
+ * v5.0.0: 删除某个 profile 的子目录 ~/.universal-db-mcp/<name>/。
+ * 由 ProfileManager.deleteProfile / importProfiles(mode='replace') 调用,
+ * 清理 templates.db / history.db / plans.db 等 profile-scoped 数据。
+ * 目录不存在时静默忽略(已经清过了)。
+ */
+export function removeProfileDir(profileName: string): void {
+  fs.rmSync(path.join(getGlobalDir(), profileName), { recursive: true, force: true });
+}
+
+/**
+ * profile-scoped DB 路径(history/templates/plans)。调用前会自动确保子目录存在。
  * @param profileName profile 名(必须满足 /^[a-zA-Z0-9_-]+$/,save_profile 已校验)
  * @param kind 'history' | 'templates' | 'plans'
  */
@@ -49,5 +68,12 @@ export function getProfileDbPath(
   profileName: string,
   kind: 'history' | 'templates' | 'plans',
 ): string {
+  // v5.0.0: 自动 mkdir -p,避免 better-sqlite3 在子目录缺失时报错。
+  // 失败时调用方拿到原始错误(由 mkdir 抛 ENOENT / EACCES)。
+  try {
+    ensureProfileDir(profileName);
+  } catch {
+    /* 调用方拿到的是 better-sqlite3 错误,不影响路径返回值 */
+  }
   return path.join(getGlobalDir(), profileName, `${kind}.db`);
 }

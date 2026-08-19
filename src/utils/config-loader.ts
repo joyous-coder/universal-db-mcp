@@ -8,7 +8,9 @@
 
 import { config as dotenvConfig } from 'dotenv';
 import type { AppConfig, HttpConfig } from '../types/http.js';
-import { getProfilesDbPath, getProfileDbPath } from './global-paths.js';
+import { getProfilesDbPath, getGlobalDir, getProfileDbPath } from './global-paths.js';
+import { readProjectProfile } from './path-resolver.js';
+import path from 'node:path';
 
 // Load environment variables from .env file
 dotenvConfig();
@@ -178,10 +180,20 @@ export function loadFromEnv(): Partial<AppConfig> {
     qaTemplatesKey !== undefined || qaHistoryKey !== undefined ||
     qaTemplatesKeyOld !== undefined || qaHistoryKeyOld !== undefined
   ) {
-    // v4.2.0: 启动时无 active profile,默认用 _default 占位;启动后由 mcp-server
-    // 根据 active profile 重定向到 {globalDir}/{profileName}/{kind}.db
-    const defaultTemplatesPath = getProfileDbPath('_default', 'templates');
-    const defaultHistoryPath = getProfileDbPath('_default', 'history');
+    // v5.0.0: 路径解析流程
+    //   1. 启动时读 <cwd>/.db-profile 找 active profile(优先 — 和 mcp-server 用同一份)
+//   2. 没有 .db-profile → 用根目录 templates.db / history.db 作 fallback(单文件,
+//      profile_name 字段区分;用户首次 use_profile 后会被覆盖)
+//   3. 有 .db-profile → 用 getProfileDbPath(activeProfile, kind) — 每个 profile
+//      独立 subdir,delete_profile 时子目录一并清理
+    const projectProfile = readProjectProfile(process.cwd());
+    const activeProfile = projectProfile?.profile ?? null;
+    const defaultTemplatesPath = activeProfile
+      ? getProfileDbPath(activeProfile, 'templates')
+      : path.join(getGlobalDir(), 'templates.db');
+    const defaultHistoryPath = activeProfile
+      ? getProfileDbPath(activeProfile, 'history')
+      : path.join(getGlobalDir(), 'history.db');
     config.queryAnalyzer = {
       enabled: qaEnabled === undefined ? true : /^(true|1|yes)$/i.test(qaEnabled),
       templatesDbPath: qaTemplates || defaultTemplatesPath,

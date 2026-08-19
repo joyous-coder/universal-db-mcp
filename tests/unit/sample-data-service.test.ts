@@ -99,4 +99,66 @@ describe('DatabaseService.generateAndInsertSampleData', () => {
       undefined,
     );
   });
+
+  // v5.0.0 Bug #60 regression: Oracle adapter returns lowercase column names (oracle.ts:339
+  // `cn.toLowerCase()`), but LLM users typically pass uppercase column names per Oracle
+  // convention. Without case-insensitive lookup, the row stayed empty → 0 bind values →
+  // NJS-098 "0 bind values were provided" for INSERT with 3 placeholders.
+  it('matches columns case-insensitively when user passes uppercase to Oracle', async () => {
+    // Oracle adapter normalizes column names to lowercase.
+    const schema: SchemaInfo = {
+      databaseType: 'oracle',
+      databaseName: 'TEST',
+      tables: [{
+        name: 'test_regression_tbl',
+        primaryKeys: ['id'],
+        columns: [
+          { name: 'id', type: 'number', nullable: false },
+          { name: 'name', type: 'varchar2', nullable: true },
+          { name: 'status', type: 'varchar2', nullable: true },
+        ],
+      }],
+    };
+    const executeBatch = vi.fn().mockResolvedValue({
+      affectedRowsPerStatement: [1, 1],
+      totalAffectedRows: 2,
+      executionTime: 1,
+    });
+    const adapter = {
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      executeQuery: vi.fn(),
+      executeBatch,
+      getSchema: vi.fn().mockResolvedValue(schema),
+      getTableInfo: vi.fn().mockResolvedValue({
+        name: 'test_regression_tbl',
+        primaryKeys: ['id'],
+        columns: [
+          { name: 'id', type: 'number', nullable: false },
+          { name: 'name', type: 'varchar2', nullable: true },
+          { name: 'status', type: 'varchar2', nullable: true },
+        ],
+      }),
+      isWriteOperation: vi.fn(),
+    } as unknown as DbAdapter;
+    const config: DbConfig = { type: 'oracle', permissions: ['insert', 'batch'] };
+    const service = new DatabaseService(adapter, config);
+
+    await service.generateAndInsertSampleData('test_regression_tbl', 2, {
+      seed: 42,
+      columns: ['ID', 'NAME', 'STATUS'],  // ← uppercase, per Oracle convention
+      columnOverrides: {
+        ID: 1,
+        NAME: 'foo',
+        STATUS: 'ok',
+      },
+    });
+
+    // Oracle quoteSimpleIdentifier uppercases identifier — column list is uppercase.
+    expect(executeBatch).toHaveBeenCalledWith(
+      'INSERT INTO "TEST_REGRESSION_TBL" ("ID", "NAME", "STATUS") VALUES (?, ?, ?)',
+      [[1, 'foo', 'ok'], [1, 'foo', 'ok']],
+      undefined,
+    );
+  });
 });

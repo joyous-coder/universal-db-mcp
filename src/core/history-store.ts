@@ -16,8 +16,8 @@ import type {
 } from './query-analyzer-types.js';
 
 export interface HistoryStoreOptions {
-  ttlDays: number;
-  maxRows: number;
+  ttlDays?: number;
+  maxRows?: number;
   /** v2.20: SQLCipher key for transparent encryption of history.db. */
   cipherKey?: string;
 }
@@ -136,9 +136,10 @@ export class HistoryStore {
       `INSERT INTO query_history (ts, db, kind, sql, params, duration_ms, rows, error, error_code, profile_name, actor, client_ip, severity, audit_metadata_json) VALUES (${q(input.ts)}, ${q(input.db)}, ${q(input.kind)}, ${q(sql)}, ${q(input.params)}, ${input.duration_ms}, ${input.rows ?? 'NULL'}, ${q(input.error)}, ${q(input.error_code)}, ${q(profileName)}, ${q(actor)}, ${q(clientIp)}, ${q(severity)}, ${q(auditMetadata)})`
     );
     // LRU: if over maxRows, delete oldest 10%
+    const maxRows = this.options.maxRows ?? 10000;
     const count = (this.conn!.prepare('SELECT COUNT(*) as c FROM query_history').get() as { c: number }).c;
-    if (count > this.options.maxRows) {
-      const toDelete = Math.ceil(this.options.maxRows * 0.1);
+    if (count > maxRows) {
+      const toDelete = Math.ceil(maxRows * 0.1);
       this.conn!.exec(`DELETE FROM query_history WHERE id IN (SELECT id FROM query_history ORDER BY id ASC LIMIT ${toDelete})`);
     }
   }
@@ -213,7 +214,8 @@ export class HistoryStore {
 
   async cleanup(): Promise<{ deleted: number }> {
     await this.init();
-    const cutoff = new Date(Date.now() - this.options.ttlDays * 86400_000).toISOString();
+    const ttlDays = this.options.ttlDays ?? 30;
+    const cutoff = new Date(Date.now() - ttlDays * 86400_000).toISOString();
     const before = (this.conn!.prepare('SELECT COUNT(*) as c FROM query_history WHERE ts < ?').get(cutoff) as { c: number }).c;
     this.conn!.exec(`DELETE FROM query_history WHERE ts < ${q(cutoff)}`);
     return { deleted: before };
