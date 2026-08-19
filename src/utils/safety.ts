@@ -40,7 +40,11 @@ export const DANGEROUS_ADMIN_KEYWORDS: readonly string[] = [
  */
 const PERMISSION_PRESETS: Record<string, readonly PermissionType[]> = {
   safe: ['read'],
-  readwrite: ['read', 'insert', 'update'],
+  // v5.0.0: readwrite now includes batch so execute_batch is exposed without
+  // requiring full DDL/script permissions. Single-row INSERT/UPDATE/DELETE is
+  // already covered by insert/update; multi-row batch uses the same row format
+  // and shouldn't need elevated perms.
+  readwrite: ['read', 'insert', 'update', 'batch'],
   // v3.2.2: full now includes script + batch so execute_script / execute_batch /
   // generate_sample_data are exposed when user grants full permission. Previously
   // these tools were silently absent even with permissionMode:'full', forcing

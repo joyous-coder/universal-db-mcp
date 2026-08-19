@@ -47,6 +47,14 @@ export function buildCreateProfileHandler(pm: ProfileManager) {
 }
 
 /**
+ * v5.0.0: Deprecated alias for buildCreateProfileHandler(). New code should use
+ * buildCreateProfileHandler() to match the renamed tool name `create_profile`.
+ */
+export function buildSaveProfileHandler(pm: ProfileManager) {
+  return buildCreateProfileHandler(pm);
+}
+
+/**
  * v5.0.0: 新增工具。update_profile 只 UPDATE 已存在的 profile,
  * profile 不存在抛 'profile ... does not exist'。
  *

@@ -11,8 +11,11 @@ describe('resolvePermissions with script/batch', () => {
     expect(resolvePermissions({ type: 'mysql', permissionMode: 'safe' })).toEqual(['read']);
   });
 
-  it('readwrite preset does NOT include script', () => {
-    expect(resolvePermissions({ type: 'mysql', permissionMode: 'readwrite' })).toEqual(['read', 'insert', 'update']);
+  it('readwrite preset now includes batch (v5.0.0; was just read+insert+update)', () => {
+    // v5.0.0: readwrite should include batch so execute_batch works without
+    // requiring full DDL/script permissions. INSERT/UPDATE/DELETE batches use
+    // the same row format as single-row writes.
+    expect(resolvePermissions({ type: 'mysql', permissionMode: 'readwrite' })).toEqual(['read', 'insert', 'update', 'batch']);
   });
 
   it('full preset now includes script + batch (v3.2.2: was double opt-in, see Bug #2)', () => {

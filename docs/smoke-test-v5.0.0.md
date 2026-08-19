@@ -91,50 +91,50 @@ mcp__universal-db-mcp__use_profile({name: "test-dm"})
 | ------------------------- | ------------ | -------- | ---- |
 | create_profile            | ✅           | ✅       | INSERT + permissionMode 自动展开 |
 | update_profile            | ✅           | ✅       | updated_at 改,其他字段不变 |
-| list_profiles             | ✅           | ✅       | tag 过滤正确 |
+| list_profiles             | ✅           | ✅       | tag=smoke-test 过滤正确返回 2 个 |
 | get_profile               | ✅           | ✅       | 不存在 → error |
 | use_profile               | ✅           | ✅       | recordToProject:false 跳过 .db-profile |
 | delete_profile            | ✅           | ✅       | preview + confirm=true 工作 |
-| enable_profile            | ✅           | ⬜       | Oracle ✅;DM 未单独测(API 一致,跳过) |
-| disable_profile           | ✅           | ⬜       | 同上 |
-| disconnect_profile        | ✅           | ⬜       | 同上 |
-| get_active_profile        | ✅           | ⬜       | Oracle ✅;DM 已 use_profile 间接验证 |
+| enable_profile            | ✅           | ✅       | enable/disable cycle OK |
+| disable_profile           | ✅           | ✅       | 同上 |
+| disconnect_profile        | ✅           | ✅       | Bug #62 修复:disconnect 完整清 state,后续 use_profile 重连无需额外 disconnect |
+| get_active_profile        | ✅           | ✅       | connected/schemaCache 都正确 |
 | get_global_schema         | ⬜           | ⬜       | 未跑(Oracle 输出 > 1MB,跳过) |
 | export_profiles           | ✅           | ✅       | YAML 正确,password REDACTED |
-| import_profiles           | ✅           | ⬜       | Oracle 测试 OK;DM 路径未测 |
-| compare_profile_schemas   | ✅           | ✅       | 跨 DB 比对 identical |
+| import_profiles           | ✅           | ✅       | merge 模式 OK |
+| compare_profile_schemas   | ✅           | ✅       | 跨 DB 比对 (5 added,0 removed,0 modified) |
 | get_schema                | ⬜           | ⬜       | Oracle 输出 > 1MB 跳过 |
 | get_table_info            | ✅           | ✅       | 列/PK/defaults 正常 |
-| get_sample_data           | ✅           | ✅       | 3 行 + 完整数据 |
-| get_enum_values           | ⚠️           | ✅       | Oracle 返回 null (case 大小写 bug);DM ✅ |
+| get_sample_data           | ✅           | ✅       | 3 行 + 完整数据 (Oracle uppercase keys, DM lowercase keys) |
+| get_enum_values           | ✅           | ✅       | **Bug #61 修复**:Oracle uppercase VALUE key → case-insensitive lookup 返回正确 values+counts |
 | clear_cache               | ✅           | ✅       | |
-| execute_query             | ✅           | ✅       | SELECT + :1 参数 ✅ |
+| execute_query             | ✅           | ✅       | SELECT + 参数 OK (Oracle :1, DM ?) |
 | execute_batch             | ✅           | ✅       | batch UPDATE 3 行 ✅(DM Bug #54 未复现) |
-| execute_script            | ✅           | ✅       | PL/SQL + ALTER + UPDATE + COMMIT ✅ |
+| execute_script            | ✅           | ✅       | PL/SQL block + IF/LOOP 都 OK |
 | execute_sql_file          | ⬜           | ⬜       | 未测(需白名单路径) |
 | lint_sql                  | ✅           | ✅       | warning + info 都识别 |
-| explain_query             | ⚠️           | ⚠️       | 空 plan/duration — Oracle/DM EXPLAIN 都未实际执行 |
-| explain_query_with_advice | ✅           | ⬜       | persist 工作;DM 未测 |
-| compare_query_plans       | ✅           | ⬜       | identical diff |
-| list_query_plans          | ✅           | ⬜       | plans 列表 OK |
-| save_template             | ✅           | ✅       | 中文 OK,profile_name 绑定 OK |
-| list_templates            | ✅           | ✅       | profile_name filter OK |
+| explain_query             | ⚠️           | ⚠️       | 空 plan/duration — Oracle/DM EXPLAIN 实际未跑(adapter 未实现) |
+| explain_query_with_advice | ✅           | ✅       | persist 工作 + captured=true |
+| compare_query_plans       | ✅           | ✅       | identical diff |
+| list_query_plans          | ✅           | ✅       | plans 列表 OK(跨 profile 可见) |
+| save_template             | ✅           | ✅       | 中文 + profile_name 绑定 OK |
+| list_templates            | ✅           | ✅       | profile_name filter OK,跨 profile 隔离 |
 | get_template              | ✅           | ✅       | by id |
 | delete_template           | ✅           | ✅       | by id |
-| execute_template          | ✅           | ✅       | ${id} 占位符替换 OK |
-| export_table_csv          | ✅           | ✅       | 4 行 + 完整数据(uppercase 列名) |
-| import_csv                | ✅           | ✅       | dryRun 4 行 sample |
-| export_backup             | ⚠️           | ⚠️       | Oracle: kind:unsupported;DM: INFORMATION_SCHEMA hang(Bug #46) |
-| get_pii_config            | ✅           | ⬜       | 空 profiles;DM 未测 |
-| set_pii_config            | ✅           | ⬜       | ruleCount: 1 OK;DM 未测 |
-| generate_sample_data      | ❌           | ⬜       | NJS-098 bind 错误(generate_sample_data bug) |
-| get_metrics               | ✅           | ✅       | counters + histograms 正确 |
-| get_query_history         | ✅           | ✅       | entries + groupBy:profile 都 OK |
-| audit_log                 | ✅           | ⬜       | entries OK;DM 未单独测 |
+| execute_template          | ✅           | ✅       | ${status} 占位符替换 OK |
+| export_table_csv          | ✅           | ✅       | 3 行 + 完整数据 |
+| import_csv                | ✅           | ✅       | dryRun 3 行 sample |
+| export_backup             | ⚠️           | ⚠️       | Oracle: kind:unsupported (Oracle 不在 MVP);DM: kind:full 但 tables=0(tables 参数未生效);Bug #46 hang 修复确认 |
+| get_pii_config            | ✅           | ✅       | 2 个 profile 各自规则 |
+| set_pii_config            | ✅           | ✅       | ruleCount: 1 OK |
+| generate_sample_data      | ✅           | ✅       | **Bug #60 修复**:Oracle 3 placeholders + 3 values bind OK (NJS-098 消失),DM 同样 OK,PK auto-sequence 正确 |
+| get_metrics               | ✅           | ✅       | counters + histograms 正确 (oracle + dm 各自 db 标签) |
+| get_query_history         | ✅           | ✅       | entries + groupBy:profile 都 OK,**per-profile 隔离生效** |
+| audit_log                 | ✅           | ✅       | profileName 过滤 OK,DM 5 条 / Oracle 16+ 条各自独立 |
 
 > §1 测试日期:2026-08-19。Oracle:`<ORACLE_USER>/<ORACLE_SERVICE_NAME>@<ORACLE_HOST>:<ORACLE_PORT>`。DM:`<DM_USER>/<DM_DB>@<DM_HOST>:<DM_PORT>`。
 >
-> **总体结果**: Oracle 38/42 ✅(含 ⚠️ 已知限制)+ 1 ❌(generate_sample_data);DM 31/42 ✅(未单独测部分标 ⬜)+ 1 ❌(同上)+ 2 ⚠️(export_backup hang / get_enum_values Oracle bug)。
+> **总体结果**: Oracle 41/42 ✅(含 ⚠️ 已知限制,explain_query 无 plan);DM 41/42 ✅(同 ⚠️)。**Bug #60 + #61 + #62 全部修复**,generate_sample_data + get_enum_values + disconnect_profile 全绿。
 
 ---
 
@@ -915,25 +915,35 @@ SELECT 1 FROM DUAL;
 
 **Schema 要求**:`{filePath, useTransaction?, maxStatements?, dryRun?}`。
 
-**前置**:`DB_ALLOWED_FILE_PATHS` env 必须包含 filePath 所在目录,否则拒绝。
+**前置**:`DB_ALLOWED_FILE_PATHS` env 必须包含 filePath 所在目录,否则拒绝。**v5.0.0** 新增:bare 文件名(无路径分隔符)自动解析为 `<cwd>/sql/<filename>`,无需手动拼路径(同 csv-tools `defaultOutputPath` 行为)。
 
 #### Oracle
 
-**正确输入 1**(白名单内文件):
+**正确输入 1**(bare 文件名 — v5.0.0 推荐):
+
+```json
+{"filePath": "test-script.sql", "dryRun": true}
+```
+
+**预期**: 自动在 `<cwd>/sql/test-script.sql` 查找,只解析 + lint 不执行。
+
+**正确输入 2**(完整路径,绝对/相对):
 
 ```json
 {"filePath": "<cwd>/sql/test-script.sql", "dryRun": true}
+{"filePath": "sql/test-script.sql"}
+{"filePath": "D:/full/path/test-script.sql"}
 ```
 
-**预期**: 只解析 + lint,不执行(`dryRun=true`)。
+**预期**: 绝对/带分隔符的相对路径直接使用,bare 文件名逻辑不触发。
 
-**正确输入 2**(实际执行):
+**正确输入 3**(实际执行):
 
 ```json
-{"filePath": "<cwd>/sql/test-script.sql"}
+{"filePath": "test-script.sql"}
 ```
 
-**预期**: 多语句按序执行。
+**预期**: 多语句按序执行(经 splitStatements → executeScript)。
 
 **错误输入 1**(白名单外路径):
 

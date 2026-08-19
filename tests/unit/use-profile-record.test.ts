@@ -28,25 +28,35 @@ describe('use_profile recordToProject', () => {
     } catch { /* ignore */ }
   });
 
-  it('omitting recordToProject does NOT write .profile', async () => {
+  // v5.0.0: 默认行为改为自动同步 .db-profile (反映当前 use_profile 状态)。
+  // 想"临时激活但不绑定"显式传 recordToProject: false。
+  it('omitting recordToProject AUTO-WRITES .db-profile (v5.0.0 default sync behavior)', async () => {
     const handler = buildUseProfileHandler(pm);
     await handler({ name: 'test-prof' });
-    const exists = await fs.stat(path.join(tmp, '.profile')).then(() => true).catch(() => false);
+    const content = await fs.readFile(path.join(tmp, '.db-profile'), 'utf8');
+    expect(content).toBe('profile=test-prof\n');
+  });
+
+  it('recordToProject=true writes .db-profile with profile=<name>', async () => {
+    const handler = buildUseProfileHandler(pm);
+    await handler({ name: 'test-prof', recordToProject: true });
+    const content = await fs.readFile(path.join(tmp, '.db-profile'), 'utf8');
+    expect(content).toBe('profile=test-prof\n');
+  });
+
+  it('recordToProject=true overwrites existing .db-profile', async () => {
+    await fs.writeFile(path.join(tmp, '.db-profile'), 'profile=old\n');
+    const handler = buildUseProfileHandler(pm);
+    await handler({ name: 'test-prof', recordToProject: true });
+    const content = await fs.readFile(path.join(tmp, '.db-profile'), 'utf8');
+    expect(content).toBe('profile=test-prof\n');
+  });
+
+  // v5.0.0: 显式 recordToProject: false 才跳过 sync
+  it('recordToProject=false skips .db-profile write', async () => {
+    const handler = buildUseProfileHandler(pm);
+    await handler({ name: 'test-prof', recordToProject: false });
+    const exists = await fs.stat(path.join(tmp, '.db-profile')).then(() => true).catch(() => false);
     expect(exists).toBe(false);
-  });
-
-  it('recordToProject=true writes .profile with profile=<name>', async () => {
-    const handler = buildUseProfileHandler(pm);
-    await handler({ name: 'test-prof', recordToProject: true });
-    const content = await fs.readFile(path.join(tmp, '.profile'), 'utf8');
-    expect(content).toBe('profile=test-prof\n');
-  });
-
-  it('recordToProject=true overwrites existing .profile', async () => {
-    await fs.writeFile(path.join(tmp, '.profile'), 'profile=old\n');
-    const handler = buildUseProfileHandler(pm);
-    await handler({ name: 'test-prof', recordToProject: true });
-    const content = await fs.readFile(path.join(tmp, '.profile'), 'utf8');
-    expect(content).toBe('profile=test-prof\n');
   });
 });

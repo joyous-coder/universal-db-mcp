@@ -117,6 +117,15 @@ export class ProfileStore {
   }
 
   /**
+   * v5.0.0: save() is a deprecated alias for create(). Existing callers (unit tests,
+   * external consumers) keep working without changes. New code should use create()
+   * to make the INSERT-only semantic visible at the call site.
+   */
+  async save(input: ProfileInput, createdBy = 'cli'): Promise<Profile> {
+    return this.create(input, createdBy);
+  }
+
+  /**
    * v5.0.0: 修改已存在的 profile(只 UPDATE,profile 名不存在则抛错)。
    * 注意:profile 名是 primary key,但通常不会改 name(改了所有引用都失效)。
    * use_count / created_at / created_by / id 不变。

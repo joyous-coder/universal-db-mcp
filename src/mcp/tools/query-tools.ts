@@ -43,11 +43,21 @@ export function buildSaveTemplateHandler(qa: QueryAnalyzer) {
     name: string;
     description: string;
     sql: string;
-    parameters: any[];
+    parameters?: any[];
     tags?: string[];
     /** v2.19: bind template to a profile (omit/null for global). */
     profile_name?: string | null;
   }) => {
+    // v5.0.0: defensive type check — inputSchema declares array but MCP SDK doesn't
+    // enforce. If user passes `parameters: {object}` or `parameters: "string"`,
+    // `(args.parameters ?? []).map` would throw "is not a function". Catch early
+    // with a clear error message.
+    if (args.parameters !== undefined && !Array.isArray(args.parameters)) {
+      throw new Error(
+        `save_template: 'parameters' 必须是数组(例如 [{"name":"id","type":"string"}] 或 ["id"])。` +
+        `收到: ${typeof args.parameters} = ${JSON.stringify(args.parameters).slice(0, 100)}`
+      );
+    }
     // v4.0.2 Bug #6 fix: accept EITHER:
     //   (a) array of strings, e.g. ["id", "name"]  — most common MCP call style
     //   (b) array of {name|type|required} objects  — internal/template-store style

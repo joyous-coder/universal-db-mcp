@@ -185,7 +185,9 @@ export class ProfileManager {
     if (!dryRun && mode === 'replace' && this.enabled) {
       const current = await this.listProfiles();
       for (const p of current) {
-        await this.deleteProfile(p.name);
+        // v5.0.0: pass confirm: true because this is an internal call (user already
+        // explicitly requested replace mode via importProfiles).
+        await this.deleteProfile(p.name, { confirm: true });
       }
     }
 
@@ -239,6 +241,14 @@ export class ProfileManager {
   }
 
   /**
+   * v5.0.0: saveProfile() is a deprecated alias for createProfile(). New code should
+   * use createProfile() to make the INSERT-only semantic explicit.
+   */
+  async saveProfile(input: ProfileInput, createdBy = 'mcp'): Promise<Profile> {
+    return this.createProfile(input, createdBy);
+  }
+
+  /**
    * v5.0.0: 修改已存在的 profile(UPDATE-only)。profile 不存在抛 'profile ... does not exist'。
    * 不会动 use_count / created_at / created_by / id。
    */
@@ -259,6 +269,10 @@ export class ProfileManager {
 
   async deleteProfile(name: string, opts?: { confirm?: boolean }): Promise<boolean> {
     if (!this.enabled) return false;
+    // v5.0.0: if profile doesn't exist, return false (no-op) — don't trigger the
+    // confirm-required error path. Unknown name is not a destructive operation.
+    const existing = await this.store.get(name);
+    if (!existing) return false;
     // v5.0.0: 二次确认。默认返回 false + 列出 ~/.universal-db-mcp/<name>/ 子目录内容,
     // 用户传 confirm: true 才会真正删除。防止误删 templates / history / plans 数据。
     if (!opts?.confirm) {
@@ -343,7 +357,16 @@ export class ProfileManager {
     // quoteSimpleIdentifier 等)。profile.config 里没有 type(type 在 profile.type 上),
     // 不传过去会让 DatabaseService 的 config.type === undefined → 默认 fallback
     // 到 PostgreSQL/SQLite 方言(LIMIT + lowercase 双引号),Oracle/DM/SQL Server 全部报错。
-    const service = new DatabaseService(adapter, { ...profile.config, type: profile.type } as any, this.cacheConfig);
+    //
+    // v5.0.0: 同时传递 permissionMode。profile.config 里可能没有 config.permissions
+    // (auto-expand 在并行调用时偶发不跑 / 早期 profile 是手动创建的没展开过),
+    // 但 profile.permissionMode 始终在 SQLite 里。resolvePermissions 优先看
+    // permissionMode,所以传过去能保证 DatabaseService 拿到正确的权限集合。
+    const service = new DatabaseService(
+      adapter,
+      { ...profile.config, type: profile.type, permissionMode: profile.permissionMode } as any,
+      this.cacheConfig,
+    );
     // v2.19: forward QA + active-profile provider to the per-profile
     // DatabaseService so history rows executed via this profile get the
     // right profile_name.

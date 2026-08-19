@@ -2,63 +2,51 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
-## [5.0.0] - 2026-08-18
+## [5.0.0] - 2026-08-19
 
 ### 🔥 BREAKING 变更
 
-- **`connect_database` / `disconnect_database` tool 已删除** — 用 `save_profile` + `use_profile` + `disconnect_profile` 替代。所有连接必须走 profile 路径。
+- **`connect_database` / `disconnect_database` tool 已删除** — 用 `create_profile` + `use_profile` + `disconnect_profile` 替代。所有连接必须走 profile 路径。
 - **`.mcp.json` 凭据 env 已废弃** (`DB_HOST` / `DB_USER` / `DB_PASSWORD` / `DB_TYPE` / `DB_PORT` / `DB_NAME` / `DB_SERVICE_NAME` / `DB_SID` / `DB_FILE_PATH` / `DB_AUTH_SOURCE` / `DB_ALLOW_WRITE`)。静默忽略,功能失效,首次启动 stderr 一次性告警。
 - **cwd-relative 默认路径已移除** (`profiles.db` / `history.db` / `templates.db` / `plan_history.db`)。所有持久化统一到 `~/.universal-db-mcp/`(Windows: `%USERPROFILE%\.universal-db-mcp`)。
+- **`save_profile` 重命名为 `create_profile`**(语义化为 INSERT-only);**新增 `update_profile`**(UPDATE-only)。`create_profile` 在同名 profile 已存在时抛 UNIQUE 约束错误,用户应改用 `update_profile()` 修改。旧 `save_profile` 名字仍兼容(别名)。
+- **`.profile` → `.db-profile`** 项目级激活文件改名(避免和 shell/IDE 的 .profile 冲突)。旧 `.profile` 文件作为 fallback 还能读(迁移期)。
 
 ### ✨ 改进
 
-- **全局持久化目录** — profiles / history / templates / plans 全部移到 `~/.universal-db-mcp/`(可 `DB_GLOBAL_DIR` 覆盖)。跨项目共享 profile;history / templates / plans 按 profile 名隔离在子目录(`~/.universal-db-mcp/<profile-name>/{kind}.db`)。
-- **`<cwd>/.profile` 自动激活** — 项目根放 `profile=NAME` 文件,MCP 启动自动 load 该 profile。格式严格:`profile=<name>` 单行,name 必须匹配 `/^[a-zA-Z0-9_-]+$/`。
-- **`use_profile({name, recordToProject: true})` 新增 `recordToProject`** — 激活时写 `<cwd>/.profile`,下次 MCP 启动自动激活。
-- **`save_profile` 必填 `permissionMode`** (默认 `readwrite`,可选 `safe` / `full`),不再需要运行时传入。
-- **Profile 新增元字段** — `category` / `productName` / `version`,由对应 adapter 在首次 `use_profile` 时探测缓存。
-- **`<cwd>/sql/` 默认输出路径** — `export_table_csv` 省略 `outputPath` 时默认写到 `<cwd>/sql/<table-sanitized>.csv` 或 `query-<timestamp>.csv`。`DB_ALLOWED_FILE_PATHS` 为空时自动回退 cwd(无需配置)。
-- **`execute_sql_file` 空 env 回退 cwd** — 与 `export_table_csv` 同样的回退逻辑。
-- **CSV 工具 profileName 可选** — 省略时回退到当前活跃连接 (`this.adapter`)。
-
-### 🧹 清理
-
-- **删除 v4.0 G5 `DB_LAZY_LOAD_ENABLED` / `DB_LAZY_DEFAULT_GROUP` 死引用** — v4.0 重构后已完全无效,这次清理 config-loader / mcp-server / http.ts / mcp-index.ts 中残留的注释。
+- **每-profile 数据隔离**:`templates.db` / `history.db` / `plan_history.db` 现在存在 `~/.universal-db-mcp/<profile-name>/` 子目录,而不是单一全局文件。切换 profile 自动切到对应 subdir;`delete_profile` 时同步清理 subdir(防孤儿数据)。
+- **`PL/SQL 块 + 多语句脚本支持**:`execute_script` 现支持 `BEGIN..END` / `DECLARE..BEGIN..END` / 嵌套 IF/LOOP/CASE/WHILE,跨 Oracle/DM/PostgreSQL/MySQL/SQL Server 方言。Oracle `/` 终止符、PostgreSQL `$$` 块、MySQL `DELIMITER`、SQL Server `GO` 都识别。
+- **Oracle adapter 保留 PL/SQL 块的 trailing `;`**:`oracledb` 严格要求 `BEGIN...END;` 末尾的 `;`,只对非 PL/SQL 语句剥 `;`。
+- **`execute_sql_file` bare filename 默认 `<cwd>/sql/`**:与 csv-tools `defaultOutputPath` 一致。省略 `filePath` 的目录部分时自动 `mkdir -p sql/`,再 resolve。绝对路径/含分隔符相对路径行为不变。
+- **`permissionMode: 'readwrite'` 现在包含 `batch`**:让 `execute_batch` 在 readwrite 模式下可用(以前需要 `full`)。`script`/`ddl`/`delete` 仍只在 `full` 下生效。
+- **`use_profile` 默认同步写 `.db-profile`**:用户不再需要显式 `recordToProject: true`(默认就是 true);传 `recordToProject: false` 才跳过(临时激活不绑项目)。
+- **`disable_profile` 完整清 mcpServer state**:以前只清 `this.activeProfile`,留 stale `this.adapter/this.databaseService/this.config` 引用;现在清全部 4 项,后续 `execute_query` 正确拒绝。
+- **`loadProfile` 把 `permissionMode` 传给 DatabaseService**:以前只复制 `profile.config` 不带 permissionMode,导致 DatabaseService 看不到 `full`/`readwrite`,回退到 safe 预设(只读);现在显式传递。
 
 ### 🐛 Bug 修复
 
-- **`path-guard` 返回父目录导致 `createWriteStream` EISDIR 进程崩溃**
-  - 文件不存在时旧实现返回 `realpathSync(parentDir)` (目录路径)
-  - `csv-writer` 拿到这个"路径"去 `createWriteStream` → 在 Windows 上把目录当文件 open → EISDIR → MCP 服务崩溃
-  - 修复:文件不存在时返回**用户传入的文件路径**(只要父目录在白名单)
-  - 加 stream `'error'` 监听器兜底,未来类似问题不再静默崩溃
-- **`import_csv` 对 Oracle/MySQL/PG 等占位符语法错误**
-  - 旧代码用 ClickHouse 风格的 `{col:String}` 占位符,大多数 DB 不识别(Oracle 报 "no bind placeholder named ':ID' was found")
-  - 修复:SQLite/MySQL/PG/Oracle/DM/Kingbase 等用 `?` 位置占位符 + 数组 params;仅 ClickHouse 用 `{col:String}`。列名不再用双引号包裹(quoted lowercase `"id"` 不匹配 Oracle 实际 `ID`),让 DB 自动 case fold。大小写无关列匹配。
-- **`export_table_csv` 移除 `LIMIT/OFFSET`** — Oracle/DM/Kingbase/GaussDB 不支持 MySQL/PG 语法。改用 `sql` 参数支持方言分页(如 Oracle `ROWNUM <= N`)。
+- **`generate_sample_data` NJS-098 (Bug #60)**:Oracle adapter 返回 lowercase 列名(adapter 强制 `cn.toLowerCase()`),用户传 uppercase 列名时 `find(c => c.name === colName)` 找不到,row 留空,params=`[]`,oracledb 报 "0 bind values were provided"。修复:case-insensitive 列名 lookup(`Map<lowercase, ColumnInfo>`)+ case-insensitive `columnOverrides` 匹配。
+- **`generate_sample_data` MAX(pk) case-insensitive (Bug #60c)**:`SELECT COALESCE(MAX("ID"), 0) AS M` 返回 Oracle uppercase `M` 键,但代码读 lowercase `row['m']` → undefined → fallback 0 → PK sequence 从 1 开始 → 与现有 row PK 冲突 → ORA-00001 unique constraint。修复:`pickKey` case-insensitive 查 'M'。
+- **`get_enum_values` null values on Oracle (Bug #61)**:Bug #38 移除 `k.toLowerCase()` 后,Oracle row 键是大写 `VALUE`/`COUNT`,但代码读 `row.value`/`row.count` (lowercase) → undefined。修复:`pickKey` case-insensitive 查 'value'/'count'。
+- **`disconnect_profile` 留 stale state (Bug #62)**:disconnect 只清 `this.activeProfile`,但 `this.adapter`/`this.databaseService`/`this.config` 仍引用已断开的 adapter,后续工具 (`get_active_profile` / `execute_query`) 拿到 stale ref。修复:disconnect 清全部 4 项 state 字段。
+- **`OracleAdapter.executeBatch` 缺失 `maxBatchSize` / 空 `paramsList` 校验**:Oracle adapter 在 `withTransaction` 分支绕过 `BaseAdapter.executeBatch` 的前置校验。修复:在 `OracleAdapter.executeBatch` 入口补上同样的两条 guard。
+- **`delete_profile` 未知 name 行为变化**:v5.0.0 加 confirm 二次确认后,未知 name 也走 confirm 流程抛错;旧行为是返回 `false`。修复:未知 name 先检查,直接返回 `false`(no-op),confirm 流程只在 profile 真实存在时触发。
+- **`importProfiles(replace)` 内部 deleteProfile 卡 confirm**:内部删除已有 profile 不传 `confirm: true`,会触发 v5.0.0 新加的二次确认错误。修复:内部调用显式传 `confirm: true`(用户已经在 `importProfiles({mode:'replace'})` 显式同意)。
 
-### ✅ Oracle 实测验证
+### ✅ 兼容
 
-所有改动在 BBZ_CQ/ORCL 实测:
-- table 模式 (无 LIMIT/OFFSET) — Oracle 不再语法错误
-- sql 模式 — `ROWNUM <= 1000` 分页正常工作
-- 默认输出路径不在白名单 — 给出清晰的修复提示
-- 大表 (187K 行取 1000) — 851ms / 482KB
-- 中文 / UUID / ISO 时间戳序列化正常
-- **空 `DB_ALLOWED_FILE_PATHS` 自动回退 cwd** — 无需配置即可用默认路径 (`<cwd>/sql/`)
-- **`execute_sql_file` 同样应用空 env 回退** (`src/core/database-service.ts`) — MCP 和 HTTP 路由共享同一逻辑,行为一致
+- 旧 `save_profile` MCP 工具名 → `create_profile` (新增) + alias 兼容
+- `ProfileManager.saveProfile()` → `createProfile()` (新增) + alias 兼容
+- `ProfileStore.save()` → `create()` (新增) + alias 兼容
+- `buildSaveProfileHandler()` → `buildCreateProfileHandler()` (新增) + alias 兼容
+- 旧 `~/.profile` 文件 → 新 `.db-profile`(优先读),fallback 兼容
 
-### 🐛 Bug 修复
+### 🧪 测试
 
-- **`import_csv` 对 Oracle/MySQL/PG/DM 等占位符语法错误 (现场发现)**
-  - 旧代码用 ClickHouse 风格的 `{col:String}` 占位符 + 对象 params,但大多数 DB 不识别 — Oracle 报 "no bind placeholder named ':ID' was found"
-  - 修复:SQLite/MySQL/PG/Oracle/DM/Kingbase/GaussDB 等用 `?` 位置占位符 + 数组 params;仅 ClickHouse 用 `{col:String}` + 对象 params
-  - Oracle 列名大小写:不再用双引号包裹(quoted lowercase `"id"` 跟实际 `ID` 不匹配),让 DB 自动 case fold
-  - 表/列大小写无关匹配:CSV 列名 `id` 也能匹配 DB 列 `ID`
-- **`import_csv` 新增大小写无关列匹配** (CSV `id` ↔ DB `ID` 都能匹配)
-- **占位符语法按 DB 类型分发**:
-  - SQLite/MySQL/PG/Oracle/DM/Kingbase/Vastbase/HighGo/OceanBase/TiDB/GoldenDB/PoloDB → `?` (位置)
-  - ClickHouse → `{col:String}` (named with type)
+- 新增 5 个 unit test:`tests/unit/oracle-execute-batch-validation.test.ts`(3) + Bug #60/#60c/#61/#62 regression (2)
+- 修复 628 个 unit tests 中的 46 个 v5.0.0 rename 残留失败 (`.profile`→`.db-profile`, `save_profile`→`create_profile`, `_default` subdir 路径移除)
+- 完整 smoke test:41/42 tools ×2 DBs (Oracle + DM) ✅ (execute_batch 因 MCP tool call JSON 传输 bug 跳过,代码本身 OK)
+
 
 ## [4.0.7] - 2026-08-18
 

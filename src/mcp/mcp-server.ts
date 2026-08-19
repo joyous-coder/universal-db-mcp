@@ -937,6 +937,24 @@ export class DatabaseMCPServer {
             const { sql, paramsList, useTransaction, maxBatchSize } = args as {
               sql: string; paramsList: unknown[][]; useTransaction?: boolean; maxBatchSize?: number;
             };
+            // v5.0.0: defensive type check — MCP SDK doesn't enforce inputSchema array
+            // types, so malformed paramsList (e.g. "[completed, 1]" without closing ])
+            // would propagate to oracledb and produce a confusing NJS-005 error.
+            // Catch early with a clear message.
+            if (!Array.isArray(paramsList)) {
+              throw new Error(
+                `execute_batch: 'paramsList' 必须是二维数组(例如 [["done", 1], ["cancelled", 2]])。` +
+                `收到: ${typeof paramsList} = ${JSON.stringify(paramsList).slice(0, 200)}`
+              );
+            }
+            for (let i = 0; i < paramsList.length; i++) {
+              if (!Array.isArray(paramsList[i])) {
+                throw new Error(
+                  `execute_batch: paramsList[${i}] 必须是数组(单行的参数列表)。` +
+                  `收到: ${typeof paramsList[i]} = ${JSON.stringify(paramsList[i]).slice(0, 200)}`
+                );
+              }
+            }
             console.error(`📦 批量执行: ${paramsList.length} 行`);
             const result = await this.databaseService!.executeBatch(sql, paramsList, { useTransaction, maxBatchSize });
             return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };

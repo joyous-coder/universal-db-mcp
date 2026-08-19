@@ -398,7 +398,13 @@ export class DatabaseService {
         const maxRes = await this.executeQuery(
           `SELECT COALESCE(MAX(${pkColIdent}), 0) AS M FROM ${pkIdent}`
         );
-        maxIntPkValues[pkName] = Number(maxRes.rows?.[0]?.['m'] ?? 0);
+        // v5.0.0: case-insensitive row key lookup (Bug #61 same root cause). Oracle
+        // returns row key as uppercase "M"; MySQL/Postgres preserve "M" case. Reading
+        // lower-case ['m'] returns undefined → maxVal falls back to 0 → PK sequence
+        // starts at 1 → collides with existing rows (ORA-00001).
+        const maxRow = maxRes.rows?.[0];
+        const maxKey = maxRow ? Object.keys(maxRow).find(k => k.toLowerCase() === 'm') : undefined;
+        maxIntPkValues[pkName] = Number(maxKey !== undefined ? maxRow![maxKey] : 0);
       } catch {
         // 表可能是空的 (no rows yet) 或 MAX 失败,默认 0
         maxIntPkValues[pkName] = 0;
@@ -498,11 +504,29 @@ export class DatabaseService {
       ? allowedDirs
       : [process.cwd()];
 
+    // v5.0.0: bare-filename shorthand → default to <cwd>/sql/<filename> (matches
+    // csv-tools defaultOutputPath pattern). Path stays unchanged when:
+    //   - Absolute (C:\..., D:/..., /tmp/...) — caller knows what they want
+    //   - Contains a path separator (sql/data.sql, ./data.sql, ../foo.sql) — caller
+    //     specified a relative location
+    const path = await import('node:path');
+    const fs = await import('node:fs');
+    let resolvedFilePath = options.filePath;
+    if (
+      !path.isAbsolute(resolvedFilePath) &&
+      !resolvedFilePath.includes('/') &&
+      !resolvedFilePath.includes(path.sep)
+    ) {
+      const sqlDir = path.join(process.cwd(), 'sql');
+      fs.mkdirSync(sqlDir, { recursive: true });
+      resolvedFilePath = path.join(sqlDir, resolvedFilePath);
+      console.error(`[executeSqlFile] bare filename "${options.filePath}" → ${resolvedFilePath}`);
+    }
+
     // Lazy import to avoid circular deps
     const { resolveAndValidatePath } = await import('../utils/path-guard.js');
-    const fs = await import('node:fs');
 
-    const realPath = resolveAndValidatePath(options.filePath, effectiveAllowedDirs, process.cwd());
+    const realPath = resolveAndValidatePath(resolvedFilePath, effectiveAllowedDirs, process.cwd());
 
     const stats = fs.statSync(realPath);
     const maxFileSize = 50 * 1024 * 1024; // 50MB

@@ -161,4 +161,63 @@ describe('DatabaseService.generateAndInsertSampleData', () => {
       undefined,
     );
   });
+
+  // v5.0.0 Bug #60c regression: SELECT MAX("ID") AS M returns row key uppercase "M"
+  // on Oracle (Bug #38 removed k.toLowerCase() from adapter). Without case-insensitive
+  // lookup, MAX result is read as 0 → PK sequence starts at 1 → collides with existing
+  // rows (ORA-00001 unique constraint).
+  it('reads MAX(pk) case-insensitively for PK sequence (Oracle uppercase M)', async () => {
+    const schema: SchemaInfo = {
+      databaseType: 'oracle',
+      databaseName: 'TEST',
+      tables: [{
+        name: 'test_regression_tbl',
+        primaryKeys: ['id'],
+        columns: [
+          { name: 'id', type: 'number', nullable: false },
+          { name: 'status', type: 'varchar2', nullable: true },
+        ],
+      }],
+    };
+    const executeBatch = vi.fn().mockResolvedValue({
+      affectedRowsPerStatement: [1],
+      totalAffectedRows: 1,
+      executionTime: 1,
+    });
+    // Oracle returns MAX result with uppercase "M" key (post-Bug #38).
+    const executeQuery = vi.fn().mockImplementation(async (sql: string) => {
+      if (/MAX/.test(sql)) return { rows: [{ M: 3 }], executionTime: 1, metadata: {} };
+      return { rows: [], executionTime: 1, metadata: {} };
+    });
+    const adapter = {
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      executeQuery,
+      executeBatch,
+      getSchema: vi.fn().mockResolvedValue(schema),
+      getTableInfo: vi.fn().mockResolvedValue({
+        name: 'test_regression_tbl',
+        primaryKeys: ['id'],
+        columns: [
+          { name: 'id', type: 'number', nullable: false },
+          { name: 'status', type: 'varchar2', nullable: true },
+        ],
+      }),
+      isWriteOperation: vi.fn(),
+    } as unknown as DbAdapter;
+    const config: DbConfig = { type: 'oracle', permissions: ['insert', 'batch'] };
+    const service = new DatabaseService(adapter, config);
+
+    await service.generateAndInsertSampleData('test_regression_tbl', 1, {
+      seed: 42,
+      columnOverrides: { STATUS: 'foo' },
+    });
+
+    // PK sequence should be MAX(3) + 1 = 4, not 0+1=1 (would collide).
+    expect(executeBatch).toHaveBeenCalledWith(
+      'INSERT INTO "TEST_REGRESSION_TBL" ("ID", "STATUS") VALUES (?, ?)',
+      [[4, 'foo']],
+      undefined,
+    );
+  });
 });

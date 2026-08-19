@@ -3,17 +3,16 @@
     "universal-db-mcp": {
       "type": "stdio",
       "command": "node",
-      "args": ["D:/Links/Tools/universal-db-mcp/dist/index.js"],
+      "args": [
+        "D:/Links/Tools/universal-db-mcp/dist/index.js"
+      ],
       "env": {
         "MODE": "mcp",
         "LOG_LEVEL": "warn",
-        "DB_TYPE": "",
-        "DB_HOST": "localhost",
-        "DB_LAZY_LOAD_ENABLED": "true",
-        "DB_ALLOWED_FILE_PATHS": "D:\\tmp,D:/Links/Tools/universal-db-mcp/tmp-e2e",
         "DB_QUERY_ANALYZER_ENABLED": "true",
         "DB_METRICS_ENABLED": "true",
-        "DB_PLAN_HISTORY_DB_PATH": ".e2e-plan-history.db"
+        "DB_PLAN_HISTORY_DB_PATH": ".e2e-plan-history.db",
+        "_reload_marker": "2026-08-19-09-20"
       }
     }
   }

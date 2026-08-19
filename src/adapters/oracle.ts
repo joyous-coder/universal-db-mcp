@@ -978,6 +978,17 @@ export class OracleAdapter extends BaseAdapter {
    * DML only.
    */
   async executeBatch(sql: string, paramsList: unknown[][], options: ExecuteBatchOptions = {}): Promise<BatchResult> {
+    // v5.0.1 Bug fix: BaseAdapter.executeBatch enforces maxBatchSize + empty-list
+    // pre-checks, but our `withTransaction` branch below never reaches that path.
+    // Re-run the same guards here so callers get consistent validation.
+    const maxBatchSize = options.maxBatchSize ?? 1000;
+    if (paramsList.length > maxBatchSize) {
+      throw new Error(`Batch has ${paramsList.length} rows, exceeds limit ${maxBatchSize}`);
+    }
+    if (paramsList.length === 0) {
+      throw new Error('Batch contains no parameter sets');
+    }
+
     if (options.useTransaction === false) {
       return super.executeBatch(sql, paramsList, { ...options, useTransaction: false });
     }

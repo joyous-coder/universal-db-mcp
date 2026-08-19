@@ -158,13 +158,13 @@ See [tools reference](./docs/03-features/tools.md) for parameter details.
 
 ### v5.0.0 新流程(Profile-based)
 
-**所有凭据现在通过 `save_profile` 管理**,不再写进 `.mcp.json`。同一套 DB 凭据可跨多个项目复用,不需要重复输入。
+**所有凭据现在通过 `create_profile` 管理**,不再写进 `.mcp.json`。同一套 DB 凭据可跨多个项目复用,不需要重复输入。
 
 #### 1. 第一次使用 — 保存 profile
 
 ```ts
 // 在 Claude Desktop / Claude Code 里:
-save_profile({
+create_profile({
   name: "my-dev-db",             // /^[a-zA-Z0-9_-]+$/
   type: "mysql",                 // oracle / mysql / postgres / redis / dm / ...
   config: {
@@ -174,22 +174,25 @@ save_profile({
     password: "your_password",
     database: "your_database",
   },
-  permissionMode: "readwrite",   // safe / readwrite / full (默认 readwrite)
+  permissionMode: "readwrite",   // safe / readwrite / full(默认 readwrite,含 batch)
 })
 ```
 
 profile 存到 `~/.universal-db-mcp/profiles.db`(Windows: `%USERPROFILE%\.universal-db-mcp\profiles.db`),跨项目保留。
+
+> 旧 `save_profile` 名字仍兼容(别名 → `create_profile`)。想更新已有 profile,用 `update_profile`。
 
 #### 2. 激活并绑定项目
 
 ```ts
 use_profile({
   name: "my-dev-db",
-  recordToProject: true,   // 写到 <cwd>/.profile — 下次自动激活
+  // recordToProject 默认 true — 自动写 <cwd>/.db-profile,下次 MCP 启动自动激活
+  // recordToProject: false 显式跳过(临时激活不绑项目)
 })
 ```
 
-下次 MCP 启动时,自动读 `<cwd>/.profile` 并激活指定 profile — 无需手动 `use_profile`。
+下次 MCP 启动时,自动读 `<cwd>/.db-profile` 并激活指定 profile — 无需手动 `use_profile`。文件名从 v4.x 的 `.profile` 改为 `.db-profile`(避免和 shell/IDE 的 `.profile` 冲突)。旧 `.profile` 文件还能作为 fallback 读到(迁移期)。
 
 #### 3. 开始查询
 
@@ -205,7 +208,7 @@ use_profile({
 ~/.universal-db-mcp/
 ├── profiles.db                       # 全局 profile 注册表
 ├── config.json                       # 配置标记
-├── my-dev-db/                        # profile 名作为子目录
+├── my-dev-db/                        # profile 名作为子目录(per-profile 隔离)
 │   ├── history.db                    # 查询历史(按 profile 隔离)
 │   ├── templates.db                  # SQL 模板
 │   └── plans.db                      # EXPLAIN 历史
@@ -220,17 +223,17 @@ use_profile({
 ```bash
 # 项目 A
 cd ~/projects/app-a
-echo 'profile=my-dev-db' > .profile
-# MCP 启动自动激活
+# MCP 启动自动激活 — 写 <cwd>/.db-profile (recordToProject: true 是默认行为)
+use_profile({name: 'my-dev-db'})
 
 # 项目 B(同一 DB)
 cd ~/projects/app-b
-echo 'profile=my-dev-db' > .profile
+use_profile({name: 'my-dev-db'})
 # 同一 profile,无需重新保存
 
 # 项目 C(不同 DB — staging)
-save_profile({name: 'staging-db', type: 'mysql', config: {...}})
-use_profile({name: 'staging-db', recordToProject: true})
+create_profile({name: 'staging-db', type: 'mysql', config: {...}})
+use_profile({name: 'staging-db'})
 ```
 
 ### MCP Mode 配置(简化版)
@@ -248,7 +251,7 @@ use_profile({name: 'staging-db', recordToProject: true})
 }
 ```
 
-启动后用 `save_profile` + `use_profile` 配连接。
+启动后用 `create_profile` + `use_profile` 配连接。v4.x `.mcp.json` env vars (`DB_HOST`/`DB_USER`/`DB_PASSWORD`/`DB_TYPE`) 会被静默忽略 +一次性 stderr 提示迁移。
 
 ### HTTP API Mode
 

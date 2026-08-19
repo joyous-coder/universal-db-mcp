@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
+import fs from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 /**
  * v4.2.0: config-loader 默认路径必须用 ~/.universal-db-mcp
@@ -8,8 +10,10 @@ import path from 'node:path';
  */
 describe('config-loader v4.2.0 defaults', () => {
   let orig: Record<string, string | undefined>;
+  let cwdSpy: ReturnType<typeof vi.spyOn>;
+  let tmpCwd: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     orig = {
       DB_GLOBAL_DIR: process.env.DB_GLOBAL_DIR,
       DB_PROFILES_DB_PATH: process.env.DB_PROFILES_DB_PATH,
@@ -28,12 +32,18 @@ describe('config-loader v4.2.0 defaults', () => {
     delete process.env.DB_PLAN_HISTORY_DB_PATH;
     delete process.env.DB_PROFILE_ENCRYPTION_KEY;
     delete process.env.DB_HISTORY_DB_KEY;
+    // v5.0.0: 测试 cwd 切到临时目录,避免真实 <cwd>/.db-profile 干扰
+    // (用户项目 .db-profile 指向 bbz-cq-oracle 会让 per-profile path 优先)
+    tmpCwd = await fs.mkdtemp(path.join(os.tmpdir(), 'cfg-test-'));
+    cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tmpCwd);
   });
-  afterEach(() => {
+  afterEach(async () => {
     for (const [k, v] of Object.entries(orig)) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
     }
+    cwdSpy.mockRestore();
+    try { await fs.rm(tmpCwd, { recursive: true, force: true }); } catch { /* ignore */ }
   });
 
   it('profilesDbPath defaults to ~/.universal-db-mcp/profiles.db', async () => {
@@ -45,21 +55,38 @@ describe('config-loader v4.2.0 defaults', () => {
     );
   });
 
-  it('historyDbPath defaults to ~/.universal-db-mcp/_default/history.db', async () => {
+  it('historyDbPath defaults to ~/.universal-db-mcp/history.db (no _default subdir)', async () => {
     process.env.DB_QUERY_ANALYZER_ENABLED = 'true';
     const { loadConfig } = await import('../../src/utils/config-loader.js');
     const cfg = loadConfig();
+    // v5.0.0: _default subdir removed — single root file is fallback when no .db-profile.
+    // With .db-profile present, getProfileDbPath(activeProfile, 'history') is used.
     expect(cfg.queryAnalyzer?.historyDbPath).toBe(
-      path.join(os.homedir(), '.universal-db-mcp', '_default', 'history.db'),
+      path.join(os.homedir(), '.universal-db-mcp', 'history.db'),
     );
   });
 
-  it('templatesDbPath defaults to ~/.universal-db-mcp/_default/templates.db', async () => {
+  it('templatesDbPath defaults to ~/.universal-db-mcp/templates.db (no _default subdir)', async () => {
     process.env.DB_QUERY_ANALYZER_ENABLED = 'true';
     const { loadConfig } = await import('../../src/utils/config-loader.js');
     const cfg = loadConfig();
     expect(cfg.queryAnalyzer?.templatesDbPath).toBe(
-      path.join(os.homedir(), '.universal-db-mcp', '_default', 'templates.db'),
+      path.join(os.homedir(), '.universal-db-mcp', 'templates.db'),
+    );
+  });
+
+  // v5.0.0: with .db-profile present, paths follow per-profile subdir
+  it('historyDbPath follows per-profile subdir when .db-profile is present', async () => {
+    // .db-profile in our tmp cwd points to bbz-cq-oracle (mimicking user's setup)
+    await fs.writeFile(path.join(tmpCwd, '.db-profile'), 'profile=bbz-cq-oracle\n');
+    process.env.DB_QUERY_ANALYZER_ENABLED = 'true';
+    const { loadConfig } = await import('../../src/utils/config-loader.js');
+    const cfg = loadConfig();
+    expect(cfg.queryAnalyzer?.historyDbPath).toBe(
+      path.join(os.homedir(), '.universal-db-mcp', 'bbz-cq-oracle', 'history.db'),
+    );
+    expect(cfg.queryAnalyzer?.templatesDbPath).toBe(
+      path.join(os.homedir(), '.universal-db-mcp', 'bbz-cq-oracle', 'templates.db'),
     );
   });
 

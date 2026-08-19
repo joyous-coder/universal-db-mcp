@@ -15,7 +15,8 @@ describe('audit-docs extractors', () => {
     // v4.2.0: connect_database / disconnect_database 已删除
     expect(names).not.toContain('connect_database');
     expect(names).not.toContain('disconnect_database');
-    expect(names).toContain('save_profile');
+    // v5.0.0: save_profile → create_profile(语义化为 INSERT-only)
+    expect(names).toContain('create_profile');
     expect(names).toContain('use_profile');
     // v4.0: use_tool_group / use_tool_schema removed
     expect(names).not.toContain('use_tool_group');
@@ -59,7 +60,7 @@ describe('audit-docs extractors', () => {
   });
 
   it('findDocReferences returns true if name appears in any doc', async () => {
-    expect(await findDocReferences('save_profile', './docs')).toBe(true);
+    expect(await findDocReferences('create_profile', './docs')).toBe(true);
     // Use a unique bogus name not in any docs
     expect(await findDocReferences('findDocReferences-bogus-12345xyz', './docs')).toBe(false);
   });
