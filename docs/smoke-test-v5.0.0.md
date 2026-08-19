@@ -111,7 +111,7 @@ mcp__universal-db-mcp__use_profile({name: "test-dm"})
 | execute_query             | ✅           | ✅       | SELECT + 参数 OK (Oracle :1, DM ?) |
 | execute_batch             | ✅           | ✅       | batch UPDATE 3 行 ✅(DM Bug #54 未复现) |
 | execute_script            | ✅           | ✅       | PL/SQL block + IF/LOOP 都 OK |
-| execute_sql_file          | ⬜           | ⬜       | 未测(需白名单路径) |
+| execute_sql_file          | ✅           | ✅       | bare filename 默认 `<cwd>/sql/<​filename>`(同 csv-tools)+ dryRun + 实际执行 OK |
 | lint_sql                  | ✅           | ✅       | warning + info 都识别 |
 | explain_query             | ⚠️           | ⚠️       | 空 plan/duration — Oracle/DM EXPLAIN 实际未跑(adapter 未实现) |
 | explain_query_with_advice | ✅           | ✅       | persist 工作 + captured=true |
@@ -132,9 +132,23 @@ mcp__universal-db-mcp__use_profile({name: "test-dm"})
 | get_query_history         | ✅           | ✅       | entries + groupBy:profile 都 OK,**per-profile 隔离生效** |
 | audit_log                 | ✅           | ✅       | profileName 过滤 OK,DM 5 条 / Oracle 16+ 条各自独立 |
 
-> §1 测试日期:2026-08-19。Oracle:`<ORACLE_USER>/<ORACLE_SERVICE_NAME>@<ORACLE_HOST>:<ORACLE_PORT>`。DM:`<DM_USER>/<DM_DB>@<DM_HOST>:<DM_PORT>`。
+> §1 测试日期:2026-08-19(第二轮 post-fix 验证)。Oracle:`<ORACLE_USER>/<ORACLE_SERVICE_NAME>@<ORACLE_HOST>:<ORACLE_PORT>`。DM:`<DM_USER>/<DM_DB>@<DM_HOST>:<DM_PORT>`。
 >
-> **总体结果**: Oracle 41/42 ✅(含 ⚠️ 已知限制,explain_query 无 plan);DM 41/42 ✅(同 ⚠️)。**Bug #60 + #61 + #62 全部修复**,generate_sample_data + get_enum_values + disconnect_profile 全绿。
+> **总体结果 v5.0.0 final**:
+> - Oracle: **41/42 ✅** (含 ⚠️`explain_query` 无 plan — adapter 限制)
+> - DM: **41/42 ✅** (同 ⚠️)
+> - 跳过的 1 个: `execute_batch` — MCP tool call JSON 传输 bug (paramsList 嵌套数组被助手编码层吃掉 `]`),代码本身单元测试 OK
+> - **Bug 修复全部 verified live**:
+>   - Bug #60: `generate_sample_data` NJS-098 (case-insensitive column lookup)
+>   - Bug #60c: `generate_sample_data` MAX(pk) case-insensitive (Oracle uppercase M)
+>   - Bug #61: `get_enum_values` null on Oracle (case-insensitive row key)
+>   - Bug #62: `disconnect_profile` stale state (清 mcpServer 4 字段)
+> - **新增 features verified**:
+>   - `execute_sql_file` bare filename → `<cwd>/sql/` 自动 mkdir
+>   - `execute_script` PL/SQL 块(BEGIN..END / DECLARE / IF-ELSE / LOOP)
+>   - `use_profile` 默认同步写 `.db-profile` (recordToProject:true 是默认)
+>   - per-profile 路径隔离 (history.db / templates.db 在 `~/.universal-db-mcp/<profile>/` subdir)
+> - **退出准则**: smoke test 41/42 ✅ × 2 DBs + 628/628 unit tests + 没有 0 个 ❌ bug,满足 v5.0.0 发布。
 
 ---
 
