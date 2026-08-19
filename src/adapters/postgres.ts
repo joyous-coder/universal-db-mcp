@@ -23,6 +23,17 @@ import { splitStatements } from '../utils/sql-parser.js';
 
 const { Pool } = pg;
 
+/**
+ * v5.0.1 Bug N10: 把 MySQL 风格的 `?` 占位符按出现顺序替换为 PG 风格的 `$1..$N`。
+ * 在 executeBatch 中每行单独调用一次(每行的 N 由该行的 params 数量决定)。
+ * 测试可独立验证占位符转换的正确性。
+ */
+export function pgConvertPlaceholders(sql: string, nParams: number): string {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+  void nParams;
+}
+
 export class PostgreSQLAdapter extends BaseAdapter {
   private pool: pg.Pool | null = null;
   private config: {
@@ -555,6 +566,41 @@ export class PostgreSQLAdapter extends BaseAdapter {
     } finally {
       client.release();
     }
+  }
+
+  /**
+   * v5.0.1 Bug N10: PG `pg` driver 只支持 `$1, $2, ...` 数字占位符,不支持 MySQL 风格的 `?`。
+   * csv-reader.ts:244 为所有非 ClickHouse DB 生成 `?` 占位符,默认走 BaseAdapter.executeBatch
+   * 把 SQL 原样发给 PG → "syntax error at or near ','"。
+   * 修复: 重写 executeBatch,把每行 SQL 中的 `?` 替换为 `$1..$N`,沿用 withTransaction
+   * 单 client + 多语句的模式。
+   */
+  async executeBatch(sql: string, paramsList: unknown[][], options: ExecuteBatchOptions = {}): Promise<BatchResult> {
+    const maxBatchSize = options.maxBatchSize ?? 1000;
+    if (paramsList.length > maxBatchSize) {
+      throw new Error(`Batch has ${paramsList.length} rows, exceeds limit ${maxBatchSize}`);
+    }
+    if (paramsList.length === 0) {
+      throw new Error('Batch contains no parameter sets');
+    }
+
+    const convertPlaceholders = pgConvertPlaceholders;
+
+    const affectedRowsPerStatement: number[] = [];
+    const startTime = Date.now();
+
+    return this.withTransaction(async (tx) => {
+      for (const params of paramsList) {
+        const pgSql = convertPlaceholders(sql, params.length);
+        const r = await tx.executeQuery(pgSql, params);
+        affectedRowsPerStatement.push(r.affectedRows ?? 0);
+      }
+      return {
+        affectedRowsPerStatement,
+        totalAffectedRows: affectedRowsPerStatement.reduce((a, b) => a + Math.max(b, 0), 0),
+        executionTime: Date.now() - startTime,
+      };
+    });
   }
 
   async executeScript(query: string, options: ExecuteScriptOptions = {}): Promise<QueryResult> {

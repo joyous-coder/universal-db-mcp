@@ -169,6 +169,14 @@ export async function importCsv(opts: {
     throw new Error('adapter.getTableInfo not implemented');
   }
   const rawInfo = await opts.adapter.getTableInfo(opts.table);
+  // v5.0.1 Bug N11: Redis/MongoDB 等 NoSQL adapter 的 getTableInfo 默认返回 null,
+  // 之前直接 `null.map()` 抛 NPE。改成显式报错(让上层 handler 也能 catch)。
+  if (!rawInfo) {
+    throw new Error(
+      `getTableInfo returned null for table "${opts.table}" ` +
+      `(NoSQL adapter 或未识别的表?)`,
+    );
+  }
   // v3.3: SQLite 包 {tableInfo, tableForeignKeys}, CH/DM/MySQL 等直接返回 {name, columns}
   const tableInfo = (rawInfo as any).tableInfo ?? rawInfo;
   const tableCols = tableInfo.columns.map((c: any) => c.name);
