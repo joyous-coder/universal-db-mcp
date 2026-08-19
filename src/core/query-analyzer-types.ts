@@ -109,7 +109,8 @@ export interface ProfileHistoryAggregate {
 
 export interface TemplateParam {
   name: string;
-  type: 'string' | 'number' | 'boolean' | 'date' | 'sql_identifier';
+  // v5.0.1: 新增 'json' 类型,占位符替换为 JSON.stringify(v) 用于 MongoDB JSON template
+  type: 'string' | 'number' | 'boolean' | 'date' | 'sql_identifier' | 'json';
   required: boolean;
   default?: unknown;
   description?: string;

@@ -38,4 +38,28 @@ describe('substituteParams', () => {
     const r = substituteParams('SELECT * FROM t LIMIT ${limit}', {}, params);
     expect(r).toBe('SELECT * FROM t LIMIT 100');
   });
+
+  // v5.0.1 Bug N18: json 类型占位符保留 JSON 结构(用于 MongoDB JSON template)
+  it('replaces json param with JSON.stringify (no surrounding quotes)', () => {
+    const params: TemplateParam[] = [{ name: 'status', type: 'json', required: true }];
+    const r = substituteParams(
+      '{"collection":"users","operation":"find","query":{"status":${status}}}',
+      { status: 'active' },
+      params,
+    );
+    // 不加单引号包 string,JSON 结构完整
+    expect(r).toBe('{"collection":"users","operation":"find","query":{"status":"active"}}');
+  });
+
+  it('replaces json param with object value (full nested JSON)', () => {
+    const params: TemplateParam[] = [{ name: 'filter', type: 'json', required: true }];
+    const r = substituteParams(
+      '{"collection":"users","operation":"find","query":${filter}}',
+      { filter: { status: 'active', age: { $gt: 18 } } },
+      params,
+    );
+    expect(r).toBe(
+      '{"collection":"users","operation":"find","query":{"status":"active","age":{"$gt":18}}}',
+    );
+  });
 });

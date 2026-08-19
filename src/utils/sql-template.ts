@@ -49,6 +49,10 @@ export function substituteParams(
         }
         return v;
       }
+      // v5.0.1 Bug N18: MongoDB JSON template 的占位符需要保留 JSON 结构
+      // (例如 {"status":"${status}"} 替换后变成 {"status":"active"} 而不是 {"status":"'active'"})
+      case 'json':
+        return JSON.stringify(v);
       default:
         return `'${String(v).replace(/'/g, "''")}'`;
     }

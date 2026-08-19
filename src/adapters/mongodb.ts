@@ -219,6 +219,11 @@ export class MongoDBAdapter extends BaseAdapter {
         // For multi-arg operations: distribute args correctly
         const op = operation.toLowerCase();
         if (Array.isArray(parsed)) {
+          // v5.0.1 Bug N17: insertMany / insert 操作需要整个数组作为 query
+          // (之前 fallback 用 parsed[0] 只取第一个文档,insertMany 会报"需要文档数组")
+          if (op === 'insertmany' || op === 'insert') {
+            return { collection, operation, query: parsed as unknown as Document };
+          }
           if ((op === 'update' || op === 'updateone' || op === 'updatemany') && parsed.length >= 2) {
             return { collection, operation, query: parsed[0] as Document, update: parsed[1] as Document };
           }
@@ -228,7 +233,7 @@ export class MongoDBAdapter extends BaseAdapter {
           if (op === 'aggregate') {
             return { collection, operation, pipeline: parsed[0] as any };
           }
-          if (op === 'insert' || op === 'insertone') {
+          if (op === 'insertone') {
             return { collection, operation, query: parsed[0] as Document };
           }
           return { collection, operation, query: parsed[0] as Document };
