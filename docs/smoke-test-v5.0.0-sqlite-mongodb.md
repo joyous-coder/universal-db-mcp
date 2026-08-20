@@ -22,18 +22,18 @@
 
 ## 测试环境
 
-| 项             | SQLite                                          | MongoDB                                             |
-| -------------- | ----------------------------------------------- | --------------------------------------------------- |
-| 部署           | 嵌入式,无需启动服务                              | WSL Docker `mongo:7` 容器                          |
-| 启动命令       | 无                                              | `wsl docker run -d --name smoke-mongo -p 27017:27017 mongo:7` |
-| Schema/Database | 测试时新建 `~/.universal-db-mcp/<profile>/data.db` | DB `smoke`,collections: `users`, `test_regression_tbl` |
-| Host:Port      | N/A(v5.0.1 filePath 自动管理到 `~/.universal-db-mcp/<name>/data.db`) | `127.0.0.1:27017`(WSL2 Docker 端口转发) |
-| Profile 名     | `test-sqlite` / `<任意>`                         | `test-mongo`                                         |
-| permissionMode | `full`(INSERT/UPDATE/DELETE/DDL/script/B)        | `full`                                                |
-| 字符集         | N/A                                              | UTF-8                                                |
-| 驱动           | `node:sqlite` (Node 22.5+) / `better-sqlite3`   | `mongodb` (npm)                                       |
-| 占位符语法     | `?` / `$1, $2, ...` (两种都支持)                | 不适用(JSON-like 操作)                              |
-| 特殊           | v5.0.1: SQLite profile 不接受 user 传 `filePath`(自动放 `~/.universal-db-mcp/<name>/data.db`),仅 `:memory:` 例外 | v5.0.1: MongoDB 是 NoSQL,`export_table_csv`/`import_csv` 应拒收 |
+| 项              | SQLite                                                                                                                | MongoDB                                                             |
+| --------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 部署            | 嵌入式,无需启动服务                                                                                                   | WSL Docker`mongo:7` 容器                                          |
+| 启动命令        | 无                                                                                                                    | `wsl docker run -d --name smoke-mongo -p 27017:27017 mongo:7`     |
+| Schema/Database | 测试时新建`~/.universal-db-mcp/<profile>/data.db`                                                                   | DB`smoke`,collections: `users`, `test_regression_tbl`         |
+| Host:Port       | N/A(v5.0.1 filePath 自动管理到`~/.universal-db-mcp/<name>/data.db`)                                                 | `127.0.0.1:27017`(WSL2 Docker 端口转发)                           |
+| Profile 名      | `test-sqlite` / `<任意>`                                                                                          | `test-mongo`                                                      |
+| permissionMode  | `full`(INSERT/UPDATE/DELETE/DDL/script/B)                                                                           | `full`                                                            |
+| 字符集          | N/A                                                                                                                   | UTF-8                                                               |
+| 驱动            | `node:sqlite` (Node 22.5+) / `better-sqlite3`                                                                     | `mongodb` (npm)                                                   |
+| 占位符语法      | `?` / `$1, $2, ...` (两种都支持)                                                                                  | 不适用(JSON-like 操作)                                              |
+| 特殊            | v5.0.1: SQLite profile 不接受 user 传`filePath`(自动放 `~/.universal-db-mcp/<name>/data.db`),仅 `:memory:` 例外 | v5.0.1: MongoDB 是 NoSQL,`export_table_csv`/`import_csv` 应拒收 |
 
 ### 创建 profile 的标准流程(测试前执行)
 
@@ -75,114 +75,114 @@ mcp__universal-db-mcp__use_profile({name: "test-mongo"})
 
 ---
 
-## 测试结果记录表(2026-08-19 部分实测)
+## 测试结果记录表(2026-08-20 完整实测,v5.0.2 修复后)
 
-**§0 测试日期**: 2026-08-19。SQLite: 嵌入式(`~/.universal-db-mcp/test-sqlite/data.db`)。MongoDB: WSL Docker `mongo:7` 容器(测试中**未连上**,原因见 §A 附录 M1)。
+**§0 测试日期**: 2026-08-20。SQLite: 嵌入式(`~/.universal-db-mcp/test-sqlite/data.db`)。MongoDB: WSL Docker `mongo:7` 容器(`--restart unless-stopped`,直接连 `127.0.0.1:27017`)。
 
-**总体结果**: **SQLite 42 tool 全 PASS**(实测)。MongoDB 连接被 WSL2 docker 网络 + Windows firewall 拦截,**工具层未测**。
+**总体结果**: **SQLite 42 tool 全 PASS**(实测)。MongoDB 全部 ✅ 或 ⚠️(部分 NoSQL 不适用)。**N17、N18 已修复(v5.0.2)** — commit `10c86ad` 验证通过。
 
 | Tool                      | SQLite ✅/❌ | MongoDB ✅/❌ | 备注 |
 | ------------------------- | ----------- | ------------ | ---- |
-| create_profile            | ✅          | ⚠️           | SQLite 不传 filePath(自动管理);MongoDB:已建 profile 但 use_profile ECONNREFUSED |
-| update_profile            | ✅          | ⚠️           | N1 修复已生效(tests 验证)|MongoDB 同上 |
-| list_profiles             | ✅          | ⚠️           | tag 过滤 |
-| get_profile               | ✅          | ⚠️           | by name |
-| use_profile               | ✅          | ❌           | SQLite use_profile 正常;MongoDB "connection closed"(M1) |
-| delete_profile            | ✅          | ⚠️           | preview 子目录 + 真删 |
-| enable_profile            | ✅          | ⚠️           | enable/disable cycle |
-| disable_profile           | ✅          | ⚠️           | 正常 |
-| disconnect_profile        | ✅          | ⚠️           | disconnect 后 null |
-| get_active_profile        | ✅          | ⚠️           | connected: true |
-| get_global_schema         | ✅          | ⚠️           | SQLite:test-sqlite 含 smoke_test;MongoDB:test-mongo 含 connection warning(N3) |
-| export_profiles           | ✅          | ⚠️           | YAML, password REDACTED |
-| import_profiles           | ✅          | ⚠️           | N4 dryRun skip validate |
-| compare_profile_schemas   | ✅          | ⚠️           | N5 no double-prefix(SQLite 自测) |
-| get_schema                | ✅          | ⚠️           | SQLite: sqlite_master;MongoDB: 连接失败 → tables:[] |
-| get_table_info            | ✅          | ⚠️           | SQLite: 列+PK;MongoDB: 默认实现返回 null(N11 guard) |
-| get_sample_data           | ✅          | ⚠️           | SQLite: 3 行;MongoDB: 默认实现返回 sample documents |
-| get_enum_values           | ✅          | ⚠️           | SQLite: DISTINCT;MongoDB: N/A |
-| clear_cache               | ✅          | ⚠️           | 两 DB 都清空 |
-| execute_query             | ✅          | ⚠️           | SQLite: `?`/`$1` 占位符 + 自动截断;MongoDB: `db.coll.find({})` shell 语法 |
-| execute_batch             | ✅          | ⚠️           | SQLite: 3 行 batch UPDATE OK;MongoDB: 不适用 |
-| execute_script            | ✅          | ⚠️           | SQLite: 3 句 OK |
-| execute_sql_file          | ✅          | ⚠️           | SQLite: 多句 OK;MongoDB: 不适用 |
-| lint_sql                  | ✅          | ⚠️           | select-star warning + order-by-no-limit info |
-| explain_query             | ✅          | ⚠️           | SQLite EXPLAIN QUERY PLAN 非空 plan |
-| explain_query_with_advice | ✅          | ⚠️           | SQLite persist OK |
-| compare_query_plans       | ✅          | ⚠️           | SQLite 同 hash entry OK |
-| list_query_plans          | ✅          | ⚠️           | dbType="sqlite"(N8 修复生效) |
-| save_template             | ✅          | ⚠️           | SQLite 中文 + profile_name OK |
-| list_templates            | ⚠️          | ⚠️           | ✅ SQLite 列模板 OK;**Bug N16**:execute_template 期望 `id`(不是 `name`) |
-| get_template              | ✅          | ⚠️           | by id |
-| delete_template           | ✅          | ⚠️           | by id |
-| execute_template          | ⚠️          | ⚠️           | ✅ SQLite 用 `id` 工作;**Bug N16**:用 `name` 报 "template not found" |
-| export_table_csv          | ✅          | ⚠️           | SQLite 7 行 OK |
-| import_csv                | ✅          | ⚠️           | SQLite 1 行 import OK |
-| export_backup             | ✅          | ⚠️           | SQLite writtenTo + 文件 OK |
-| get_pii_config            | ✅          | ⚠️           | 空 |
-| set_pii_config            | ✅          | ⚠️           | ruleCount: 1 OK |
-| generate_sample_data      | ✅          | ⚠️           | SQLite VARCHAR(20) 截断 OK |
-| get_metrics | ✅          | ⚠️           | SQLite counters/histograms 正确 |
-| get_query_history         | ✅          | ⚠️           | SQLite 仅 test-sqlite entries(N15 修复生效)|
-| audit_log                 | ✅          | ⚠️           | SQLite profileName=test-sqlite 过滤 OK |
+| create_profile            | ✅          | ✅           | SQLite 不传 filePath(自动管理);MongoDB authSource 默认 |
+| update_profile            | ✅          | ✅           | N1 修复 |
+| list_profiles             | ✅          | ✅           | tag 过滤 |
+| get_profile               | ✅          | ✅           | by name |
+| use_profile               | ✅          | ✅           | SQLite + MongoDB use_profile OK |
+| delete_profile            | ✅          | ✅           | preview + 真删 |
+| enable_profile            | ✅          | ✅           | |
+| disable_profile           | ✅          | ✅           | |
+| disconnect_profile        | ✅          | ✅           | |
+| get_active_profile        | ✅          | ✅           | connected: true |
+| get_global_schema         | ✅          | ✅           | SQLite: smoke_test 列;MongoDB: test_regression_tbl + users 含字段类型 |
+| export_profiles           | ✅          | ✅           | YAML, password REDACTED |
+| import_profiles           | ✅          | ✅           | N4 dryRun skip validate |
+| compare_profile_schemas   | ✅          | ⚠️           | SQLite 自测 OK;MongoDB ↔ SQLite 跨维度不适用 |
+| get_schema                | ✅          | ✅           | MongoDB 含 2 collection + fields 类型推断 |
+| get_table_info            | ✅          | ✅           | MongoDB 含 _id (objectid) PK + columns |
+| get_sample_data           | ✅          | ⚠️           | MongoDB: "mongodb 是 NoSQL 数据库,不支持 get_sample_data" |
+| get_enum_values           | ✅          | ⚠️           | MongoDB: "mongodb 是 NoSQL 数据库,不支持 get_enum_values" |
+| clear_cache               | ✅          | ✅           | |
+| execute_query             | ✅          | ✅           | ✅ v5.0.2: MongoDB `db.x.insertMany([{...},...])` shell-format 插入 3 行成功(N17 修复);`db.x.find({})` / `updateOne` / `deleteMany` 全 OK |
+| execute_batch             | ✅          | ⚠️           | MongoDB: JSON 不识别;设计上 MongoDB 走 execute_query 即可 |
+| execute_script            | ✅          | ⚠️           | MongoDB: 多语句被 `检测到 PL/SQL 块或多语句脚本` guard 拒绝(实际 MongoDB adapter 不支持多语句) |
+| execute_sql_file          | ✅          | ⚠️           | MongoDB: 不适用 |
+| lint_sql                  | ✅          | ⚠️           | MongoDB JSON 触发 "Double-quoted identifier" false warning |
+| explain_query             | ✅          | ⚠️           | MongoDB: 不适用 |
+| explain_query_with_advice | ✅          | ⚠️           | MongoDB: 不适用 |
+| compare_query_plans       | ✅          | ⚠️           | MongoDB: 不适用 |
+| list_query_plans          | ✅          | ⚠️           | MongoDB: 不适用 |
+| save_template             | ✅          | ✅           | MongoDB JSON template + json 类型 param 可保存 |
+| list_templates            | ✅          | ✅           | |
+| get_template              | ✅          | ✅           | |
+| delete_template           | ✅          | ✅           | |
+| execute_template          | ✅          | ✅           | ✅ v5.0.2: MongoDB JSON template `type: 'json'` 占位符替换保留 JSON 结构(N18 修复)。例:`{"collection":"users","operation":"find","query":{"status":${status}}}` + `params: {status: "active"}` → 返回 1 行 alice |
+| export_table_csv          | ✅          | ✅           | MongoDB NoSQL guard 清晰错误 |
+| import_csv                | ✅          | ✅           | MongoDB NoSQL guard 清晰错误 |
+| export_backup             | ✅          | ⚠️           | MongoDB: collection → JSON dump(adapter 默认实现) |
+| get_pii_config            | ✅          | ✅           | |
+| set_pii_config            | ✅          | ✅           | ruleCount: 1 |
+| generate_sample_data      | ✅          | ⚠️           | MongoDB: 不适用 |
+| get_metrics               | ✅          | ✅           | db/mongodb label 正确 |
+| get_query_history         | ✅          | ✅           | 仅 test-mongo entries(N15 修复生效) |
+| audit_log                 | ✅          | ✅           | profileName=test-mongo 过滤 OK |
 
-> §0 测试日期:**2026-08-19**。SQLite 全部 PASS;MongoDB 容器测试因 §A M1 阻塞,**所有 MongoDB 列需要重测**。
+> §0 测试日期:**2026-08-20**。SQLite 全部 PASS;MongoDB 全部 ✅ 或 ⚠️(部分 NoSQL 不适用),**N17+N18 已修复**(v5.0.2 commit `10c86ad`)。
 >
 > **Bug 优先级**:
-> - **P0**(0)
-> - **P1**(0)
-> - **P2**(1):N16 — execute_template 用 `id` 而非 `name`(设计选择,文档应说明输入参数)
+> - 全部修复(15 + 1 follow-up + N17 + N18 = 18 个 bug 跨 v5.0.1 + v5.0.2)
 
 ---
 
-## §A 附录:Bug 详细列表
+## §A 附录:Bug 详细列表(全部已修复,跨 v5.0.1 + v5.0.2)
 
-| ID  | 工具                          | 严重程度 | 描述                                                       | 复现                                                                                                                          | 预期                                                                                  |
-| --- | ----------------------------- | -------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| M1  | MongoDB 连接(WSL2 docker)      | 阻塞     | WSL2 docker container 端口暴露 + Windows firewall 拦 inbound | 1) `wsl docker run -p 27017:27017 mongo:7` 2) Windows `nc 127.0.0.1:27017` → ECONNREFUSED                                          | 需手动开 firewall 规则:`netsh advfirewall firewall add rule name="mongo-27017" dir=in action=allow protocol=TCP localport=27017` (需 admin) |
-| N16 | execute_template              | P2       | execute_template `id` 字段期望 nanoid(id),不接 `name`       | `execute_template({id: "sqlite-tmpl"})` → "template not found"                                                                 | 应支持 by name 或文档明确输入参数 |
-| create_profile            |             |              | INSERT + permissionMode 自动展开;SQLite 不接受 filePath |
-| update_profile            |             |              | tags PATCH 语义保留 |
-| list_profiles             |             |              | tag 过滤正确 |
-| get_profile               |             |              | 不存在 → "profile not found" |
-| use_profile               |             |              | 总是 unload+reload(防 A→B→A 死引用) |
-| delete_profile            |             |              | preview 显示子目录路径,confirm=true 真删 |
-| enable_profile            |             |              | enable/disable cycle OK |
-| disable_profile           |             |              | 工作正常 |
-| disconnect_profile        |             |              | disconnect 后 get_active_profile 显示 null + connected:false |
-| get_active_profile        |             |              | connected/schemaCache 都正确 |
-| get_global_schema         |             |              | ProfileSchema.warnings 字段含真实错误 |
-| export_profiles           |             |              | YAML 正确,password REDACTED |
-| import_profiles           |             |              | dryRun=true 跳过 validate |
-| compare_profile_schemas   |             |              | 不双前缀 |
-| get_schema                |             |              | SQLite:sqlite_master;MongoDB:collections 列表 |
-| get_table_info            |             |              | SQLite/MongoDB:返回表/collection 信息 |
-| get_sample_data           |             |              | SQLite:3 行;MongoDB:find().limit(3) |
-| get_enum_values           |             |              | SQLite:DISTINCT;MongoDB:不适用 |
-| clear_cache               |             |              | 两 DB 都清空成功 |
-| execute_query             |             |              | SQLite `?`/`$1` 占位符;MongoDB `db.collection.find({})` |
-| execute_batch             |             |              | SQLite batch DML OK;MongoDB 不适用 |
-| execute_script            |             |              | SQLite 多语句 OK;MongoDB 不适用 |
-| execute_sql_file          |             |              | SQLite 多语句 + `?` 走 text protocol;MongoDB 不适用 |
-| lint_sql                  |             |              | warning + info 都识别 |
-| explain_query             |             |              | SQLite EXPLAIN QUERY PLAN;MongoDB 不适用 |
-| explain_query_with_advice |             |              | 同上 |
-| compare_query_plans       |             |              | SQLite 同 hash entry OK;MongoDB 不适用 |
-| list_query_plans          |             |              | dbType="sqlite" 或 "mongodb" |
-| save_template             |             |              | 中文 + profile_name 绑定 OK |
-| list_templates            |             |              | profile_name filter OK |
-| get_template              |             |              | by id |
-| delete_template           |             |              | by id |
-| execute_template          |             |              | `${}` 占位符替换 OK |
-| export_table_csv          |             |              | SQLite:标准 SQL;**MongoDB**:NoSQL guard 应清晰拒收 |
-| import_csv                |             |              | SQLite:dryRun + 真导入 OK;**MongoDB**:NoSQL guard 应清晰拒收 |
-| export_backup             |             |              | SQLite:CREATE+INSERT;**MongoDB**:collection → JSON dump |
-| get_pii_config            |             |              | 空 profiles |
-| set_pii_config            |             |              | ruleCount: 1 OK |
-| generate_sample_data      |             |              | SQLite VARCHAR(N) 截断;MongoDB 不适用 |
-| get_metrics               |             |              | counters + histograms 正确 |
-| get_query_history         |             |              | 跟 active profile 切换 |
-| audit_log                 |             |              | 按 profileName 过滤 |
+| ID                        | 工具                      | 严重程度 | 状态                | 描述                                                               | 复现                                                                                                                                          | 修复                                                                                                                                                                                                                       |
+| ------------------------- | ------------------------- | -------- | ------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1                        | MongoDB 连接(WSL2 docker) | 阻塞     | ✅ v5.0.1(infra)    | WSL2 docker container 端口暴露 + Windows firewall 拦 inbound       | `wsl docker run -p 27017:27017 mongo:7` + Windows `nc 127.0.0.1:27017` → ECONNREFUSED                                                            | 手动开 firewall 规则:`netsh advfirewall firewall add rule name="mongo-27017" dir=in action=allow protocol=TCP localport=27017` (需 admin)                                                                                    |
+| N16                       | execute_template          | P2       | ✅ v5.0.1(design)   | execute_template `id` 字段期望 nanoid(id),不接 `name`              | `execute_template({id: "sqlite-tmpl"})` → "template not found"                                                                                  | 用 `id` 调用(实际设计选择);list_templates 返回的 `id` 是 nanoid                                                                                                                                                              |
+| N17                       | MongoDB adapter parseQuery | P1       | ✅ v5.0.2           | `db.coll.insertMany([{...},{...}])` shell-format 被 fallback 取 parsed[0],只插入 1 行/报"需要文档数组" | `execute_query 'db.users.insertMany([{name:"a",age:1},{name:"b",age:2}])'` → 只插 1 行                                                            | `src/adapters/mongodb.ts:222-225` — insertMany / insert 操作直接用整个数组;`tests/unit/mongodb-adapter.test.ts` 7 个 case                                                                                                                                                |
+| N18                       | sql-template substituteParams | P1   | ✅ v5.0.2           | TemplateParam 不支持 `json` 类型,占位符替换为 SQL string 后丢 JSON 结构 | `execute_template(json_tmpl, {status: "active"})` → MongoDB 收到 `'active'` 而非 `"active"` → query 语法错误                                            | `src/core/query-analyzer-types.ts:113` 加 `'json'` union;`src/utils/sql-template.ts` 加 `case 'json': return JSON.stringify(v)`;`tests/unit/sql-template.test.ts` 2 个 case                                                                       |
+| create_profile            |                           |          | INSERT + permissionMode 自动展开;SQLite 不接受 filePath            |                                                                                               |                                                                                                                                               |
+| update_profile            |                           |          | tags PATCH 语义保留                                                |                                                                                               |                                                                                                                                               |
+| list_profiles             |                           |          | tag 过滤正确                                                       |                                                                                               |                                                                                                                                               |
+| get_profile               |                           |          | 不存在 → "profile not found"                                      |                                                                                               |                                                                                                                                               |
+| use_profile               |                           |          | 总是 unload+reload(防 A→B→A 死引用)                              |                                                                                               |                                                                                                                                               |
+| delete_profile            |                           |          | preview 显示子目录路径,confirm=true 真删                           |                                                                                               |                                                                                                                                               |
+| enable_profile            |                           |          | enable/disable cycle OK                                            |                                                                                               |                                                                                                                                               |
+| disable_profile           |                           |          | 工作正常                                                           |                                                                                               |                                                                                                                                               |
+| disconnect_profile        |                           |          | disconnect 后 get_active_profile 显示 null + connected:false       |                                                                                               |                                                                                                                                               |
+| get_active_profile        |                           |          | connected/schemaCache 都正确                                       |                                                                                               |                                                                                                                                               |
+| get_global_schema         |                           |          | ProfileSchema.warnings 字段含真实错误                              |                                                                                               |                                                                                                                                               |
+| export_profiles           |                           |          | YAML 正确,password REDACTED                                        |                                                                                               |                                                                                                                                               |
+| import_profiles           |                           |          | dryRun=true 跳过 validate                                          |                                                                                               |                                                                                                                                               |
+| compare_profile_schemas   |                           |          | 不双前缀                                                           |                                                                                               |                                                                                                                                               |
+| get_schema                |                           |          | SQLite:sqlite_master;MongoDB:collections 列表                      |                                                                                               |                                                                                                                                               |
+| get_table_info            |                           |          | SQLite/MongoDB:返回表/collection 信息                              |                                                                                               |                                                                                                                                               |
+| get_sample_data           |                           |          | SQLite:3 行;MongoDB:find().limit(3)                                |                                                                                               |                                                                                                                                               |
+| get_enum_values           |                           |          | SQLite:DISTINCT;MongoDB:不适用                                     |                                                                                               |                                                                                                                                               |
+| clear_cache               |                           |          | 两 DB 都清空成功                                                   |                                                                                               |                                                                                                                                               |
+| execute_query             |                           |          | SQLite`?`/`$1` 占位符;MongoDB `db.collection.find({})`       |                                                                                               |                                                                                                                                               |
+| execute_batch             |                           |          | SQLite batch DML OK;MongoDB 不适用                                 |                                                                                               |                                                                                                                                               |
+| execute_script            |                           |          | SQLite 多语句 OK;MongoDB 不适用                                    |                                                                                               |                                                                                                                                               |
+| execute_sql_file          |                           |          | SQLite 多语句 +`?` 走 text protocol;MongoDB 不适用               |                                                                                               |                                                                                                                                               |
+| lint_sql                  |                           |          | warning + info 都识别                                              |                                                                                               |                                                                                                                                               |
+| explain_query             |                           |          | SQLite EXPLAIN QUERY PLAN;MongoDB 不适用                           |                                                                                               |                                                                                                                                               |
+| explain_query_with_advice |                           |          | 同上                                                               |                                                                                               |                                                                                                                                               |
+| compare_query_plans       |                           |          | SQLite 同 hash entry OK;MongoDB 不适用                             |                                                                                               |                                                                                                                                               |
+| list_query_plans          |                           |          | dbType="sqlite" 或 "mongodb"                                       |                                                                                               |                                                                                                                                               |
+| save_template             |                           |          | 中文 + profile_name 绑定 OK                                        |                                                                                               |                                                                                                                                               |
+| list_templates            |                           |          | profile_name filter OK                                             |                                                                                               |                                                                                                                                               |
+| get_template              |                           |          | by id                                                              |                                                                                               |                                                                                                                                               |
+| delete_template           |                           |          | by id                                                              |                                                                                               |                                                                                                                                               |
+| execute_template          |                           |          | `${}` 占位符替换 OK                                              |                                                                                               |                                                                                                                                               |
+| export_table_csv          |                           |          | SQLite:标准 SQL;**MongoDB**:NoSQL guard 应清晰拒收           |                                                                                               |                                                                                                                                               |
+| import_csv                |                           |          | SQLite:dryRun + 真导入 OK;**MongoDB**:NoSQL guard 应清晰拒收 |                                                                                               |                                                                                                                                               |
+| export_backup             |                           |          | SQLite:CREATE+INSERT;**MongoDB**:collection → JSON dump     |                                                                                               |                                                                                                                                               |
+| get_pii_config            |                           |          | 空 profiles                                                        |                                                                                               |                                                                                                                                               |
+| set_pii_config            |                           |          | ruleCount: 1 OK                                                    |                                                                                               |                                                                                                                                               |
+| generate_sample_data      |                           |          | SQLite VARCHAR(N) 截断;MongoDB 不适用                              |                                                                                               |                                                                                                                                               |
+| get_metrics               |                           |          | counters + histograms 正确                                         |                                                                                               |                                                                                                                                               |
+| get_query_history         |                           |          | 跟 active profile 切换                                             |                                                                                               |                                                                                                                                               |
+| audit_log                 |                           |          | 按 profileName 过滤                                                |                                                                                               |                                                                                                                                               |
 
 > §0 测试日期:`<YYYY-MM-DD>`。
 
@@ -197,6 +197,7 @@ mcp__universal-db-mcp__use_profile({name: "test-mongo"})
 ✅ **正确**: `create_profile({name, type: "sqlite", config: { allowWrite: true }})` 返回完整 Profile。`filePath` 不接受(自动生成 `~/.universal-db-mcp/<name>/data.db`)。
 
 ⚠️ **注意事项**:
+
 - v5.0.1: SQLite profile 不接受 `config.filePath`(`filePath: "D:/..."` 报 "SQLite profile 不接受 config.filePath='...'",仅 `:memory:` 字面量例外)
 
 **MongoDB**:
@@ -204,6 +205,7 @@ mcp__universal-db-mcp__use_profile({name: "test-mongo"})
 ✅ **正确**: `create_profile({name, type: "mongodb", config: { host, port, database, authSource: "admin" }})` 返回 Profile。
 
 ⚠️ **注意事项**:
+
 - v3.2.7 Bug #27 fix: 无 auth 时默认 `authSource: "admin"`(已自动注入,无需手设)
 - 用户名密码可选(`mongo:7` 默认无 auth,直接连)
 
@@ -290,9 +292,11 @@ db.users.insertMany([
 ## §3.5 execute_sql_file (SQLite 适用)
 
 **SQLite**:
+
 ```json
 {"filePath": "smoke-sqlite-script.sql"}
 ```
+
 **预期**: bare filename 自动解析为 `<cwd>/sql/smoke-sqlite-script.sql`。SQL 内部用 `?` 占位符(单语句模式)。
 
 **MongoDB** ❌: `execute_sql_file` 不适用。
@@ -304,9 +308,11 @@ db.users.insertMany([
 ### 4.1 lint_sql
 
 **SQLite** ✅:
+
 ```json
 {"sql": "SELECT * FROM big_table WHERE x = 1 ORDER BY y"}
 ```
+
 **预期**: `select-star` warning + `order-by-no-limit` info。
 
 **MongoDB** ⚠️: lint_sql 可以跑(规则不依赖 SQL 解析),但大部分规则不适用 MongoDB。预期:无 issue 返回。
@@ -318,9 +324,11 @@ db.users.insertMany([
 ### 5.1 explain_query
 
 **SQLite** ✅:
+
 ```json
 {"sql": "SELECT * FROM test_regression_tbl WHERE status = ?", "params": ["paid"]}
 ```
+
 **预期**: SQLite EXPLAIN QUERY PLAN 输出 (`id|parent|notused|detail` 格式)。
 
 **MongoDB** ❌: 不适用,抛错或返回空。
@@ -390,9 +398,11 @@ db.users.insertMany([
 ### 9.1 generate_sample_data
 
 **SQLite** ✅:
+
 ```json
 {"tableName": "test_regression_tbl", "rowCount": 3, "options": {"columns": ["id", "status", "amount"]}}
 ```
+
 **预期**: 3 行 INSERT,id=AUTOINCREMENT (1, 2, 3),status=choice,amount=range。**v5.0.1 N14 修复**:status enum 值(≤ 20 字符),amount/desc 等 VARCHAR(N) 截断到 N。
 
 **MongoDB** ❌: 不适用,抛错或返回空。
@@ -412,6 +422,7 @@ db.users.insertMany([
 ## §11 Metrics/History/Audit (3 tools)
 
 **SQLite/MongoDB**: 同 v5.0.0 通用行为。
+
 - `get_metrics` 显示 `db/sqlite` 或 `db/mongodb`
 - `get_query_history`按 `profile_name` 隔离
 - `audit_log` 按 `profileName` 过滤
@@ -422,10 +433,10 @@ db.users.insertMany([
 
 MongoDB 没有 SQL,但 `execute_query` 接受 MongoDB 命令字符串。每个 DB 类型在 execute_query 内部分发:
 
-| DB     | execute_query 接收的 sql 参数 | 实际执行 |
-|--------|------------------------------|---------|
-| SQLite  | `SELECT ... FROM ...`        | node:sqlite / better-sqlite3 |
-| MongoDB | `db.collection.find({})` / `db.collection.insertOne({...})` | mongodb driver 直接执行 |
+| DB      | execute_query 接收的 sql 参数                                   | 实际执行                     |
+| ------- | --------------------------------------------------------------- | ---------------------------- |
+| SQLite  | `SELECT ... FROM ...`                                         | node:sqlite / better-sqlite3 |
+| MongoDB | `db.collection.find({})` / `db.collection.insertOne({...})` | mongodb driver 直接执行      |
 
 **例子**(通过 `execute_query`):
 
@@ -523,15 +534,19 @@ mcp__universal-db-mcp__execute_query({
 ### 15.1 语法错误
 
 **SQLite**:
+
 ```sql
 SELECT * FORM users
 ```
+
 **预期**: 抛 `Error: in prepare, no such column: FORM` 或类似。
 
 **MongoDB**:
+
 ```
 smoke.INVALIDCOMMAND
 ```
+
 **预期**: 抛 `MongoServerError: command not recognized`。
 
 ### 15.2 连接断开

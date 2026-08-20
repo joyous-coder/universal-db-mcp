@@ -2,6 +2,25 @@
 
 本文档记录 Universal DB MCP 的版本更新历史。
 
+## [5.0.2] - 2026-08-20
+
+### 🐛 Bug 修复(MongoDB 冒烟测试发现)
+
+源自 2026-08-20 MongoDB 冒烟测试(`docs/smoke-test-v5.0.0-sqlite-mongodb.md`):
+
+#### MongoDB adapter / SQL Template
+
+- **N17** `MongoDBAdapter.parseQuery` shell-format 解析 `db.coll.insertMany([{...},{...}])` 时不再 fallback 到 `parsed[0]`,整个数组作为 `query` 传给 `executeOperation`,`insertMany` / `insert` 操作正确处理多文档。同步修复:`db.coll.insert([{...},{...}])` shell-format(P1,commit `10c86ad`)
+- **N18** `TemplateParam.type` 新增 `'json'` union,`substituteParams` 新增 `case 'json': return JSON.stringify(v)`,MongoDB JSON template `{"collection":"users","operation":"find","query":{"status":${status}}}` + `params: {status: "active"}` 占位符正确展开为 `"active"` 而非 `'active'`。JSON 结构保留(P1,commit `10c86ad`)
+
+### 📊 测试覆盖
+
+- 单元测试:**81 文件 / 663 测试 全 PASS**(`npm test`,新增 `tests/unit/mongodb-adapter.test.ts` 7 个 case + `tests/unit/sql-template.test.ts` 2 个 case)
+- 集成测试(MongoDB via WSL2 docker):**42 tool 全 PASS**(SQLite 全部,MongoDB 全部 ✅ 或 ⚠️;**N17+N18 手动 MCP 验证通过**)
+- 测试覆盖文档更新:`docs/smoke-test-v5.0.0-sqlite-mongodb.md` §0 + §A 附录
+
+---
+
 ## [5.0.1] - 2026-08-20
 
 ### 🐛 Bug 修复(冒烟测试发现 — Redis + MySQL + PostgreSQL + SQLite)
