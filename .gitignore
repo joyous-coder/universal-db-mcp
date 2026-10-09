@@ -23,3 +23,10 @@ tmp-e2e/
 # Local harness config (e.g. opencode.json for OpenCode CLI users)
 opencode.json
 release-notes-*.md
+
+# CodeGraph 本地索引 (codegraph init 重建)
+.codegraph/
+# 项目级 profile 激活文件 (MCP 启动时读取)
+.db-profile
+# export_table_csv 默认导出目录
+sql/
