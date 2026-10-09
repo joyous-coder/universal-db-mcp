@@ -180,7 +180,7 @@ if (profileName) { ... profileName ... }
 
 不选「同步 better-sqlite3 后门」方案 —— 保持 store 单一异步实现,避免两套打开逻辑。
 
-**保留既有守卫**:该段逻辑位于 `config-loader.ts:194` 的 `if` 块内,仅当任一 QA 相关 env(`DB_TEMPLATES_DB_PATH` / `DB_HISTORY_DB_PATH` / `DB_QUERY_TIMEOUT_MS` 等)存在时才执行。无 env 时绑定查询不发生,`mergeConfigs` 用默认值兜底。**这与现状完全一致**(`readProjectProfile` 同样在块内),不是本次改动引入的行为,实施时不要"顺手修正"。
+**保留既有守卫**:该段逻辑位于 `config-loader.ts:194` 的 `if` 块内,仅当任一 QA 相关 env 存在时才执行 —— 与现状一致,不要顺手"修正"。
 
 ### 5.3 `use_profile` — `src/mcp/tools/profile-tools.ts:115`
 
